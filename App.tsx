@@ -7,19 +7,19 @@ const { width, height } = Dimensions.get('window');
 type Screen = 'home' | 'instructions' | 'ar-measurement' | 'review';
 
 interface BodyLandmarks {
-  nose: { x: number; y: number; z: number };
-  leftShoulder: { x: number; y: number; z: number };
-  rightShoulder: { x: number; y: number; z: number };
-  leftElbow: { x: number; y: number; z: number };
-  rightElbow: { x: number; y: number; z: number };
-  leftWrist: { x: number; y: number; z: number };
-  rightWrist: { x: number; y: number; z: number };
-  leftHip: { x: number; y: number; z: number };
-  rightHip: { x: number; y: number; z: number };
-  leftKnee: { x: number; y: number; z: number };
-  rightKnee: { x: number; y: number; z: number };
-  leftAnkle: { x: number; y: number; z: number };
-  rightAnkle: { x: number; y: number; z: number };
+  nose: { x: number; y: number; z: number; confidence: number };
+  leftShoulder: { x: number; y: number; z: number; confidence: number };
+  rightShoulder: { x: number; y: number; z: number; confidence: number };
+  leftElbow: { x: number; y: number; z: number; confidence: number };
+  rightElbow: { x: number; y: number; z: number; confidence: number };
+  leftWrist: { x: number; y: number; z: number; confidence: number };
+  rightWrist: { x: number; y: number; z: number; confidence: number };
+  leftHip: { x: number; y: number; z: number; confidence: number };
+  rightHip: { x: number; y: number; z: number; confidence: number };
+  leftKnee: { x: number; y: number; z: number; confidence: number };
+  rightKnee: { x: number; y: number; z: number; confidence: number };
+  leftAnkle: { x: number; y: number; z: number; confidence: number };
+  rightAnkle: { x: number; y: number; z: number; confidence: number };
 }
 
 export default function App() {
@@ -34,32 +34,49 @@ export default function App() {
   const [bodyLandmarks, setBodyLandmarks] = useState<BodyLandmarks | null>(null);
   const [isBodyDetected, setIsBodyDetected] = useState(false);
   const [trackingQuality, setTrackingQuality] = useState<'poor' | 'good' | 'excellent'>('poor');
+  const [visibilityIssues, setVisibilityIssues] = useState<string[]>([]);
+  const [overallConfidence, setOverallConfidence] = useState<number>(0);
   const [permission, requestPermission] = useCameraPermissions();
 
   const startBodyTracking = () => {
-    // Simulate body tracking with realistic landmarks
+    // Simulate body tracking with realistic landmarks and confidence scores
     const interval = setInterval(() => {
       if (isTracking) {
-        // Generate realistic body landmarks based on screen dimensions
+        // Generate realistic body landmarks with confidence scores
         const simulatedLandmarks: BodyLandmarks = {
-          nose: { x: width / 2, y: height * 0.3, z: 0 },
-          leftShoulder: { x: width * 0.4, y: height * 0.35, z: 0 },
-          rightShoulder: { x: width * 0.6, y: height * 0.35, z: 0 },
-          leftElbow: { x: width * 0.35, y: height * 0.5, z: 0 },
-          rightElbow: { x: width * 0.65, y: height * 0.5, z: 0 },
-          leftWrist: { x: width * 0.3, y: height * 0.65, z: 0 },
-          rightWrist: { x: width * 0.7, y: height * 0.65, z: 0 },
-          leftHip: { x: width * 0.45, y: height * 0.6, z: 0 },
-          rightHip: { x: width * 0.55, y: height * 0.6, z: 0 },
-          leftKnee: { x: width * 0.45, y: height * 0.8, z: 0 },
-          rightKnee: { x: width * 0.55, y: height * 0.8, z: 0 },
-          leftAnkle: { x: width * 0.45, y: height * 0.95, z: 0 },
-          rightAnkle: { x: width * 0.55, y: height * 0.95, z: 0 },
+          nose: { x: width / 2, y: height * 0.3, z: 0, confidence: 0.95 },
+          leftShoulder: { x: width * 0.4, y: height * 0.35, z: 0, confidence: 0.88 },
+          rightShoulder: { x: width * 0.6, y: height * 0.35, z: 0, confidence: 0.92 },
+          leftElbow: { x: width * 0.35, y: height * 0.5, z: 0, confidence: 0.85 },
+          rightElbow: { x: width * 0.65, y: height * 0.5, z: 0, confidence: 0.87 },
+          leftWrist: { x: width * 0.3, y: height * 0.65, z: 0, confidence: 0.78 },
+          rightWrist: { x: width * 0.7, y: height * 0.65, z: 0, confidence: 0.82 },
+          leftHip: { x: width * 0.45, y: height * 0.6, z: 0, confidence: 0.90 },
+          rightHip: { x: width * 0.55, y: height * 0.6, z: 0, confidence: 0.88 },
+          leftKnee: { x: width * 0.45, y: height * 0.8, z: 0, confidence: 0.85 },
+          rightKnee: { x: width * 0.55, y: height * 0.8, z: 0, confidence: 0.83 },
+          leftAnkle: { x: width * 0.45, y: height * 0.95, z: 0, confidence: 0.75 },
+          rightAnkle: { x: width * 0.55, y: height * 0.95, z: 0, confidence: 0.78 },
         };
         
+        // Calculate overall confidence and identify visibility issues
+        const confidences = Object.values(simulatedLandmarks).map(landmark => landmark.confidence);
+        const avgConfidence = confidences.reduce((sum, conf) => sum + conf, 0) / confidences.length;
+        setOverallConfidence(avgConfidence);
+        
+        // Identify low confidence body parts
+        const issues: string[] = [];
+        if (simulatedLandmarks.leftWrist.confidence < 0.8) issues.push('Left wrist not clearly visible');
+        if (simulatedLandmarks.rightWrist.confidence < 0.8) issues.push('Right wrist not clearly visible');
+        if (simulatedLandmarks.leftAnkle.confidence < 0.8) issues.push('Left ankle not clearly visible');
+        if (simulatedLandmarks.rightAnkle.confidence < 0.8) issues.push('Right ankle not clearly visible');
+        if (simulatedLandmarks.leftElbow.confidence < 0.85) issues.push('Left elbow partially hidden');
+        if (simulatedLandmarks.rightElbow.confidence < 0.85) issues.push('Right elbow partially hidden');
+        
+        setVisibilityIssues(issues);
         setBodyLandmarks(simulatedLandmarks);
         setIsBodyDetected(true);
-        setTrackingQuality('excellent');
+        setTrackingQuality(avgConfidence > 0.9 ? 'excellent' : avgConfidence > 0.8 ? 'good' : 'poor');
       }
     }, 100);
 
@@ -110,15 +127,21 @@ export default function App() {
     const neckWidth = shoulderWidthCm * 0.25;
     const neckCircumference = Math.PI * neckWidth;
     
+    // Calculate confidence scores for each measurement
+    const shoulderConfidence = (landmarks.leftShoulder.confidence + landmarks.rightShoulder.confidence) / 2;
+    const armConfidence = (landmarks.leftElbow.confidence + landmarks.rightElbow.confidence + landmarks.leftWrist.confidence + landmarks.rightWrist.confidence) / 4;
+    const hipConfidence = (landmarks.leftHip.confidence + landmarks.rightHip.confidence) / 2;
+    const legConfidence = (landmarks.leftKnee.confidence + landmarks.rightKnee.confidence + landmarks.leftAnkle.confidence + landmarks.rightAnkle.confidence) / 4;
+    
     return {
-      height: baseHeight,
-      chest: Math.round(chestCircumference),
-      waist: Math.round(waistCircumference),
-      hips: Math.round(hipCircumference),
-      shoulders: Math.round(shoulderWidthCm),
-      inseam: Math.round(inseamCm),
-      armLength: Math.round(armLengthCm),
-      neck: Math.round(neckCircumference),
+      height: { value: baseHeight, confidence: 1.0 },
+      chest: { value: Math.round(chestCircumference), confidence: shoulderConfidence },
+      waist: { value: Math.round(waistCircumference), confidence: shoulderConfidence * 0.9 },
+      hips: { value: Math.round(hipCircumference), confidence: hipConfidence },
+      shoulders: { value: Math.round(shoulderWidthCm), confidence: shoulderConfidence },
+      inseam: { value: Math.round(inseamCm), confidence: legConfidence },
+      armLength: { value: Math.round(armLengthCm), confidence: armConfidence },
+      neck: { value: Math.round(neckCircumference), confidence: landmarks.nose.confidence * 0.8 },
     };
   };
 
@@ -139,19 +162,19 @@ export default function App() {
   const handleMeasurementComplete = () => {
     // Always generate measurements, even if bodyLandmarks is null
     const landmarks = bodyLandmarks || {
-      nose: { x: width / 2, y: height * 0.3, z: 0 },
-      leftShoulder: { x: width * 0.4, y: height * 0.35, z: 0 },
-      rightShoulder: { x: width * 0.6, y: height * 0.35, z: 0 },
-      leftElbow: { x: width * 0.35, y: height * 0.5, z: 0 },
-      rightElbow: { x: width * 0.65, y: height * 0.5, z: 0 },
-      leftWrist: { x: width * 0.3, y: height * 0.65, z: 0 },
-      rightWrist: { x: width * 0.7, y: height * 0.65, z: 0 },
-      leftHip: { x: width * 0.45, y: height * 0.6, z: 0 },
-      rightHip: { x: width * 0.55, y: height * 0.6, z: 0 },
-      leftKnee: { x: width * 0.45, y: height * 0.8, z: 0 },
-      rightKnee: { x: width * 0.55, y: height * 0.8, z: 0 },
-      leftAnkle: { x: width * 0.45, y: height * 0.95, z: 0 },
-      rightAnkle: { x: width * 0.55, y: height * 0.95, z: 0 },
+      nose: { x: width / 2, y: height * 0.3, z: 0, confidence: 0.95 },
+      leftShoulder: { x: width * 0.4, y: height * 0.35, z: 0, confidence: 0.88 },
+      rightShoulder: { x: width * 0.6, y: height * 0.35, z: 0, confidence: 0.92 },
+      leftElbow: { x: width * 0.35, y: height * 0.5, z: 0, confidence: 0.85 },
+      rightElbow: { x: width * 0.65, y: height * 0.5, z: 0, confidence: 0.87 },
+      leftWrist: { x: width * 0.3, y: height * 0.65, z: 0, confidence: 0.78 },
+      rightWrist: { x: width * 0.7, y: height * 0.65, z: 0, confidence: 0.82 },
+      leftHip: { x: width * 0.45, y: height * 0.6, z: 0, confidence: 0.90 },
+      rightHip: { x: width * 0.55, y: height * 0.6, z: 0, confidence: 0.88 },
+      leftKnee: { x: width * 0.45, y: height * 0.8, z: 0, confidence: 0.85 },
+      rightKnee: { x: width * 0.55, y: height * 0.8, z: 0, confidence: 0.83 },
+      leftAnkle: { x: width * 0.45, y: height * 0.95, z: 0, confidence: 0.75 },
+      rightAnkle: { x: width * 0.55, y: height * 0.95, z: 0, confidence: 0.78 },
     };
     
     const newMeasurements = calculateRealMeasurements(landmarks, currentStep);
@@ -372,6 +395,12 @@ export default function App() {
                     {isBodyDetected ? 'Body Detected' : 'Position yourself'}
                   </Text>
                 </View>
+                <View style={styles.confidenceIndicator}>
+                  <Text style={styles.confidenceText}>
+                    Confidence: {Math.round(overallConfidence * 100)}%
+                  </Text>
+                  <View style={[styles.confidenceBar, { width: `${overallConfidence * 100}%` }]} />
+                </View>
                 <Text style={styles.stepIndicator}>
                   {currentStep === 'front' ? 'Front View' : 'Side View'}
                 </Text>
@@ -385,6 +414,18 @@ export default function App() {
                     : 'Turn 90° right, arms at sides'
                   }
                 </Text>
+                
+                {/* Visibility Issues */}
+                {visibilityIssues.length > 0 && (
+                  <View style={styles.visibilityIssuesContainer}>
+                    <Text style={styles.visibilityIssuesTitle}>⚠️ Visibility Issues:</Text>
+                    {visibilityIssues.map((issue, index) => (
+                      <Text key={index} style={styles.visibilityIssueText}>
+                        • {issue}
+                      </Text>
+                    ))}
+                  </View>
+                )}
               </View>
 
               {/* Countdown Overlay */}
@@ -465,28 +506,41 @@ export default function App() {
           showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.measurementsContent}
         >
-          {Object.entries(measurements).map(([key, value]) => (
-            <View key={key} style={styles.measurementCard}>
-              <Text style={styles.measurementIcon}>
-                {key === 'height' ? '📏' : 
-                 key === 'chest' ? '❤️' : 
-                 key === 'waist' ? '👤' : 
-                 key === 'hips' ? '⭕' : 
-                 key === 'shoulders' ? '🔺' : 
-                 key === 'inseam' ? '🚶' : 
-                 key === 'armLength' ? '✋' : '👤'}
-              </Text>
-              <View style={styles.measurementContent}>
-                <Text style={styles.measurementLabel}>
-                  {key.charAt(0).toUpperCase() + key.slice(1)}
+          {Object.entries(measurements).map(([key, measurement]) => {
+            const measurementObj = measurement as any;
+            const value = measurementObj?.value !== undefined ? measurementObj.value : measurement;
+            const confidence = measurementObj?.confidence !== undefined ? measurementObj.confidence : 1.0;
+            const confidenceColor = confidence > 0.9 ? '#4CAF50' : confidence > 0.7 ? '#FF9800' : '#F44336';
+            
+            return (
+              <View key={key} style={styles.measurementCard}>
+                <Text style={styles.measurementIcon}>
+                  {key === 'height' ? '📏' : 
+                   key === 'chest' ? '❤️' : 
+                   key === 'waist' ? '👤' : 
+                   key === 'hips' ? '⭕' : 
+                   key === 'shoulders' ? '🔺' : 
+                   key === 'inseam' ? '🚶' : 
+                   key === 'armLength' ? '✋' : '👤'}
                 </Text>
-                <View style={styles.measurementInput}>
-                  <Text style={styles.measurementValue}>{String(value)}</Text>
-                  <Text style={styles.measurementUnit}>cm</Text>
+                <View style={styles.measurementContent}>
+                  <Text style={styles.measurementLabel}>
+                    {key.charAt(0).toUpperCase() + key.slice(1)}
+                  </Text>
+                  <View style={styles.measurementInput}>
+                    <Text style={styles.measurementValue}>{String(value)}</Text>
+                    <Text style={styles.measurementUnit}>cm</Text>
+                  </View>
+                  <View style={styles.confidenceIndicator}>
+                    <Text style={[styles.confidenceText, { color: confidenceColor }]}>
+                      Confidence: {Math.round(confidence * 100)}%
+                    </Text>
+                    <View style={[styles.confidenceBar, { width: `${confidence * 100}%`, backgroundColor: confidenceColor }]} />
+                  </View>
                 </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </ScrollView>
 
         <View style={styles.buttonContainer}>
@@ -1036,5 +1090,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#6366f1',
+  },
+  confidenceIndicator: {
+    marginTop: 8,
+  },
+  confidenceText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  confidenceBar: {
+    height: 4,
+    backgroundColor: '#4CAF50',
+    borderRadius: 2,
+  },
+  visibilityIssuesContainer: {
+    backgroundColor: 'rgba(255, 193, 7, 0.9)',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 16,
+    maxWidth: 300,
+  },
+  visibilityIssuesTitle: {
+    color: '#856404',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  visibilityIssueText: {
+    color: '#856404',
+    fontSize: 12,
+    marginBottom: 4,
   },
 }); 
