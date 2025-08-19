@@ -205,6 +205,56 @@ class ApiService {
         });
     }
 
+    async getPurchases() {
+        return this.request('/purchases');
+    }
+
+    async getPurchase(id) {
+        return this.request(`/purchases/${id}`);
+    }
+
+    async updatePurchase(id, purchaseData) {
+        return this.request(`/purchases/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(purchaseData),
+        });
+    }
+
+    async deletePurchase(id) {
+        return this.request(`/purchases/${id}`, {
+            method: 'DELETE',
+        });
+    }
+
+    // Rental Methods
+    async getRentals() {
+        return this.request('/rentals');
+    }
+
+    async getRental(id) {
+        return this.request(`/rentals/${id}`);
+    }
+
+    async createRental(rentalData) {
+        return this.request('/rentals', {
+            method: 'POST',
+            body: JSON.stringify(rentalData),
+        });
+    }
+
+    async updateRental(id, rentalData) {
+        return this.request(`/rentals/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(rentalData),
+        });
+    }
+
+    async deleteRental(id) {
+        return this.request(`/rentals/${id}`, {
+            method: 'DELETE',
+        });
+    }
+
     // Check if user is authenticated
     async isAuthenticated() {
         try {

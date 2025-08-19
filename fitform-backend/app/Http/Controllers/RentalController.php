@@ -22,16 +22,36 @@ class RentalController extends Controller
     {
         $data = $request->validate([
             'item_name' => 'required|string',
+            'rental_type' => 'required|string',
+            'rental_duration' => 'required|string',
+            'start_date' => 'required|date',
+            'return_date' => 'required|date',
+            'special_requests' => 'nullable|string',
+            'customer_name' => 'required|string',
+            'customer_email' => 'required|email',
             'rental_date' => 'required|date',
             'clothing_type' => 'required|string',
             'measurements' => 'required|array',
-            'notes' => 'nullable|string',
-            'customer_email' => 'required|email',
         ]);
+        
         $data['user_id'] = $request->user()->id;
-        $data['customer_name'] = $request->user()->name;
         $data['status'] = 'pending';
-        $rental = Rental::create($data);
+        
+        // Map frontend fields to database fields
+        $rentalData = [
+            'user_id' => $data['user_id'],
+            'item_name' => $data['item_name'],
+            'rental_date' => $data['start_date'], // Use start_date as rental_date
+            'return_date' => $data['return_date'],
+            'status' => $data['status'],
+            'clothing_type' => $data['clothing_type'],
+            'measurements' => $data['measurements'],
+            'notes' => $data['special_requests'],
+            'customer_name' => $data['customer_name'],
+            'customer_email' => $data['customer_email'],
+        ];
+        
+        $rental = Rental::create($rentalData);
         return response()->json($rental, 201);
     }
 
@@ -103,7 +123,7 @@ class RentalController extends Controller
     {
         $rental = Rental::findOrFail($id);
         $rental->quotation_status = 'accepted';
-        $rental->status = 'in_progress';
+        $rental->status = 'ready_for_pickup';
         $rental->quotation_responded_at = now();
         $rental->save();
         // Notify all admins

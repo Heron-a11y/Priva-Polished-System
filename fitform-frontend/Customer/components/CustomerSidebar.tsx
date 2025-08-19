@@ -263,19 +263,19 @@ const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
 const styles = StyleSheet.create({
   mobileOverlay: {
     position: 'absolute',
-    top: 0,
+    top: -60,
     left: 0,
     width: '100%',
-    height: '100%',
+    height: '120%',
     backgroundColor: 'rgba(0,0,0,0.3)',
     zIndex: 998,
   },
   mobileSidebar: {
     position: 'absolute',
-    top: 0,
+    top: -60,
     left: 0,
     width: 270,
-    height: '100%',
+    height: '120%',
     backgroundColor: '#014D40',
     zIndex: 999,
     shadowColor: '#000',
@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
   logoArea: {
     backgroundColor: '#014D40',
     alignItems: 'center',
-    paddingTop: 32,
+    paddingTop: 92,
     paddingBottom: 24,
     position: 'relative',
     borderBottomWidth: 1,
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     position: 'absolute',
-    top: 16,
+    top: 76,
     right: 16,
     zIndex: 10,
   },

@@ -3,7 +3,6 @@ import { View, StyleSheet, Dimensions } from 'react-native';
 import { Stack } from 'expo-router';
 import CustomerSidebar from '../../Customer/components/CustomerSidebar';
 import Header from '../../components/Header';
-import CustomerOrders from './orders';
 import { NotificationProvider } from '../../contexts/NotificationContext';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;

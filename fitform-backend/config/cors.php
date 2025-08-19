@@ -20,14 +20,37 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
+        // Local development
         'http://localhost:8081',
-        'http://localhost:19006', // Expo development server
-        'exp://localhost:19000', // Expo Go
-        'exp://192.168.1.55:19000', // Your actual IP
-        'http://192.168.1.55:19006', // Your actual IP
+        'http://localhost:19006',
+        'http://localhost:3000',
+        
+        // Expo development server
+        'exp://localhost:19000',
+        'exp://localhost:19006',
+        
+        // Common local network IPs (will be updated dynamically)
+        'http://192.168.1.*:19006',
+        'http://192.168.0.*:19006',
+        'http://10.0.0.*:19006',
+        'http://172.16.*.*:19006',
+        
+        // Expo Go patterns
+        'exp://192.168.1.*:19000',
+        'exp://192.168.0.*:19000',
+        'exp://10.0.0.*:19000',
+        'exp://172.16.*.*:19000',
     ],
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        // Allow any local network IP for development
+        'exp://192\.168\..*:19000',
+        'exp://10\.0\..*:19000',
+        'exp://172\.16\..*:19000',
+        'http://192\.168\..*:19006',
+        'http://10\.0\..*:19006',
+        'http://172\.16\..*:19006',
+    ],
 
     'allowed_headers' => ['*'],
 

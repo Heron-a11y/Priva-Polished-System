@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo FitForm Frontend - Multi-Device Setup
+echo FitForm - API IP Update Helper
 echo ========================================
 echo.
 
@@ -25,21 +25,23 @@ set "IP_ADDRESS=%IP_ADDRESS: =%"
 
 echo Current IP Address: %IP_ADDRESS%
 echo.
-echo ========================================
-echo IMPORTANT SETUP STEPS:
-echo ========================================
-echo 1. Make sure your mobile device is on the same WiFi network
-echo 2. Update fitform-frontend/services/api.js with this IP: %IP_ADDRESS%
-echo 3. Your phone can access the app via Expo Go using: exp://%IP_ADDRESS%:19000
+echo This script will help you update the API_BASE_URL in services/api.js
+echo.
+echo Current API_BASE_URL should be: http://%IP_ADDRESS%:8000/api
 echo.
 echo ========================================
-echo Starting Expo development server...
+echo MANUAL UPDATE REQUIRED:
 echo ========================================
+echo 1. Open fitform-frontend/services/api.js
+echo 2. Find the line: const API_BASE_URL = '...'
+echo 3. Update it to: const API_BASE_URL = 'http://%IP_ADDRESS%:8000/api'
+echo 4. Save the file
 echo.
-echo The server will be accessible on your network
-echo You can scan the QR code with Expo Go on your phone
+echo ========================================
+echo After updating:
+echo ========================================
+echo - Backend: http://%IP_ADDRESS%:8000
+echo - Frontend: exp://%IP_ADDRESS%:19000
+echo - API: http://%IP_ADDRESS%:8000/api
 echo.
 pause
-echo.
-npm start
-pause 

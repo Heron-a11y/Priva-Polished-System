@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, ScrollView, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import RentalOrderFlow from '../../Customer/components/RentalOrderFlow';
 import PurchaseOrderFlow from '../../Customer/components/PurchaseOrderFlow';
+import { Colors } from '../../constants/Colors';
+
+const { width, height } = Dimensions.get('window');
 
 const TABS = [
-  { key: 'rentals', label: 'Rentals' },
-  { key: 'purchases', label: 'Purchases' },
+  { key: 'rentals', label: 'Rentals', icon: '👔', description: 'Garment rentals' },
+  { key: 'purchases', label: 'Purchases', icon: '🛍️', description: 'Custom garments' },
 ];
 
 export default function CustomerOrders() {
@@ -13,19 +17,33 @@ export default function CustomerOrders() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.tabBar}>
-        {TABS.map(tab => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[styles.tab, activeTab === tab.key && styles.activeTab]}
-            onPress={() => setActiveTab(tab.key)}
-          >
-            <Text style={[styles.tabText, activeTab === tab.key && styles.activeTabText]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      {/* Compact Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>My Orders</Text>
+        <Text style={styles.headerSubtitle}>Manage your transactions</Text>
       </View>
+
+      {/* Compact Tab Bar */}
+      <View style={styles.tabContainer}>
+        <View style={styles.tabBar}>
+          {TABS.map(tab => (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.tab, activeTab === tab.key && styles.activeTab]}
+              onPress={() => setActiveTab(tab.key)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.tabIcon}>{tab.icon}</Text>
+              <Text style={[styles.tabText, activeTab === tab.key && styles.activeTabText]}>
+                {tab.label}
+              </Text>
+              {activeTab === tab.key && <View style={styles.activeIndicator} />}
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* Content Area */}
       <View style={styles.content}>
         {activeTab === 'rentals' ? (
           <RentalOrderFlow />
@@ -38,34 +56,89 @@ export default function CustomerOrders() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background.light,
+  },
+  header: {
+    backgroundColor: Colors.background.primary,
+    paddingTop: Platform.OS === 'ios' ? 40 : 16,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    shadowColor: Colors.background.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  headerTitle: {
+    fontSize: Platform.OS === 'ios' ? 22 : 20,
+    fontWeight: '700',
+    color: Colors.text.inverse,
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  headerSubtitle: {
+    fontSize: Platform.OS === 'ios' ? 13 : 12,
+    color: Colors.text.inverse,
+    opacity: 0.9,
+    textAlign: 'center',
+    fontWeight: '400',
+  },
+  tabContainer: {
+    backgroundColor: Colors.background.card,
+    marginHorizontal: 12,
+    marginTop: -12,
+    borderRadius: 12,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    backgroundColor: Colors.background.card,
+    borderRadius: 12,
+    padding: 2,
   },
   tab: {
     flex: 1,
-    paddingVertical: 16,
     alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    paddingVertical: Platform.OS === 'ios' ? 12 : 10,
+    paddingHorizontal: 4,
+    borderRadius: 10,
+    position: 'relative',
   },
   activeTab: {
-    borderBottomColor: '#014D40',
-    backgroundColor: '#e6f2ef',
+    backgroundColor: Colors.background.primary,
+  },
+  tabIcon: {
+    fontSize: Platform.OS === 'ios' ? 20 : 18,
+    marginBottom: 4,
   },
   tabText: {
-    fontSize: 16,
-    color: '#014D40',
-    fontWeight: 'bold',
+    fontSize: Platform.OS === 'ios' ? 14 : 13,
+    fontWeight: '600',
+    color: Colors.text.secondary,
   },
   activeTabText: {
-    color: '#014D40',
+    color: Colors.text.inverse,
+  },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: '50%',
+    marginLeft: -6,
+    width: 12,
+    height: 2,
+    backgroundColor: Colors.secondary,
+    borderRadius: 1,
   },
   content: {
     flex: 1,
-    padding: 24,
+    paddingTop: 8,
   },
 }); 
