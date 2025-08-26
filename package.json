@@ -9,10 +9,20 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@mediapipe/camera_utils": "^0.3.1675466862",
+    "@mediapipe/pose": "^0.5.1675469404",
     "expo": "~53.0.0",
+    "expo-asset": "^11.1.7",
     "expo-camera": "~16.1.11",
+    "expo-constants": "^17.1.7",
+    "expo-file-system": "^18.1.11",
+    "expo-gl": "^15.1.7",
+    "expo-gl-cpp": "^11.4.0",
+    "expo-media-library": "^17.1.7",
+    "expo-sensors": "^14.1.4",
     "react": "19.0.0",
-    "react-native": "0.79.5"
+    "react-native": "0.79.5",
+    "react-native-vision-camera": "^4.7.1"
   },
   "devDependencies": {
     "@babel/core": "^7.26.0",
