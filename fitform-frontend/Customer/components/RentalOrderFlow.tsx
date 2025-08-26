@@ -20,12 +20,7 @@ const RENTAL_TYPES = [
   { id: 'other', label: 'Other', icon: '👕', description: 'Other clothing types' }
 ];
 
-const RENTAL_DURATIONS = [
-  { id: '1_day', label: '1 Day', price: '₱500', description: 'Same day return' },
-  { id: '3_days', label: '3 Days', price: '₱1,200', description: 'Weekend rental' },
-  { id: '1_week', label: '1 Week', price: '₱2,500', description: 'Weekly rental' },
-  { id: '2_weeks', label: '2 Weeks', price: '₱4,500', description: 'Extended rental' }
-];
+
 
 interface RentalOrder {
   id: number;
@@ -53,15 +48,20 @@ interface RentalOrder {
   quotation_responded_at: string | null;
   created_at: string;
   updated_at: string;
+  penalty_breakdown?: {
+    delay_days: number;
+    delay_fee: number;
+  };
+  total_penalties: number;
+  penalty_status: string;
 }
 
 interface RentalForm {
   rentalType: string;
   otherType: string;
-  duration: string;
   startDate: string;
-  returnDate: string;
   specialRequests: string;
+  agreementAccepted: boolean;
 }
 
 export default function RentalOrderFlow() {
@@ -71,18 +71,17 @@ export default function RentalOrderFlow() {
   const [formData, setFormData] = useState<RentalForm>({
     rentalType: '',
     otherType: '',
-    duration: '',
     startDate: '',
-    returnDate: '',
-    specialRequests: ''
+    specialRequests: '',
+    agreementAccepted: false
   });
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [selectedOrder, setSelectedOrder] = useState<RentalOrder | null>(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [showQuotationModal, setShowQuotationModal] = useState(false);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showReturnDatePicker, setShowReturnDatePicker] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showAgreementModal, setShowAgreementModal] = useState(false);
 
   const { user } = useAuth();
   const { selectedOrderForReview, clearOrderReview } = useNotificationContext();
@@ -94,12 +93,7 @@ export default function RentalOrderFlow() {
     }
   };
 
-  const handleReturnDateChange = (event: any, selectedDate?: Date) => {
-    setShowReturnDatePicker(false);
-    if (selectedDate) {
-      setFormData({...formData, returnDate: selectedDate.toISOString().split('T')[0]});
-    }
-  };
+
 
   useEffect(() => {
     fetchRentalOrders();
@@ -142,26 +136,13 @@ export default function RentalOrderFlow() {
     if (formData.rentalType === 'other' && !formData.otherType.trim()) {
       newErrors.otherType = 'Please specify the rental type';
     }
-    if (!formData.duration) newErrors.duration = 'Please select rental duration';
     if (!formData.startDate) newErrors.startDate = 'Please select pickup date';
-    if (!formData.returnDate) newErrors.returnDate = 'Please select return date';
+    if (!formData.agreementAccepted) newErrors.agreementAccepted = 'You must accept the rental agreement';
 
     // Validate date formats
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (formData.startDate && !dateRegex.test(formData.startDate)) {
       newErrors.startDate = 'Please use YYYY-MM-DD format';
-    }
-    if (formData.returnDate && !dateRegex.test(formData.returnDate)) {
-      newErrors.returnDate = 'Please use YYYY-MM-DD format';
-    }
-
-    // Validate that return date is after start date
-    if (formData.startDate && formData.returnDate) {
-      const startDate = new Date(formData.startDate);
-      const returnDate = new Date(formData.returnDate);
-      if (returnDate <= startDate) {
-        newErrors.returnDate = 'Return date must be after pickup date';
-      }
     }
 
     setErrors(newErrors);
@@ -173,13 +154,16 @@ export default function RentalOrderFlow() {
 
     setLoading(true);
     try {
+      // Calculate return date (5 days from start date)
+      const startDate = new Date(formData.startDate);
+      const returnDate = new Date(startDate);
+      returnDate.setDate(startDate.getDate() + 5);
+
       const payload = {
         item_name: formData.rentalType === 'other' ? formData.otherType : 
                    RENTAL_TYPES.find(t => t.id === formData.rentalType)?.label,
         rental_type: formData.rentalType,
-        rental_duration: formData.duration,
         start_date: formData.startDate,
-        return_date: formData.returnDate,
         special_requests: formData.specialRequests,
         customer_name: user?.name,
         customer_email: user?.email,
@@ -195,7 +179,8 @@ export default function RentalOrderFlow() {
           shoulder_width: 0,
           arm_length: 0,
           inseam: 0
-        } // Default measurements for rental orders
+        }, // Default measurements for rental orders
+        agreement_accepted: formData.agreementAccepted // Add agreement_accepted
       };
 
       console.log('Submitting rental order with payload:', payload);
@@ -218,10 +203,9 @@ export default function RentalOrderFlow() {
     setFormData({
       rentalType: '',
       otherType: '',
-      duration: '',
       startDate: '',
-      returnDate: '',
-      specialRequests: ''
+      specialRequests: '',
+      agreementAccepted: false
     });
     setErrors({});
   };
@@ -300,26 +284,7 @@ export default function RentalOrderFlow() {
     </TouchableOpacity>
   );
 
-  const renderDurationCard = (duration: any) => (
-    <TouchableOpacity
-      key={duration.id}
-      style={[
-        styles.durationCard,
-        formData.duration === duration.id && styles.selectedDuration
-      ]}
-      onPress={() => setFormData({...formData, duration: duration.id})}
-      activeOpacity={0.7}
-    >
-      <Text style={styles.durationLabel}>{duration.label}</Text>
-      <Text style={styles.durationPrice}>{duration.price}</Text>
-      <Text style={styles.durationDescription}>{duration.description}</Text>
-      {formData.duration === duration.id && (
-        <View style={styles.selectedIndicator}>
-          <Ionicons name="checkmark-circle" size={24} color={Colors.secondary} />
-        </View>
-      )}
-    </TouchableOpacity>
-  );
+
 
   const renderOrderCard = (order: RentalOrder) => (
     <TouchableOpacity
@@ -472,18 +437,11 @@ export default function RentalOrderFlow() {
               {errors.rentalType && <Text style={styles.errorText}>{errors.rentalType}</Text>}
             </View>
 
-            {/* Duration Selection */}
-            <View style={styles.formSection}>
-              <Text style={styles.formSectionTitle}>Select Rental Duration</Text>
-              <View style={styles.durationGrid}>
-                {RENTAL_DURATIONS.map(renderDurationCard)}
-              </View>
-              {errors.duration && <Text style={styles.errorText}>{errors.duration}</Text>}
-            </View>
+
 
             {/* Date Selection */}
             <View style={styles.formSection}>
-              <Text style={styles.formSectionTitle}>Rental Dates</Text>
+              <Text style={styles.formSectionTitle}>Rental Date</Text>
               
               <View style={styles.dateInputRow}>
                 <View style={styles.dateInputContainer}>
@@ -499,20 +457,13 @@ export default function RentalOrderFlow() {
                   </TouchableOpacity>
                   {errors.startDate && <Text style={styles.errorText}>{errors.startDate}</Text>}
                 </View>
-                
-                <View style={styles.dateInputContainer}>
-                  <Text style={styles.inputLabel}>Return Date</Text>
-                  <TouchableOpacity
-                    style={styles.datePickerButton}
-                    onPress={() => setShowReturnDatePicker(true)}
-                  >
-                    <Ionicons name="calendar" size={20} color={Colors.primary} />
-                    <Text style={styles.datePickerButtonText}>
-                      {formData.returnDate || 'Select Return Date'}
-                    </Text>
-                  </TouchableOpacity>
-                  {errors.returnDate && <Text style={styles.errorText}>{errors.returnDate}</Text>}
-                </View>
+              </View>
+              
+              <View style={styles.rentalInfoBox}>
+                <Ionicons name="information-circle" size={20} color={Colors.primary} />
+                <Text style={styles.rentalInfoText}>
+                  <Text style={styles.rentalInfoBold}>Rental Period:</Text> 5 days from pickup date
+                </Text>
               </View>
             </View>
 
@@ -527,6 +478,78 @@ export default function RentalOrderFlow() {
                 multiline
                 numberOfLines={3}
               />
+            </View>
+
+            {/* User Agreement */}
+            <View style={styles.formSection}>
+              <Text style={styles.formSectionTitle}>Rental Agreement</Text>
+              
+              <View style={styles.agreementContainer}>
+                <View style={styles.agreementHeader}>
+                  <Ionicons name="shield-checkmark" size={24} color={Colors.primary} />
+                  <Text style={styles.agreementHeaderText}>Terms & Conditions</Text>
+                </View>
+                
+                <TouchableOpacity
+                  style={styles.viewAgreementButton}
+                  onPress={() => setShowAgreementModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="document-text-outline" size={20} color={Colors.primary} />
+                  <Text style={styles.viewAgreementButtonText}>View Complete Terms</Text>
+                  <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+                </TouchableOpacity>
+                
+                <View style={styles.agreementSummary}>
+                  <View style={styles.agreementItem}>
+                    <Ionicons name="time" size={16} color={Colors.warning} />
+                    <Text style={styles.agreementItemText}>5-day rental period</Text>
+                  </View>
+                  <View style={styles.agreementItem}>
+                    <Ionicons name="cash" size={16} color={Colors.success} />
+                    <Text style={styles.agreementItemText}>₱500 rental fee</Text>
+                  </View>
+                  <View style={styles.agreementItem}>
+                    <Ionicons name="warning" size={16} color={Colors.error} />
+                    <Text style={styles.agreementItemText}>Penalties apply for delays/damage</Text>
+                  </View>
+                </View>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.agreementCheckbox,
+                    formData.agreementAccepted && styles.agreementCheckboxAccepted
+                  ]}
+                  onPress={() => setFormData({...formData, agreementAccepted: !formData.agreementAccepted})}
+                  activeOpacity={0.8}
+                >
+                  <View style={[
+                    styles.checkboxContainer,
+                    formData.agreementAccepted && styles.checkboxContainerAccepted
+                  ]}>
+                    {formData.agreementAccepted && (
+                      <Ionicons name="checkmark" size={18} color={Colors.text.inverse} />
+                    )}
+                  </View>
+                  <View style={styles.agreementTextContainer}>
+                    <Text style={styles.agreementCheckboxText}>
+                      I have read and agree to the{' '}
+                      <Text style={styles.agreementLink}>terms and conditions</Text>
+                      {' '}of the rental agreement
+                    </Text>
+                    <Text style={styles.agreementNote}>
+                      This includes understanding all penalty fees and return requirements
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                
+                {errors.agreementAccepted && (
+                  <View style={styles.errorContainer}>
+                    <Ionicons name="alert-circle" size={16} color={Colors.error} />
+                    <Text style={styles.errorText}>{errors.agreementAccepted}</Text>
+                  </View>
+                )}
+              </View>
             </View>
           </ScrollView>
 
@@ -655,6 +678,42 @@ export default function RentalOrderFlow() {
                     </Text>
                   </View>
                 )}
+
+                {/* Penalty Information */}
+                {selectedOrder.penalty_breakdown && (
+                  <View style={styles.penaltySection}>
+                    <Text style={styles.penaltySectionTitle}>Penalty Information</Text>
+                    
+                    {selectedOrder.penalty_breakdown.delay_days > 0 && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Delay Penalty:</Text>
+                        <Text style={[styles.detailValue, styles.penaltyValue]}>
+                          ₱{selectedOrder.penalty_breakdown.delay_fee} ({selectedOrder.penalty_breakdown.delay_days} days)
+                        </Text>
+                      </View>
+                    )}
+                    
+                    {selectedOrder.total_penalties > 0 && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Total Penalties:</Text>
+                        <Text style={[styles.detailValue, styles.penaltyValue]}>
+                          ₱{selectedOrder.total_penalties}
+                        </Text>
+                      </View>
+                    )}
+                    
+                    {selectedOrder.penalty_status !== 'none' && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Penalty Status:</Text>
+                        <Text style={[styles.detailValue, 
+                          selectedOrder.penalty_status === 'paid' ? styles.paidStatus : styles.pendingStatus
+                        ]}>
+                          {selectedOrder.penalty_status === 'paid' ? 'Paid' : 'Pending Payment'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
               </View>
             </ScrollView>
           </View>
@@ -733,6 +792,104 @@ export default function RentalOrderFlow() {
         </View>
       </Modal>
 
+      {/* User Agreement Modal */}
+      <Modal
+        visible={showAgreementModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowAgreementModal(false)}
+      >
+        <View style={styles.agreementModalOverlay}>
+          <View style={styles.agreementModalContent}>
+            <View style={styles.agreementModalHeader}>
+              <Text style={styles.agreementModalTitle}>Rental Agreement & Penalties</Text>
+              <TouchableOpacity
+                onPress={() => setShowAgreementModal(false)}
+                style={styles.agreementCloseButton}
+              >
+                <Text style={styles.agreementCloseButtonText}>×</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.agreementFormContainer}>
+              <ScrollView 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.agreementScrollContent}
+                style={styles.agreementScrollView}
+              >
+                <View style={styles.agreementHeaderSection}>
+                  <View style={styles.agreementIconContainer}>
+                    <Ionicons name="shield-checkmark" size={40} color={Colors.primary} />
+                  </View>
+                  <Text style={styles.enhancedAgreementTitle}>Rental Agreement & Terms</Text>
+                  <Text style={styles.enhancedAgreementSubtitle}>
+                    Please read and understand the following terms before proceeding
+                  </Text>
+                </View>
+                
+                <View style={styles.enhancedTermsContainer}>
+                  <View style={styles.enhancedTermCard}>
+                    <View style={styles.enhancedTermHeader}>
+                      <Ionicons name="information-circle" size={20} color={Colors.primary} />
+                      <Text style={styles.enhancedTermTitle}>Cancellation Policy</Text>
+                    </View>
+                    <Text style={styles.enhancedTermDescription}>
+                      A cancellation fee of ₱500 will be applied to cancelled orders.
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.enhancedTermCard}>
+                    <View style={styles.enhancedTermHeader}>
+                      <Ionicons name="time" size={20} color={Colors.warning} />
+                      <Text style={styles.enhancedTermTitle}>Return Policy</Text>
+                    </View>
+                    <Text style={styles.enhancedTermDescription}>
+                      Late returns incur a penalty of ₱100 per day beyond the 5-day rental period.
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.enhancedTermCard}>
+                    <View style={styles.enhancedTermHeader}>
+                      <Ionicons name="warning" size={20} color={Colors.error} />
+                      <Text style={styles.enhancedTermTitle}>Damage Assessment</Text>
+                    </View>
+                    <Text style={styles.enhancedTermDescription}>
+                      Damage fees range from ₱200 (minor) to full rental cost (severe damage).
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.enhancedTermCard}>
+                    <View style={styles.enhancedTermHeader}>
+                      <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+                      <Text style={styles.enhancedTermTitle}>Care Requirements</Text>
+                    </View>
+                    <Text style={styles.enhancedTermDescription}>
+                      Handle garments with care and return in original condition to avoid penalties.
+                    </Text>
+                  </View>
+                </View>
+                
+                <View style={styles.enhancedAgreementFooter}>
+                  <Ionicons name="alert-circle" size={18} color={Colors.warning} />
+                  <Text style={styles.enhancedAgreementFooterText}>
+                    All penalties must be settled before future rentals can be processed.
+                  </Text>
+                </View>
+              </ScrollView>
+            </View>
+
+            <View style={styles.agreementModalFooter}>
+              <TouchableOpacity
+                style={styles.agreementModalButton}
+                onPress={() => setShowAgreementModal(false)}
+              >
+                <Text style={styles.agreementModalButtonText}>Got It</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Date Pickers */}
       {showStartDatePicker && (
         <DateTimePicker
@@ -741,16 +898,6 @@ export default function RentalOrderFlow() {
           display="default"
           onChange={handleStartDateChange}
           minimumDate={new Date()}
-        />
-      )}
-
-      {showReturnDatePicker && (
-        <DateTimePicker
-          value={formData.returnDate ? new Date(formData.returnDate) : new Date()}
-          mode="date"
-          display="default"
-          onChange={handleReturnDateChange}
-          minimumDate={formData.startDate ? new Date(formData.startDate) : new Date()}
         />
       )}
     </View>
@@ -916,34 +1063,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 16,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   modalTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
     color: Colors.text.primary,
+    letterSpacing: 0.5,
   },
   closeButton: {
-    padding: 8,
+    padding: 10,
+    borderRadius: 20,
+    backgroundColor: Colors.background.card,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
   },
   modalContent: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: 24,
+    paddingTop: 24,
   },
   formSection: {
     marginBottom: 32,
   },
   formSectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: Colors.text.primary,
-    marginBottom: 16,
+    marginBottom: 20,
     textAlign: 'center',
+    position: 'relative',
   },
   rentalTypesGrid: {
     flexDirection: 'row',
@@ -954,33 +1110,45 @@ const styles = StyleSheet.create({
   rentalTypeCard: {
     width: (width - 60) / 2,
     backgroundColor: Colors.background.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: Colors.border.light,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+
   },
   selectedRentalType: {
     borderColor: Colors.primary,
-    backgroundColor: Colors.primary + '10',
+    backgroundColor: Colors.primary + '15',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    transform: [{ scale: 1.02 }],
   },
   rentalTypeIcon: {
-    fontSize: 32,
-    marginBottom: 8,
+    fontSize: 36,
+    marginBottom: 12,
   },
   rentalTypeLabel: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.text.primary,
-    marginBottom: 4,
+    marginBottom: 6,
     textAlign: 'center',
   },
   rentalTypeDescription: {
-    fontSize: 12,
+    fontSize: 13,
     color: Colors.text.secondary,
     textAlign: 'center',
-    lineHeight: 16,
+    lineHeight: 18,
   },
   durationGrid: {
     flexDirection: 'row',
@@ -1061,40 +1229,55 @@ const styles = StyleSheet.create({
   },
   modalActions: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
     borderTopWidth: 1,
     borderTopColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
   cancelButton: {
     flex: 1,
     backgroundColor: Colors.background.card,
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingVertical: 18,
+    borderRadius: 16,
     marginRight: 12,
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: Colors.border.light,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   cancelButtonText: {
     color: Colors.text.secondary,
-    fontWeight: '600',
-    fontSize: 16,
+    fontWeight: '700',
+    fontSize: 17,
+    letterSpacing: 0.5,
   },
   submitButton: {
     flex: 1,
     backgroundColor: Colors.primary,
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingVertical: 18,
+    borderRadius: 16,
     alignItems: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   submitButtonDisabled: {
     opacity: 0.6,
   },
   submitButtonText: {
     color: Colors.text.inverse,
-    fontWeight: '600',
-    fontSize: 16,
+    fontWeight: '700',
+    fontSize: 17,
+    letterSpacing: 0.5,
   },
   orderDetailCard: {
     backgroundColor: Colors.background.card,
@@ -1130,12 +1313,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.background.card,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: Colors.border.light,
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    minHeight: 48,
+    paddingVertical: 14,
+    minHeight: 52,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   datePickerButtonText: {
     fontSize: 16,
@@ -1305,4 +1493,326 @@ const styles = StyleSheet.create({
     textAlign: 'left',
     paddingLeft: 8,
   },
+  agreementCheckbox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  agreementCheckboxAccepted: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + '10',
+  },
+  checkboxContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: Colors.text.secondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  checkboxContainerAccepted: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary,
+  },
+  agreementTextContainer: {
+    flex: 1,
+  },
+  agreementCheckboxText: {
+    fontSize: 14,
+    color: Colors.text.primary,
+    marginLeft: 10,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  agreementLink: {
+    color: Colors.primary,
+    textDecorationLine: 'underline',
+  },
+  agreementNote: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  penaltySection: {
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border.light,
+  },
+  penaltySectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginBottom: 12,
+  },
+  penaltyValue: {
+    fontWeight: '600',
+    color: Colors.error,
+  },
+  paidStatus: {
+    color: Colors.success,
+  },
+  pendingStatus: {
+    color: Colors.warning,
+  },
+  agreementContainer: {
+    marginTop: 16,
+  },
+  agreementHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  agreementHeaderText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginLeft: 8,
+  },
+  viewAgreementButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background.card,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  viewAgreementButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginLeft: 8,
+  },
+  agreementSummary: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  agreementItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  agreementItemText: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginLeft: 8,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.error + '10',
+  },
+  rentalInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background.card,
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  rentalInfoText: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginLeft: 8,
+    flex: 1,
+  },
+  rentalInfoBold: {
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  enhancedAgreementContent: {
+    padding: 20,
+    paddingBottom: 20,
+  },
+  agreementHeaderSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  agreementIconContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: Colors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  enhancedAgreementTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  enhancedAgreementSubtitle: {
+    fontSize: 16,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  enhancedTermsContainer: {
+    marginBottom: 20,
+  },
+  enhancedTermCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  enhancedTermHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  enhancedTermTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginLeft: 12,
+  },
+  enhancedTermDescription: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    lineHeight: 20,
+    marginLeft: 32,
+  },
+  enhancedAgreementFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.warning + '10',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.warning + '30',
+    marginBottom: 20,
+  },
+  enhancedAgreementFooterText: {
+    fontSize: 14,
+    color: Colors.warning,
+    fontWeight: '500',
+    marginLeft: 12,
+    flex: 1,
+    lineHeight: 20,
+  },
+
+
+  agreementCloseButtonText: {
+    fontSize: 20,
+    color: Colors.text.secondary,
+    fontWeight: 'bold',
+  },
+  agreementModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  agreementModalContent: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 20,
+    width: width * 0.9,
+    maxHeight: '92%',
+    minHeight: 550,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  agreementModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light,
+  },
+  agreementModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.text.primary,
+  },
+  agreementCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.background.light,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border.medium,
+  },
+  agreementFormContainer: {
+    flex: 1,
+    padding: 20,
+    paddingTop: 30,
+    paddingBottom: 0,
+    minHeight: 450,
+  },
+  agreementScrollContent: {
+    paddingBottom: 40,
+  },
+  agreementScrollView: {
+    flex: 1,
+  },
+
+  agreementModalFooter: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border.light,
+    backgroundColor: Colors.background.card,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  agreementModalButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 15,
+    paddingHorizontal: 25,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  agreementModalButtonText: {
+    color: Colors.text.inverse,
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
+

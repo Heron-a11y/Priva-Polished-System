@@ -255,6 +255,20 @@ class ApiService {
         });
     }
 
+    // Penalty management
+    async getPenaltyBreakdown(rentalId) {
+        return this.request(`/rentals/${rentalId}/penalties`);
+    }
+    async calculatePenalties(rentalId, data) {
+        return this.request(`/rentals/${rentalId}/calculate-penalties`, { method: 'POST', data });
+    }
+    async markPenaltiesPaid(rentalId) {
+        return this.request(`/rentals/${rentalId}/mark-penalties-paid`, { method: 'POST' });
+    }
+    async acceptAgreement(rentalId) {
+        return this.request(`/rentals/${rentalId}/accept-agreement`, { method: 'POST' });
+    }
+
     // Check if user is authenticated
     async isAuthenticated() {
         try {
@@ -300,10 +314,40 @@ class ApiService {
         return this.request('/admin/sizing/standards');
     }
 
+    async getAllSizingStandards() {
+        return this.request('/admin/sizing/standards/all');
+    }
+
+    async getActiveSizingStandards() {
+        return this.request('/admin/sizing/standards/active');
+    }
+
+    async checkSizingStandardDeletion(id) {
+        return this.request(`/admin/sizing/standards/${id}/check-deletion`);
+    }
+
     async updateSizingStandard(standardData) {
         return this.request('/admin/sizing/standards', {
             method: 'POST',
             body: JSON.stringify(standardData),
+        });
+    }
+
+    async deleteSizingStandard(id) {
+        return this.request(`/admin/sizing/standards/${id}`, {
+            method: 'DELETE',
+        });
+    }
+
+    async deactivateSizingStandard(id) {
+        return this.request(`/admin/sizing/standards/${id}/deactivate`, {
+            method: 'POST',
+        });
+    }
+
+    async reactivateSizingStandard(id) {
+        return this.request(`/admin/sizing/standards/${id}/reactivate`, {
+            method: 'POST',
         });
     }
 

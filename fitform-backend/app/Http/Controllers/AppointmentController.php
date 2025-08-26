@@ -34,6 +34,37 @@ class AppointmentController extends Controller
             'notes' => 'nullable|string',
         ]);
 
+        // Check if appointment date is in the past
+        $appointmentDate = \Carbon\Carbon::parse($validated['appointment_date']);
+        $today = \Carbon\Carbon::today();
+        
+        if ($appointmentDate->lt($today)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot schedule appointments in the past. Please select a current or future date.',
+                'error' => 'past_date_not_allowed'
+            ], 422);
+        }
+
+        // Check if appointment time is within business hours (10 AM to 5 PM)
+        $appointmentHour = $appointmentDate->hour;
+        if ($appointmentHour < 10 || $appointmentHour >= 17) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Appointments can only be scheduled between 10:00 AM and 5:00 PM. Please select a time within business hours.',
+                'error' => 'outside_business_hours'
+            ], 422);
+        }
+
+        // Log the appointment time for debugging
+        \Log::info('Appointment time being created:', [
+            'original' => $validated['appointment_date'],
+            'parsed_hour' => $appointmentHour,
+            'parsed_date' => $appointmentDate->toDateTimeString(),
+            'formatted_time' => $appointmentDate->format('H:i:s'),
+            'timezone' => $appointmentDate->timezone->getName()
+        ]);
+
         // Check if there's already an appointment on this date
         $existingAppointment = Appointment::whereDate('appointment_date', $validated['appointment_date'])
             ->where('status', '!=', 'cancelled')
@@ -64,6 +95,36 @@ class AppointmentController extends Controller
         $validated = $request->validate([
             'appointment_date' => 'required|date',
         ]);
+
+        // Check if rescheduled date is in the past
+        $appointmentDate = \Carbon\Carbon::parse($validated['appointment_date']);
+        $today = \Carbon\Carbon::today();
+        
+        if ($appointmentDate->lt($today)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot reschedule appointments to past dates. Please select a current or future date.',
+                'error' => 'past_date_not_allowed'
+            ], 422);
+        }
+
+        // Check if rescheduled appointment time is within business hours (10 AM to 5 PM)
+        $appointmentHour = $appointmentDate->hour;
+        if ($appointmentHour < 10 || $appointmentHour >= 17) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Appointments can only be rescheduled between 10:00 AM and 5:00 PM. Please select a time within business hours.',
+                'error' => 'outside_business_hours'
+            ], 422);
+        }
+
+        // Log the rescheduled appointment time for debugging
+        \Log::info('Appointment time being rescheduled:', [
+            'original' => $validated['appointment_date'],
+            'parsed_hour' => $appointmentHour,
+            'parsed_date' => $appointmentDate->toDateTimeString()
+        ]);
+
         $appointment->appointment_date = $validated['appointment_date'];
         $appointment->status = 'pending'; // Optionally reset status on reschedule
         $appointment->save();

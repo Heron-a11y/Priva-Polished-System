@@ -14,6 +14,7 @@ interface Order {
   quotation_price?: number;
   quotation_notes?: string;
   quotation_schedule?: string;
+  penalty_status?: 'paid' | 'pending'; // Added for penalty status
 }
 
 const OrdersScreen = () => {
@@ -35,6 +36,11 @@ const OrdersScreen = () => {
   const [quotationScheduleDate, setQuotationScheduleDate] = useState<Date | null>(null);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  // Add penalty management state
+  const [penaltyDamageLevel, setPenaltyDamageLevel] = useState<'none' | 'minor' | 'major' | 'severe'>('none');
+  const [penaltyNotes, setPenaltyNotes] = useState('');
+  const [penaltyLoading, setPenaltyLoading] = useState(false);
+  const [showPenaltyModal, setShowPenaltyModal] = useState(false);
 
   const SCREEN_WIDTH = Dimensions.get('window').width;
   const isMobile = SCREEN_WIDTH < 600;
@@ -54,6 +60,7 @@ const OrdersScreen = () => {
           quotation_amount: r.quotation_amount,
           quotation_notes: r.quotation_notes,
           quotation_schedule: r.quotation_schedule,
+          penalty_status: r.penalty_status, // Assuming penalty_status is returned from the API
         }));
         const purchasesRes = await apiService.request('/purchases');
         const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
@@ -106,6 +113,7 @@ const OrdersScreen = () => {
         customer: r.customer_name || r.customer_email || 'N/A',
         status: r.status || 'N/A',
         details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
+        penalty_status: r.penalty_status, // Assuming penalty_status is returned from the API
       }));
       const purchasesRes = await apiService.request('/purchases');
       const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
@@ -279,6 +287,7 @@ const OrdersScreen = () => {
                 <View style={[styles.headerCell, { width: 140 }]}><Text style={styles.orderCellHeaderClassic}>Customer</Text></View>
                 <View style={[styles.headerCell, { width: 120 }]}><Text style={styles.orderCellHeaderClassic}>Status</Text></View>
                 <View style={[styles.headerCell, { width: 100 }]}><Text style={styles.orderCellHeaderClassic}>Actions</Text></View>
+                <View style={[styles.headerCell, { width: 120 }]}><Text style={styles.orderCellHeaderClassic}>Penalty Status</Text></View>
               </View>
               {filteredOrders.map((item) => (
                 <View key={`${item.type}-${item.id}`} style={styles.orderRowClassic2}>
@@ -291,6 +300,21 @@ const OrdersScreen = () => {
                       <Text style={styles.actionButtonTextClassic2}>View</Text>
                     </TouchableOpacity>
                   </View>
+                  {/* Add penalty status column for rentals */}
+                  {item.type === 'Rental' && (
+                    <View style={[styles.dataCell, { width: 120 }]}>
+                      <Text style={[
+                        styles.orderCellClassic2,
+                        { 
+                          color: item.penalty_status === 'paid' ? '#388e3c' : 
+                                 item.penalty_status === 'pending' ? '#ff9800' : '#666'
+                        }
+                      ]}>
+                        {item.penalty_status === 'paid' ? '✅ Paid' : 
+                         item.penalty_status === 'pending' ? '⚠️ Pending' : '—'}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               ))}
             </View>
@@ -660,6 +684,119 @@ const OrdersScreen = () => {
                 <Ionicons name="person-circle-outline" size={18} color="#d32f2f" />
                 <Text>Customer Response: <Text style={{ fontWeight: 'bold', color: '#d32f2f' }}>Rejected</Text></Text>
               </View>
+            </View>
+          )}
+          {/* Penalty Management Section for Rental Orders */}
+          {selectedOrder.type === 'Rental' && (
+            <View style={{ marginTop: 16, padding: 16, backgroundColor: '#fff3e0', borderRadius: 8, borderWidth: 1, borderColor: '#ff9800' }}>
+              <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#e65100', marginBottom: 12 }}>
+                🚨 Penalty Management
+              </Text>
+              
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontWeight: '600', marginBottom: 6 }}>Damage Assessment:</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {(['none', 'minor', 'major', 'severe'] as const).map((level) => (
+                    <TouchableOpacity
+                      key={level}
+                      style={[
+                        { 
+                          paddingHorizontal: 12, 
+                          paddingVertical: 6, 
+                          borderRadius: 16, 
+                          borderWidth: 1,
+                          borderColor: penaltyDamageLevel === level ? '#ff9800' : '#ccc'
+                        },
+                        penaltyDamageLevel === level 
+                          ? { backgroundColor: '#ff9800', borderColor: '#ff9800' }
+                          : { backgroundColor: '#fff' }
+                      ]}
+                      onPress={() => setPenaltyDamageLevel(level)}
+                    >
+                      <Text style={[
+                        { fontSize: 12, fontWeight: '500' },
+                        penaltyDamageLevel === level 
+                          ? { color: '#fff' }
+                          : { color: '#666' }
+                      ]}>
+                        {level.charAt(0).toUpperCase() + level.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+              
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontWeight: '600', marginBottom: 6 }}>Penalty Notes:</Text>
+                <TextInput
+                  style={[styles.input, { marginBottom: 0 }]}
+                  placeholder="Add notes about damage or penalties..."
+                  value={penaltyNotes}
+                  onChangeText={setPenaltyNotes}
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
+              
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: '#ff9800', marginBottom: 8 }]}
+                disabled={penaltyLoading}
+                onPress={async () => {
+                  setPenaltyLoading(true);
+                  try {
+                    await apiService.request(`/rentals/${selectedOrder.id}/calculate-penalties`, {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        damage_level: penaltyDamageLevel,
+                        penalty_notes: penaltyNotes
+                      })
+                    });
+                    Alert.alert('Success', 'Penalties calculated and applied!');
+                    setPenaltyDamageLevel('none');
+                    setPenaltyNotes('');
+                    // Refresh orders
+                    setLoading(true);
+                    const rentalsRes = await apiService.request('/rentals');
+                    const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
+                    const rentals = (rentalsArr || []).map((r: any) => ({
+                      id: r.id,
+                      type: 'Rental',
+                      customer: r.customer_name || r.customer_email || 'N/A',
+                      status: r.status || 'N/A',
+                      details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
+                      quotation_amount: r.quotation_amount,
+                      quotation_notes: r.quotation_notes,
+                      quotation_schedule: r.quotation_schedule,
+                    }));
+                    const purchasesRes = await apiService.request('/purchases');
+                    const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
+                    const purchases = (purchasesArr || []).map((p: any) => ({
+                      id: p.id,
+                      type: 'Purchase',
+                      customer: p.customer_name || p.customer_email || 'N/A',
+                      status: p.status || 'N/A',
+                      details: p.item_name + (r.notes ? ` - ${r.notes}` : ''),
+                      quotation_price: p.quotation_price,
+                      quotation_notes: p.quotation_notes,
+                      quotation_schedule: p.quotation_schedule,
+                    }));
+                    setOrders([...rentals, ...purchases]);
+                  } catch (err) {
+                    Alert.alert('Error', 'Failed to calculate penalties.');
+                  } finally {
+                    setPenaltyLoading(false);
+                  }
+                }}
+              >
+                <Ionicons name="calculator-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
+                  {penaltyLoading ? 'Calculating...' : 'Calculate Penalties'}
+                </Text>
+              </TouchableOpacity>
+              
+              <Text style={{ fontSize: 12, color: '#e65100', textAlign: 'center' }}>
+                Penalties: ₱500 cancellation, ₱100/day delay, ₱200+ damage fees
+              </Text>
             </View>
           )}
           {/* Existing action buttons */}

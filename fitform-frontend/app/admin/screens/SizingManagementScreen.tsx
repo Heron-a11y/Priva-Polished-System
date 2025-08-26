@@ -15,6 +15,7 @@ import { ThemedView } from '../../../components/ThemedView';
 import { ThemedText } from '../../../components/ThemedText';
 import { Colors } from '../../../constants/Colors';
 import apiService from '../../../services/api';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const { width } = Dimensions.get('window');
 
@@ -39,17 +40,14 @@ export default function SizingManagementScreen() {
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingStandard, setEditingStandard] = useState<SizingStandard | null>(null);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     category: 'shirts',
     gender: 'male',
     is_active: true,
     measurements: {
-      chest: '',
-      waist: '',
-      length: '',
-      shoulder: '',
-      sleeve: '',
+      chest: '', waist: '', length: '', shoulder: '', sleeve: ''
     },
     size_categories: {
       XS: { chest: '', waist: '', length: '', shoulder: '', sleeve: '' },
@@ -68,29 +66,33 @@ export default function SizingManagementScreen() {
     size_categories: Record<string, Record<string, string>>;
   });
 
-  const categories = ['shirts', 'pants', 'dresses', 'jackets', 'skirts', 'blazers', 'polo', 't-shirts', 'jeans', 'shorts', 'custom'];
+  const categories = ['shirts', 'pants', 'dresses', 'jackets', 'skirts', 'shoes', 'hats', 'suits', 'activewear', 'custom'];
   const genders = ['male', 'female', 'unisex'];
 
   // Category-based default measurements
   const getDefaultMeasurements = (category: string): Record<string, string> => {
     switch (category) {
       case 'shirts':
-      case 'polo':
-      case 't-shirts':
-      case 'blazers':
         return { chest: '', waist: '', length: '', shoulder: '', sleeve: '' };
       case 'pants':
-      case 'jeans':
-      case 'shorts':
-        return { waist: '', hips: '', inseam: '', thigh: '', length: '' };
+        return { waist: '', hips: '', length: '', inseam: '', thigh: '' };
       case 'dresses':
-        return { bust: '', waist: '', hips: '', length: '', shoulder: '' };
+        return { chest: '', waist: '', hips: '', length: '', shoulder: '' };
       case 'jackets':
         return { chest: '', waist: '', length: '', shoulder: '', sleeve: '' };
       case 'skirts':
         return { waist: '', hips: '', length: '' };
+      case 'shoes':
+        return { foot_length: '' };
+      case 'hats':
+        return { head_circumference: '' };
+      case 'suits':
+        return { chest: '', waist: '', hips: '', length: '', shoulder: '', sleeve: '', inseam: '' };
+      case 'activewear':
+        return { chest: '', waist: '', hips: '', length: '' };
       default:
-        return { chest: '', waist: '', length: '' }; // Generic fallback
+        // For custom categories, return basic measurements
+        return { chest: '', waist: '', length: '' };
     }
   };
 
@@ -98,20 +100,23 @@ export default function SizingManagementScreen() {
   const getCategoryDescription = (category: string): string => {
     switch (category) {
       case 'shirts':
-      case 'polo':
-      case 't-shirts':
-      case 'blazers':
-        return 'Upper body garments that require chest, shoulder, and sleeve measurements for proper fit';
+        return 'Upper body garments that require chest, waist, length, shoulder, and sleeve measurements for proper fit';
       case 'pants':
-      case 'jeans':
-      case 'shorts':
-        return 'Lower body garments that focus on waist, hips, and inseam for comfortable wear';
+        return 'Lower body garments that require waist, hips, length, inseam, and thigh measurements for comfortable wear';
       case 'dresses':
-        return 'Full-body garments that need bust, waist, and hip measurements for elegant fit';
+        return 'Full-body garments that require chest, waist, hips, length, and shoulder measurements for elegant fit';
       case 'jackets':
-        return 'Outerwear that requires chest, shoulder, and sleeve measurements for layering';
+        return 'Outerwear that requires chest, waist, length, shoulder, and sleeve measurements for layering';
       case 'skirts':
-        return 'Lower body garments that need waist and hip measurements for proper fit';
+        return 'Lower body garments that require waist, hips, and length measurements for proper fit';
+      case 'shoes':
+        return 'Footwear that requires foot length measurement for proper sizing';
+      case 'hats':
+        return 'Headwear that requires head circumference measurement for comfortable fit';
+      case 'suits':
+        return 'Formal wear that requires comprehensive measurements including chest, waist, hips, length, shoulder, sleeve, and inseam';
+      case 'activewear':
+        return 'Athletic clothing that requires chest, waist, hips, and length measurements for comfortable movement';
       default:
         return 'Custom garment category - add relevant measurements as needed';
     }
@@ -202,8 +207,7 @@ export default function SizingManagementScreen() {
       measurements: defaultMeasurements,
       size_categories: defaultSizeCategories
     });
-    setCustomCategory('');
-    setShowCustomCategoryInput(false);
+    
     setModalVisible(true);
   };
 
@@ -370,22 +374,28 @@ export default function SizingManagementScreen() {
     // Check if the category is custom (not in predefined list)
     const isCustomCategory = !categories.slice(0, -1).includes(standard.category);
     
+    // Convert measurements to strings for the form
+    const measurementsAsStrings = Object.fromEntries(
+      Object.entries(standard.measurements).map(([key, value]) => [key, value.toString()])
+    );
+    
+    // Convert size categories measurements to strings for the form
+    const sizeCategoriesAsStrings = Object.fromEntries(
+      Object.entries(standard.size_categories).map(([size, measurements]) => [
+        size,
+        Object.fromEntries(
+          Object.entries(measurements).map(([key, value]) => [key, value.toString()])
+        )
+      ])
+    );
+    
     setFormData({
       name: standard.name,
       category: standard.category,
       gender: standard.gender,
       is_active: standard.is_active,
-      measurements: Object.fromEntries(
-        Object.entries(standard.measurements).map(([key, value]) => [key, value.toString()])
-      ),
-      size_categories: Object.fromEntries(
-        Object.entries(standard.size_categories).map(([size, measurements]) => [
-          size,
-          Object.fromEntries(
-            Object.entries(measurements).map(([key, value]) => [key, value.toString()])
-          )
-        ])
-      ),
+      measurements: measurementsAsStrings,
+      size_categories: sizeCategoriesAsStrings,
     });
     
     if (isCustomCategory) {
@@ -397,6 +407,50 @@ export default function SizingManagementScreen() {
     }
     
     setModalVisible(true);
+  };
+
+  // Format measurement value for display
+  const formatMeasurementValue = (value: string | number): string => {
+    if (typeof value === 'number') {
+      return value.toString();
+    }
+    if (typeof value === 'string') {
+      // Remove any non-numeric characters except decimal points
+      return value.replace(/[^0-9.]/g, '');
+    }
+    return '';
+  };
+
+  // Check if form is valid for submission
+  const isFormValid = (): boolean => {
+    // Check if name is provided
+    if (!formData.name.trim()) return false;
+    
+    // Check if category is set
+    if (!formData.category.trim()) return false;
+    
+    // Check if custom category is selected but not yet submitted
+    if (showCustomCategoryInput && !customCategory.trim()) return false;
+    
+    // Check if all measurements are valid positive numbers
+    const allMeasurementsValid = Object.values(formData.measurements).every(value => {
+      if (!value || value.trim() === '') return false;
+      const numValue = parseFloat(value);
+      return !isNaN(numValue) && numValue > 0;
+    });
+    
+    if (!allMeasurementsValid) return false;
+    
+    // Check if all size category measurements are valid positive numbers
+    const allSizeMeasurementsValid = Object.values(formData.size_categories).every(measurements => {
+      return Object.values(measurements).every(value => {
+        if (!value || value.trim() === '') return false;
+        const numValue = parseFloat(value);
+        return !isNaN(numValue) && numValue > 0;
+      });
+    });
+    
+    return allSizeMeasurementsValid;
   };
 
   const handleSubmit = async () => {
@@ -417,12 +471,66 @@ export default function SizingManagementScreen() {
       return;
     }
 
+    // Validate that all measurements are positive numbers
+    const validationErrors: string[] = [];
+    
+    // Check base measurements
+    Object.entries(formData.measurements).forEach(([field, value]) => {
+      if (!value || value.trim() === '') {
+        validationErrors.push(`Base measurement '${field}' is required`);
+      } else {
+        const numValue = parseFloat(value);
+        if (isNaN(numValue) || numValue <= 0) {
+          validationErrors.push(`Base measurement '${field}' must be a positive number`);
+        }
+      }
+    });
+
+    // Check size category measurements
+    Object.entries(formData.size_categories).forEach(([size, measurements]) => {
+      Object.entries(measurements).forEach(([field, value]) => {
+        if (!value || value.trim() === '') {
+          validationErrors.push(`Size '${size}' measurement '${field}' is required`);
+        } else {
+          const numValue = parseFloat(value);
+          if (isNaN(numValue) || numValue <= 0) {
+            validationErrors.push(`Size '${size}' measurement '${field}' must be a positive number`);
+          }
+        }
+      });
+    });
+
+    if (validationErrors.length > 0) {
+      Alert.alert('Validation Error', `Please fix the following issues:\n\n${validationErrors.join('\n')}`);
+      return;
+    }
+
+    // Convert measurements to numbers for backend
+    const numericMeasurements: Record<string, number> = {};
+    Object.entries(formData.measurements).forEach(([field, value]) => {
+      numericMeasurements[field] = parseFloat(value);
+    });
+
+    const numericSizeCategories: Record<string, Record<string, number>> = {};
+    Object.entries(formData.size_categories).forEach(([size, measurements]) => {
+      numericSizeCategories[size] = {};
+      Object.entries(measurements).forEach(([field, value]) => {
+        numericSizeCategories[size][field] = parseFloat(value);
+      });
+    });
+
+    const submissionData = {
+      ...formData,
+      measurements: numericMeasurements,
+      size_categories: numericSizeCategories
+    };
+
     // Debug: Log what we're sending
-    console.log('Submitting form data:', formData);
+    console.log('Submitting form data:', submissionData);
 
     try {
       setLoading(true);
-      const response = await apiService.updateSizingStandard(formData);
+      const response = await apiService.updateSizingStandard(submissionData);
       if (response.success) {
         Alert.alert('Success', response.message);
         setModalVisible(false);
@@ -516,14 +624,14 @@ export default function SizingManagementScreen() {
     console.log('Current size categories:', formData.size_categories);
     
     return (
-    <Modal
-      animationType="slide"
-      transparent={true}
-      visible={modalVisible}
-      onRequestClose={() => setModalVisible(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        transparent={false}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <ThemedText style={styles.modalTitle}>
               {editingStandard ? 'Edit Sizing Standard' : 'Add New Sizing Standard'}
@@ -532,17 +640,15 @@ export default function SizingManagementScreen() {
               style={styles.closeButton}
               onPress={() => setModalVisible(false)}
             >
-              <ThemedText style={styles.closeButtonText}>×</ThemedText>
+              <Ionicons name="close" size={24} color={Colors.text.primary} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
             {/* Basic Information */}
             <View style={styles.formSection}>
-              <View style={styles.sectionHeader}>
-                <ThemedText style={styles.sectionTitle}>Basic Information</ThemedText>
-                <ThemedText style={styles.sectionSubtitle}>Define the core details of your sizing standard</ThemedText>
-              </View>
+              <ThemedText style={styles.formSectionTitle}>Basic Information</ThemedText>
+              <ThemedText style={styles.formSectionSubtitle}>Define the core details of your sizing standard</ThemedText>
               
               <View style={styles.inputGroup}>
                 <ThemedText style={styles.inputLabel}>Standard Name</ThemedText>
@@ -657,15 +763,25 @@ export default function SizingManagementScreen() {
 
             {/* Measurements Configuration */}
             <View style={styles.formSection}>
-              <View style={styles.sectionHeader}>
-                <ThemedText style={styles.sectionTitle}>Measurement Fields</ThemedText>
-                <ThemedText style={styles.sectionSubtitle}>
-                  Configure which measurements to track for this sizing standard
+              <ThemedText style={styles.formSectionTitle}>📏 Base Measurements (Reference Values)</ThemedText>
+              <ThemedText style={styles.formSectionSubtitle}>
+                Set the reference measurements that will be used as a baseline for all size categories
+              </ThemedText>
+              <View style={styles.baseMeasurementsInfo}>
+                <ThemedText style={styles.baseMeasurementsInfoText}>
+                  🎯 <Text style={styles.highlightText}>Base measurements serve as your sizing standard reference.</Text>
                 </ThemedText>
-                <View style={styles.categoryInfo}>
-                  <ThemedText style={styles.categoryInfoText}>
-                    📏 <Text style={styles.highlightText}>{formData.category.toUpperCase()}</Text> requires these measurements:
-                  </ThemedText>
+                <ThemedText style={styles.baseMeasurementsSubtext}>
+                  These values represent the "middle" or "standard" measurements that other sizes will be based on.
+                </ThemedText>
+              </View>
+                              <View style={styles.categoryInfo}>
+                  <View style={styles.categoryInfoHeader}>
+                    <Text style={styles.categoryIcon}>✏️</Text>
+                    <ThemedText style={styles.categoryInfoText}>
+                      <Text style={styles.highlightText}>{formData.category.toUpperCase()}</Text> requires these measurements:
+                    </ThemedText>
+                  </View>
                   <View style={styles.measurementTagsContainer}>
                     {Object.keys(formData.measurements).map((field, index) => (
                       <View key={field} style={styles.measurementTagContainer}>
@@ -682,55 +798,72 @@ export default function SizingManagementScreen() {
                     These fields will be available for all size categories
                   </ThemedText>
                 </View>
-              </View>
               
               {/* Add New Measurement Field */}
-              <View style={styles.addFieldSection}>
-                <View style={styles.addFieldRow}>
+              <View style={styles.addMeasurementSection}>
+                <View style={styles.addMeasurementRow}>
                   <TextInput
-                    style={styles.addFieldInput}
+                    style={styles.addMeasurementInput}
                     value={newMeasurementField}
                     onChangeText={setNewMeasurementField}
                     placeholder="e.g., bust, waist, inseam..."
                     placeholderTextColor="#999"
                   />
                   <TouchableOpacity
-                    style={[styles.addFieldButton, !newMeasurementField.trim() && styles.addFieldButtonDisabled]}
+                    style={[styles.addMeasurementButton, !newMeasurementField.trim() && styles.addMeasurementButtonDisabled]}
                     onPress={addCustomMeasurementField}
                     disabled={!newMeasurementField.trim()}
                   >
-                    <ThemedText style={styles.addFieldButtonText}>+ Add</ThemedText>
+                    <ThemedText style={styles.addMeasurementButtonText}>+ Add</ThemedText>
                   </TouchableOpacity>
                 </View>
               </View>
 
               {/* Display Current Measurement Fields */}
               <View style={styles.measurementFieldsContainer}>
+                <View style={styles.baseMeasurementsLabel}>
+                  <ThemedText style={styles.baseMeasurementsLabelText}>
+                    📊 Base Measurement Values (Reference)
+                  </ThemedText>
+                  <ThemedText style={styles.baseMeasurementsLabelSubtext}>
+                    Set these as your standard reference measurements
+                  </ThemedText>
+                </View>
                 {Object.entries(formData.measurements).map(([field, value]) => (
                   <View key={field} style={styles.measurementFieldItem}>
                     <View style={styles.measurementFieldInfo}>
                       <ThemedText style={styles.measurementFieldLabel}>
-                        {field.charAt(0).toUpperCase() + field.slice(1)}
+                        {field.charAt(0).toUpperCase() + field.slice(1)} *
                       </ThemedText>
                       <View style={styles.baseMeasurementInput}>
                         <TextInput
-                          style={styles.baseInput}
-                          value={value}
+                          style={[
+                            styles.baseInput,
+                            (!value || value.trim() === '' || parseFloat(value) <= 0) && styles.inputError
+                          ]}
+                          value={formatMeasurementValue(value)}
                           onChangeText={(text) => {
+                            // Only allow numbers and decimal points
+                            const numericText = text.replace(/[^0-9.]/g, '');
                             setFormData({
                               ...formData,
                               measurements: {
                                 ...formData.measurements,
-                                [field]: text
+                                [field]: numericText
                               }
                             });
                           }}
-                          placeholder="Base value"
+                          placeholder="Enter measurement (inches)"
                           placeholderTextColor="#999"
                           keyboardType="numeric"
                         />
                         <ThemedText style={styles.baseUnit}>inches</ThemedText>
                       </View>
+                      {(!value || value.trim() === '' || parseFloat(value) <= 0) && (
+                        <ThemedText style={styles.errorText}>
+                          Required - must be a positive number
+                        </ThemedText>
+                      )}
                     </View>
                     <TouchableOpacity
                       style={styles.removeFieldButton}
@@ -743,29 +876,44 @@ export default function SizingManagementScreen() {
               </View>
             </View>
 
+            {/* Visual Separator */}
+            <View style={styles.sectionSeparator}>
+              <View style={styles.separatorLine} />
+              <ThemedText style={styles.separatorText}>📏 MEASUREMENT BREAKDOWN 📏</ThemedText>
+              <View style={styles.separatorLine} />
+            </View>
+
             {/* Size Categories */}
             <View style={styles.formSection}>
-              <View style={styles.sectionHeader}>
-                <ThemedText style={styles.sectionTitle}>Size Categories</ThemedText>
-                <ThemedText style={styles.sectionSubtitle}>Define measurements for each size category</ThemedText>
+              <ThemedText style={styles.formSectionTitle}>👕 Size Categories (Individual Size Measurements)</ThemedText>
+              <ThemedText style={styles.formSectionSubtitle}>
+                Define the specific measurements for each size category (XS, S, M, L, XL, XXL)
+              </ThemedText>
+              <View style={styles.sizeCategoriesInfo}>
+                <ThemedText style={styles.sizeCategoriesInfoText}>
+                  🎯 <Text style={styles.highlightText}>Each size category needs measurements for all fields defined above.</Text>
+                </ThemedText>
+                <ThemedText style={styles.sizeCategoriesSubtext}>
+                  These measurements determine what "XS", "S", "M", etc. actually mean for your customers.
+                </ThemedText>
               </View>
               
               {/* Add New Size Category */}
-              <View style={styles.addFieldSection}>
-                <View style={styles.addFieldRow}>
+              <View style={styles.addSizeSection}>
+                <View style={styles.addSizeRow}>
                   <TextInput
-                    style={styles.addFieldInput}
+                    style={styles.addSizeInput}
                     value={newSizeCategory}
                     onChangeText={setNewSizeCategory}
                     placeholder="e.g., 2XL, 3XL, S/M, L/XL..."
                     placeholderTextColor="#999"
                   />
                   <TouchableOpacity
-                    style={[styles.addFieldButton, !newSizeCategory.trim() && styles.addFieldButtonDisabled]}
+                    style={[styles.addSizeButton, !newSizeCategory.trim() && styles.addSizeButtonDisabled]}
                     onPress={addCustomSizeCategory}
                     disabled={!newSizeCategory.trim()}
                   >
-                    <ThemedText style={styles.addFieldButtonText}>+ Add Size</ThemedText>
+                    <ThemedText style={styles.addSizeButtonText}>+ Add Size</ThemedText>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -781,25 +929,37 @@ export default function SizingManagementScreen() {
                       style={styles.removeSizeButton}
                       onPress={() => removeSizeCategory(size)}
                     >
-                      <ThemedText style={styles.removeSizeButtonText}>×</ThemedText>
+                      <ThemedText style={styles.removeFieldButtonText}>×</ThemedText>
                     </TouchableOpacity>
                   </View>
                   <View style={styles.measurementInputs}>
                     {Object.entries(measurements).map(([key, value]) => (
                       <View key={key} style={styles.measurementInput}>
-                        <ThemedText style={styles.measurementLabel}>{key.charAt(0).toUpperCase() + key.slice(1)}</ThemedText>
+                        <ThemedText style={styles.measurementLabel}>
+                          {key.charAt(0).toUpperCase() + key.slice(1)} *
+                        </ThemedText>
                         <TextInput
-                          style={styles.numberInput}
-                          value={value.toString()}
+                          style={[
+                            styles.numberInput,
+                            (!value || value.trim() === '' || parseFloat(value) <= 0) && styles.inputError
+                          ]}
+                          value={formatMeasurementValue(value)}
                           onChangeText={(text) => {
+                            // Only allow numbers and decimal points
+                            const numericText = text.replace(/[^0-9.]/g, '');
                             const newSizeCategories = { ...formData.size_categories };
-                            newSizeCategories[size] = { ...newSizeCategories[size], [key]: text };
+                            newSizeCategories[size] = { ...newSizeCategories[size], [key]: numericText };
                             setFormData({...formData, size_categories: newSizeCategories});
                           }}
                           keyboardType="numeric"
                           placeholder="0"
                           placeholderTextColor="#999"
                         />
+                        {(!value || value.trim() === '' || parseFloat(value) <= 0) && (
+                          <ThemedText style={styles.errorText}>
+                            Required
+                          </ThemedText>
+                        )}
                       </View>
                     ))}
                   </View>
@@ -807,6 +967,19 @@ export default function SizingManagementScreen() {
               ))}
             </View>
           </ScrollView>
+
+          {/* Floating Bulb Icon - Above the Cancel and Fill All Fields buttons */}
+          <View style={styles.floatingBulbContainer}>
+            <TouchableOpacity 
+              style={styles.floatingBulbIcon}
+              onPress={() => {
+                console.log('Opening summary modal...');
+                setShowSummaryModal(true);
+              }}
+            >
+              <ThemedText style={styles.floatingBulbText}>💡</ThemedText>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.modalFooter}>
             <TouchableOpacity
@@ -816,12 +989,16 @@ export default function SizingManagementScreen() {
               <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+              style={[styles.saveButton, (loading || !isFormValid()) && styles.saveButtonDisabled]}
               onPress={handleSubmit}
-              disabled={loading}
+              disabled={loading || !isFormValid()}
             >
               {loading ? (
                 <ActivityIndicator size="small" color="#fff" />
+              ) : !isFormValid() ? (
+                <ThemedText style={styles.saveButtonText}>
+                  Fill All Fields
+                </ThemedText>
               ) : (
                 <ThemedText style={styles.saveButtonText}>
                   {editingStandard ? 'Update' : 'Create'}
@@ -830,9 +1007,8 @@ export default function SizingManagementScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </View>
-    </Modal>
-  );
+      </Modal>
+    );
   };
 
   return (
@@ -864,6 +1040,106 @@ export default function SizingManagementScreen() {
       )}
 
       {renderForm()}
+
+      {/* Summary Modal */}
+      <Modal
+        visible={showSummaryModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowSummaryModal(false)}
+        statusBarTranslucent={true}
+      >
+        <View style={styles.summaryModalOverlay}>
+          <View style={styles.summaryModalContent}>
+            <View style={styles.summaryModalHeader}>
+              <Text style={styles.summaryModalTitle}>
+                💡 How Sizing Standards Work
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowSummaryModal(false)}
+                style={styles.summaryCloseButton}
+              >
+                <Text style={styles.summaryCloseButtonText}>×</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.summaryFormContainer}>
+              <ScrollView 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.summaryScrollContent}
+                style={styles.summaryScrollView}
+              >
+                <View style={styles.summaryHeaderSection}>
+                  <View style={styles.summaryIconContainer}>
+                    <Text style={styles.summaryIcon}>📏</Text>
+                  </View>
+                  <Text style={styles.summaryMainTitle}>Sizing Standards Guide</Text>
+                  <Text style={styles.summarySubtitle}>
+                    Understand how to set up and manage your sizing system effectively
+                  </Text>
+                </View>
+                
+                <View style={styles.summaryStepsContainer}>
+                  <View style={styles.summaryStepCard}>
+                    <View style={styles.summaryStepHeader}>
+                      <Text style={styles.summaryStepNumber}>1</Text>
+                      <Text style={styles.summaryStepTitle}>
+                        Base Measurements Set Your Reference Standard
+                      </Text>
+                    </View>
+                    <Text style={styles.summaryStepDescription}>
+                      These are your "middle" or "standard" measurements that serve as the foundation for your sizing system.
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.summaryStepCard}>
+                    <View style={styles.summaryStepHeader}>
+                      <Text style={styles.summaryStepNumber}>2</Text>
+                      <Text style={styles.summaryStepTitle}>
+                        Size Categories Define What Each Size Means
+                      </Text>
+                    </View>
+                    <Text style={styles.summaryStepDescription}>
+                      XS, S, M, L, XL, XXL are just labels. Here you define the actual measurements for each size.
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.summaryStepCard}>
+                    <View style={styles.summaryStepHeader}>
+                      <Text style={styles.summaryStepNumber}>3</Text>
+                      <Text style={styles.summaryStepTitle}>
+                        Customer Experience Get Perfect Size Recommendations
+                      </Text>
+                    </View>
+                    <Text style={styles.summaryStepDescription}>
+                      When customers enter their measurements, the system compares them to your size categories and recommends the best fit.
+                    </Text>
+                  </View>
+                </View>
+                
+                <View style={styles.summaryExampleSection}>
+                  <View style={styles.summaryExampleCard}>
+                    <Text style={styles.summaryExampleIcon}>📊</Text>
+                    <Text style={styles.summaryExampleDescription}>
+                      If you set "M" size to Chest: 40", Waist: 32", Length: 28", then customers with similar measurements will be recommended "M" size.
+                    </Text>
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+
+            <View style={styles.summaryModalFooter}>
+              <TouchableOpacity
+                style={styles.summaryModalButton}
+                onPress={() => setShowSummaryModal(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.summaryModalButtonText}>Got It</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -1042,75 +1318,62 @@ const styles = StyleSheet.create({
   standardsList: {
     flex: 1,
   },
-  modalOverlay: {
+  modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: Colors.background.card,
-    borderRadius: 20,
-    width: width * 0.9,
-    maxHeight: '80%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-    borderWidth: 1,
-    borderColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: Colors.text.primary,
+    letterSpacing: 0.5,
   },
   closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.background.light,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 10,
+    borderRadius: 20,
+    backgroundColor: Colors.background.card,
     borderWidth: 1,
-    borderColor: Colors.border.medium,
+    borderColor: Colors.border.light,
   },
   closeButtonText: {
     fontSize: 20,
     color: Colors.text.secondary,
     fontWeight: 'bold',
   },
-  formContainer: {
-    padding: 20,
+  modalContent: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 24,
   },
   formSection: {
-    marginBottom: 25,
+    marginBottom: 32,
   },
-  sectionHeader: {
-    marginBottom: 20,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border.light,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  formSectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
     color: Colors.text.primary,
-    marginBottom: 5,
+    marginBottom: 20,
+    textAlign: 'center',
+    position: 'relative',
   },
-  sectionSubtitle: {
-    fontSize: 12,
+  formSectionSubtitle: {
+    fontSize: 14,
     color: Colors.text.secondary,
-    marginTop: 5,
+    marginBottom: 20,
+    textAlign: 'center',
   },
   inputGroup: {
     marginBottom: 15,
@@ -1368,42 +1631,102 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.primary,
   },
-  addFieldSection: {
-    marginBottom: 15,
+  addMeasurementSection: {
+    marginTop: 5,
+    marginBottom: 10,
+    alignItems: 'center',
   },
-  addFieldRow: {
+  addMeasurementRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
+    justifyContent: 'center',
+    width: '100%',
+    paddingHorizontal: 15,
   },
-  addFieldInput: {
+  addSizeSection: {
+    marginTop: 5,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  addSizeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    justifyContent: 'center',
+    width: '100%',
+    paddingHorizontal: 15,
+  },
+  addMeasurementInput: {
     flex: 1,
+    maxWidth: 250,
+    minWidth: 200,
     borderWidth: 1,
     borderColor: Colors.border.medium,
     borderRadius: 8,
-    padding: 10,
+    padding: 8,
     fontSize: 14,
     backgroundColor: Colors.background.light,
     color: Colors.text.primary,
   },
-  addFieldButton: {
+  addSizeInput: {
+    flex: 1,
+    maxWidth: 250,
+    minWidth: 200,
+    borderWidth: 1,
+    borderColor: Colors.border.medium,
+    borderRadius: 8,
+    padding: 8,
+    fontSize: 14,
+    backgroundColor: Colors.background.light,
+    color: Colors.text.primary,
+  },
+  addMeasurementButton: {
     backgroundColor: Colors.primary,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 20,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 80,
+    height: 36,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
   },
-  addFieldButtonDisabled: {
+  addMeasurementButtonDisabled: {
     backgroundColor: Colors.text.muted,
     shadowOpacity: 0,
     elevation: 0,
   },
-  addFieldButtonText: {
+  addMeasurementButtonText: {
+    color: Colors.text.inverse,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  addSizeButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 80,
+    height: 36,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  addSizeButtonDisabled: {
+    backgroundColor: Colors.text.muted,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  addSizeButtonText: {
     color: Colors.text.inverse,
     fontSize: 14,
     fontWeight: '600',
@@ -1466,18 +1789,40 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.text.secondary,
   },
+  inputError: {
+    borderColor: Colors.error,
+    borderWidth: 2,
+  },
+  errorText: {
+    fontSize: 10,
+    color: Colors.error,
+    marginTop: 5,
+    textAlign: 'center',
+  },
   categoryInfo: {
     marginTop: 10,
-    padding: 10,
+    padding: 15,
     backgroundColor: Colors.background.light,
-    borderRadius: 8,
+    borderRadius: 15,
     borderWidth: 1,
-    borderColor: Colors.border.medium,
+    borderColor: Colors.border.light,
+    alignItems: 'center',
+  },
+  categoryInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    justifyContent: 'center',
+  },
+  categoryIcon: {
+    fontSize: 16,
+    marginRight: 8,
   },
   categoryInfoText: {
-    fontSize: 12,
+    fontSize: 14,
     color: Colors.text.secondary,
     textAlign: 'center',
+    fontWeight: '600',
   },
   measurementTagsContainer: {
     flexDirection: 'row',
@@ -1485,6 +1830,8 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 5,
     marginBottom: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   measurementTagContainer: {
     backgroundColor: Colors.primary,
@@ -1508,6 +1855,321 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     marginTop: 5,
     textAlign: 'center',
+  },
+  formNote: {
+    marginTop: 15,
+    padding: 10,
+    backgroundColor: Colors.background.light,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border.medium,
+    alignItems: 'center',
+  },
+  formNoteText: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+  },
+  requiredAsterisk: {
+    color: Colors.error,
+    fontWeight: 'bold',
+  },
+  baseMeasurementsInfo: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: Colors.background.light,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border.medium,
+    alignItems: 'center',
+  },
+  baseMeasurementsInfoText: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+  },
+  baseMeasurementsSubtext: {
+    fontSize: 11,
+    color: Colors.text.muted,
+    marginTop: 5,
+    textAlign: 'center',
+  },
+  sizeCategoriesInfo: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: Colors.background.light,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border.medium,
+    alignItems: 'center',
+  },
+  sizeCategoriesInfoText: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+  },
+  sizeCategoriesSubtext: {
+    fontSize: 11,
+    color: Colors.text.muted,
+    marginTop: 5,
+    textAlign: 'center',
+  },
+  baseMeasurementsLabel: {
+    marginBottom: 10,
+    padding: 10,
+    backgroundColor: Colors.background.light,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border.medium,
+    alignItems: 'center',
+  },
+  baseMeasurementsLabelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginBottom: 5,
+  },
+  baseMeasurementsLabelSubtext: {
+    fontSize: 11,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+  },
+  sectionSeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+    paddingHorizontal: 10,
+  },
+  separatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.border.medium,
+  },
+  separatorText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.text.primary,
+    marginHorizontal: 10,
+  },
+  floatingBulbContainer: {
+    position: 'absolute',
+    bottom: 110,
+    right: 15,
+    zIndex: 10,
+  },
+  floatingBulbIcon: {
+    backgroundColor: Colors.background.card,
+    padding: 12,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  floatingBulbText: {
+    fontSize: 20,
+    textAlign: 'center',
+    color: Colors.text.primary,
+  },
+  summaryModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  summaryModalContent: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 20,
+    width: width * 0.9,
+    maxHeight: '92%',
+    minHeight: 550,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  summaryModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light,
+  },
+  summaryModalTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.text.primary,
+    flex: 1,
+    marginRight: 10,
+  },
+  summaryCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.background.light,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border.medium,
+  },
+  summaryCloseButtonText: {
+    fontSize: 20,
+    color: Colors.text.secondary,
+    fontWeight: 'bold',
+  },
+  summaryFormContainer: {
+    flex: 1,
+    padding: 20,
+    paddingTop: 30,
+    paddingBottom: 0,
+    minHeight: 450,
+  },
+  summaryScrollContent: {
+    paddingBottom: 40,
+  },
+  summaryScrollView: {
+    flex: 1,
+  },
+  summaryHeaderSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  summaryIconContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: Colors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  summaryIcon: {
+    fontSize: 40,
+    color: Colors.text.inverse,
+  },
+  summaryMainTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  summarySubtitle: {
+    fontSize: 16,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  summaryStepsContainer: {
+    marginBottom: 20,
+  },
+  summaryStepCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  summaryStepHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  summaryStepNumber: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.primary,
+    marginRight: 12,
+  },
+  summaryStepTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    flex: 1,
+  },
+  summaryStepDescription: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    lineHeight: 20,
+    marginLeft: 32,
+  },
+  summaryExampleSection: {
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  summaryExampleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.warning + '10',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.warning + '30',
+  },
+  summaryExampleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 0,
+  },
+  summaryExampleIcon: {
+    fontSize: 18,
+    color: Colors.warning,
+    marginRight: 12,
+  },
+  summaryExampleTitle: {
+    fontSize: 14,
+    color: Colors.warning,
+    fontWeight: '500',
+    flex: 1,
+    lineHeight: 20,
+  },
+  summaryExampleDescription: {
+    fontSize: 14,
+    color: Colors.warning,
+    fontWeight: '500',
+    marginLeft: 12,
+    flex: 1,
+    lineHeight: 20,
+  },
+  summaryModalFooter: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border.light,
+    backgroundColor: Colors.background.card,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    minHeight: 80,
+  },
+  summaryModalButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 15,
+    paddingHorizontal: 25,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  summaryModalButtonText: {
+    color: Colors.text.inverse,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

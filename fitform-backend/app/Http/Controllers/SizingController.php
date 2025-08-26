@@ -101,25 +101,49 @@ class SizingController extends Controller
      */
     public function matchMeasurements(Request $request)
     {
-        $validator = Validator::make($request->all(), [
+        // Debug logging
+        \Log::info('matchMeasurements called with data:', $request->all());
+        \Log::info('Measurements received:', $request->measurements ?? 'No measurements');
+        
+        // Base validation
+        $baseValidator = Validator::make($request->all(), [
             'category' => 'required|string',
             'gender' => 'required|in:male,female,unisex',
             'measurements' => 'required|array',
-            'measurements.chest' => 'required|numeric',
-            'measurements.waist' => 'required|numeric',
-            'measurements.hips' => 'required|numeric',
-            'measurements.length' => 'required|numeric',
         ]);
 
-        if ($validator->fails()) {
+        if ($baseValidator->fails()) {
+            \Log::error('Base validation failed:', $baseValidator->errors()->toArray());
             return response()->json([
                 'success' => false,
-                'errors' => $validator->errors()
+                'errors' => $baseValidator->errors()
+            ], 422);
+        }
+
+        // Category-specific measurement validation
+        $category = $request->category;
+        $measurements = $request->measurements;
+        
+        // Define required measurements for each category
+        $requiredMeasurements = $this->getRequiredMeasurementsForCategory($category);
+        
+        // Validate required measurements for the category
+        $measurementRules = [];
+        foreach ($requiredMeasurements as $field) {
+            $measurementRules["measurements.{$field}"] = 'required|numeric';
+        }
+        
+        $measurementValidator = Validator::make($request->all(), $measurementRules);
+        
+        if ($measurementValidator->fails()) {
+            \Log::error('Measurement validation failed:', $measurementValidator->errors()->toArray());
+            return response()->json([
+                'success' => false,
+                'errors' => $measurementValidator->errors()
             ], 422);
         }
 
         $user = Auth::user();
-        $measurements = $request->measurements;
         
         // Get the appropriate sizing standard
         $standard = SizingStandard::where('category', $request->category)
@@ -176,6 +200,54 @@ class SizingController extends Controller
         }
 
         $standards = SizingStandard::with('updatedBy')
+            ->orderBy('category')
+            ->orderBy('gender')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $standards
+        ]);
+    }
+
+    /**
+     * Admin: Get all sizing standards (including inactive)
+     */
+    public function getAllSizingStandards(Request $request)
+    {
+        if (!Auth::user()->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        $standards = SizingStandard::with('updatedBy')
+            ->orderBy('is_active', 'desc') // Active standards first
+            ->orderBy('category')
+            ->orderBy('gender')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $standards
+        ]);
+    }
+
+    /**
+     * Admin: Get only active sizing standards
+     */
+    public function getActiveSizingStandards(Request $request)
+    {
+        if (!Auth::user()->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        $standards = SizingStandard::with('updatedBy')
+            ->where('is_active', true)
             ->orderBy('category')
             ->orderBy('gender')
             ->get();
@@ -343,6 +415,201 @@ class SizingController extends Controller
     }
 
     /**
+     * Admin: Delete sizing standard safely
+     */
+    public function deleteSizingStandard(Request $request, $id)
+    {
+        if (!Auth::user()->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        try {
+            $standard = SizingStandard::findOrFail($id);
+            
+            // Check if there are any size recommendations using this standard
+            $dependentRecommendations = SizeRecommendation::where('sizing_standard_id', $id)->count();
+            
+            if ($dependentRecommendations > 0) {
+                // Delete dependent size recommendations first
+                SizeRecommendation::where('sizing_standard_id', $id)->delete();
+                
+                \Log::info('Deleted dependent size recommendations before deleting sizing standard', [
+                    'standard_id' => $id,
+                    'deleted_recommendations' => $dependentRecommendations
+                ]);
+            }
+            
+            // Now safely delete the sizing standard
+            $standard->delete();
+            
+            \Log::info('Sizing standard deleted successfully', [
+                'id' => $id,
+                'name' => $standard->name,
+                'deleted_by' => Auth::id()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Sizing standard deleted successfully',
+                'data' => [
+                    'deleted_standard' => $standard->name,
+                    'deleted_recommendations' => $dependentRecommendations
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error deleting sizing standard:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'standard_id' => $id
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete sizing standard: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Admin: Soft delete sizing standard (mark as inactive instead of deleting)
+     */
+    public function deactivateSizingStandard(Request $request, $id)
+    {
+        if (!Auth::user()->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        try {
+            $standard = SizingStandard::findOrFail($id);
+            
+            // Mark as inactive instead of deleting
+            $standard->update([
+                'is_active' => false,
+                'updated_by' => Auth::id()
+            ]);
+            
+            \Log::info('Sizing standard deactivated successfully', [
+                'id' => $id,
+                'name' => $standard->name,
+                'deactivated_by' => Auth::id()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Sizing standard deactivated successfully',
+                'data' => $standard
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error deactivating sizing standard:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'standard_id' => $id
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to deactivate sizing standard: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Admin: Reactivate sizing standard
+     */
+    public function reactivateSizingStandard(Request $request, $id)
+    {
+        if (!Auth::user()->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        try {
+            $standard = SizingStandard::findOrFail($id);
+            
+            // Mark as active again
+            $standard->update([
+                'is_active' => true,
+                'updated_by' => Auth::id()
+            ]);
+            
+            \Log::info('Sizing standard reactivated successfully', [
+                'id' => $id,
+                'name' => $standard->name,
+                'reactivated_by' => Auth::id()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Sizing standard reactivated successfully',
+                'data' => $standard
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error reactivating sizing standard:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'standard_id' => $id
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to reactivate sizing standard: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Admin: Check if sizing standard can be safely deleted
+     */
+    public function checkSizingStandardDeletion(Request $request, $id)
+    {
+        if (!Auth::user()->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        try {
+            $standard = SizingStandard::findOrFail($id);
+            
+            // Check for dependent size recommendations
+            $dependentRecommendations = SizeRecommendation::where('sizing_standard_id', $id)->count();
+            
+            // Check for other potential dependencies (you can add more checks here)
+            $canDelete = $dependentRecommendations === 0;
+            
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'standard_id' => $id,
+                    'standard_name' => $standard->name,
+                    'can_delete' => $canDelete,
+                    'dependent_recommendations' => $dependentRecommendations,
+                    'warning_message' => $canDelete ? null : 
+                        "This sizing standard has {$dependentRecommendations} size recommendation(s) that will also be deleted."
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to check sizing standard: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Calculate recommended size based on measurements
      */
     private function calculateSize($measurements, $standard)
@@ -382,5 +649,35 @@ class SizingController extends Controller
         $confidence = max(0.1, 1 - ($averageVariance / 10)); // Higher variance = lower confidence
         
         return round($confidence, 2);
+    }
+
+    /**
+     * Helper to get required measurements for a specific category
+     */
+    private function getRequiredMeasurementsForCategory($category)
+    {
+        switch (strtolower($category)) {
+            case 'shirts':
+                return ['chest', 'waist', 'length', 'shoulder', 'sleeve'];
+            case 'pants':
+                return ['waist', 'hips', 'length', 'inseam', 'thigh'];
+            case 'dresses':
+                return ['chest', 'waist', 'hips', 'length', 'shoulder'];
+            case 'jackets':
+                return ['chest', 'waist', 'length', 'shoulder', 'sleeve'];
+            case 'skirts':
+                return ['waist', 'hips', 'length'];
+            case 'shoes':
+                return ['foot_length'];
+            case 'hats':
+                return ['head_circumference'];
+            case 'suits':
+                return ['chest', 'waist', 'hips', 'length', 'shoulder', 'sleeve', 'inseam'];
+            case 'activewear':
+                return ['chest', 'waist', 'hips', 'length'];
+            default:
+                // For custom categories, require basic measurements
+                return ['chest', 'waist', 'length'];
+        }
     }
 }

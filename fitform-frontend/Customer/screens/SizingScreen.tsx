@@ -47,33 +47,29 @@ export default function SizingScreen() {
   const [selectedGender, setSelectedGender] = useState('all');
   const [customCategory, setCustomCategory] = useState('');
   const [showCustomCategoryModal, setShowCustomCategoryModal] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   
   // Measurement form state
-  const [measurements, setMeasurements] = useState<Record<string, string>>({
-    chest: '',
-    waist: '',
-    hips: '',
-    length: '',
-  });
+  const [measurements, setMeasurements] = useState<Record<string, string>>({});
 
   // Update measurements when category changes
   const updateMeasurementsForCategory = (newCategory: string) => {
+    console.log('🔄 updateMeasurementsForCategory called with:', newCategory);
+    console.log('📊 Current measurements before update:', measurements);
+    
     if (newCategory === 'all' || newCategory === 'custom') {
-      // Reset to generic measurements for 'all' or 'custom'
-      setMeasurements({
-        chest: '',
-        waist: '',
-        hips: '',
-        length: '',
-      });
+      // Reset to empty measurements for 'all' or 'custom'
+      console.log('🔄 Resetting measurements for generic category');
+      setMeasurements({});
     } else {
       // Get category-specific measurements
       const categoryMeasurements = getDefaultMeasurements(newCategory);
+      console.log('🔄 Setting category measurements for', newCategory, ':', categoryMeasurements);
       setMeasurements(categoryMeasurements);
     }
   };
 
-  const categories = ['all', 'shirts', 'pants', 'dresses', 'jackets', 'skirts', 'custom'];
+  const categories = ['all', 'shirts', 'pants', 'dresses', 'jackets', 'skirts', 'shoes', 'hats', 'suits', 'activewear', 'custom'];
   const genders = ['all', 'male', 'female', 'unisex'];
 
   // Category-based default measurements
@@ -82,15 +78,51 @@ export default function SizingScreen() {
       case 'shirts':
         return { chest: '', waist: '', length: '', shoulder: '', sleeve: '' };
       case 'pants':
-        return { waist: '', hips: '', inseam: '', thigh: '', length: '' };
+        return { waist: '', hips: '', length: '', inseam: '', thigh: '' };
       case 'dresses':
-        return { bust: '', waist: '', hips: '', length: '', shoulder: '' };
+        return { chest: '', waist: '', hips: '', length: '', shoulder: '' };
       case 'jackets':
         return { chest: '', waist: '', length: '', shoulder: '', sleeve: '' };
       case 'skirts':
         return { waist: '', hips: '', length: '' };
+      case 'shoes':
+        return { foot_length: '' };
+      case 'hats':
+        return { head_circumference: '' };
+      case 'suits':
+        return { chest: '', waist: '', hips: '', length: '', shoulder: '', sleeve: '', inseam: '' };
+      case 'activewear':
+        return { chest: '', waist: '', hips: '', length: '' };
       default:
-        return { chest: '', waist: '', hips: '', length: '' }; // Generic fallback
+        // For custom categories, return basic measurements
+        return { chest: '', waist: '', length: '' };
+    }
+  };
+
+  // Get required fields for a specific category
+  const getRequiredFieldsForCategory = (category: string): string[] => {
+    switch (category) {
+      case 'shirts':
+        return ['chest', 'waist', 'length', 'shoulder', 'sleeve'];
+      case 'pants':
+        return ['waist', 'hips', 'length', 'inseam', 'thigh'];
+      case 'dresses':
+        return ['chest', 'waist', 'hips', 'length', 'shoulder'];
+      case 'jackets':
+        return ['chest', 'waist', 'length', 'shoulder', 'sleeve'];
+      case 'skirts':
+        return ['waist', 'hips', 'length'];
+      case 'shoes':
+        return ['foot_length'];
+      case 'hats':
+        return ['head_circumference'];
+      case 'suits':
+        return ['chest', 'waist', 'hips', 'length', 'shoulder', 'sleeve', 'inseam'];
+      case 'activewear':
+        return ['chest', 'waist', 'hips', 'length'];
+      default:
+        // For custom categories, require basic measurements
+        return ['chest', 'waist', 'length'];
     }
   };
 
@@ -98,17 +130,25 @@ export default function SizingScreen() {
   const getCategoryDescription = (category: string): string => {
     switch (category) {
       case 'shirts':
-        return 'Upper body garments that require chest, shoulder, and sleeve measurements for proper fit';
+        return 'Upper body garments that require chest, waist, length, shoulder, and sleeve measurements for proper fit';
       case 'pants':
-        return 'Lower body garments that focus on waist, hips, and inseam for comfortable wear';
+        return 'Lower body garments that require waist, hips, length, inseam, and thigh measurements for comfortable wear';
       case 'dresses':
-        return 'Full-body garments that need bust, waist, and hip measurements for elegant fit';
+        return 'Full-body garments that require chest, waist, hips, length, and shoulder measurements for elegant fit';
       case 'jackets':
-        return 'Outerwear that requires chest, shoulder, and sleeve measurements for layering';
+        return 'Outerwear that requires chest, waist, length, shoulder, and sleeve measurements for layering';
       case 'skirts':
-        return 'Lower body garments that need waist and hip measurements for proper fit';
+        return 'Lower body garments that require waist, hips, and length measurements for proper fit';
+      case 'shoes':
+        return 'Footwear that requires foot length measurement for proper sizing';
+      case 'hats':
+        return 'Headwear that requires head circumference measurement for comfortable fit';
+      case 'suits':
+        return 'Formal wear that requires comprehensive measurements including chest, waist, hips, length, shoulder, sleeve, and inseam';
+      case 'activewear':
+        return 'Athletic clothing that requires chest, waist, hips, and length measurements for comfortable movement';
       default:
-        return 'Select a specific category to see relevant measurements';
+        return 'Select a specific category to see relevant measurements. Custom categories may require basic measurements.';
     }
   };
 
@@ -140,6 +180,11 @@ export default function SizingScreen() {
       updateMeasurementsForCategory(selectedCategory);
     }
   }, [selectedCategory]);
+
+  // Debug effect to log measurements changes
+  useEffect(() => {
+    console.log('📊 Measurements state changed:', measurements);
+  }, [measurements]);
 
   const loadRecommendations = async () => {
     if (!isAuthenticated) {
@@ -227,13 +272,16 @@ export default function SizingScreen() {
       return;
     }
 
-    // Validate measurements
-    const hasEmptyFields = Object.values(measurements).some(value => !value);
-    if (hasEmptyFields) {
-      Alert.alert('Error', 'Please fill in all measurement fields');
+    // Validate measurements based on selected category
+    const requiredFields = getRequiredFieldsForCategory(selectedCategory);
+    const missingFields = requiredFields.filter(field => !measurements[field] || measurements[field].trim() === '');
+    
+    if (missingFields.length > 0) {
+      const missingFieldNames = missingFields.map(field => field.charAt(0).toUpperCase() + field.slice(1)).join(', ');
+      Alert.alert('Missing Measurements', `Please fill in the following required measurements for ${selectedCategory}: ${missingFieldNames}`);
       return;
     }
-
+    
     try {
       setLoading(true);
       
@@ -243,6 +291,15 @@ export default function SizingScreen() {
         numericMeasurements[key] = parseFloat(value);
       });
       
+      // Debug logging
+      console.log('🔍 Debug - Measurements being sent to API:');
+      console.log('📏 Original measurements:', measurements);
+      console.log('🔢 Numeric measurements:', numericMeasurements);
+      console.log('📊 Category:', selectedCategory);
+      console.log('👤 Gender:', selectedGender);
+      console.log('✅ Required fields for this category:', requiredFields);
+      console.log('✅ All required fields are filled:', requiredFields.every(field => measurements[field] && measurements[field].trim() !== ''));
+      
       const response = await apiService.matchMeasurements({
         category: selectedCategory,
         gender: selectedGender,
@@ -250,18 +307,46 @@ export default function SizingScreen() {
       });
 
       if (response.success) {
+        // Set success state for visual feedback
+        setIsSuccess(true);
+        
+        // Enhanced success feedback
         Alert.alert(
-          'Size Recommendation',
-          `Your recommended size is: ${response.data.recommended_size}\nConfidence: ${(response.data.confidence_score * 100).toFixed(0)}%`
+          '🎉 Size Recommendation Successful!',
+          `Your size recommendation has been processed successfully!\n\n` +
+          `📏 **Recommended Size:** ${response.data.recommended_size}\n` +
+          `🎯 **Confidence Level:** ${(response.data.confidence_score * 100).toFixed(0)}%\n` +
+          `👕 **Category:** ${selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)}\n` +
+          `👤 **Gender:** ${selectedGender.charAt(0).toUpperCase() + selectedGender.slice(1)}\n\n` +
+          `Your measurements have been saved and you can view your recommendations in the Recommendations tab.`,
+          [
+            {
+              text: 'View Recommendations',
+              onPress: () => {
+                setActiveTab('recommendations');
+                loadRecommendations();
+              }
+            },
+            {
+              text: 'Continue',
+              style: 'default'
+            }
+          ]
         );
+        
         // Reset form
         setMeasurements(getDefaultMeasurements(selectedCategory));
         // Refresh recommendations
         loadRecommendations();
+        
+        // Reset success state after 3 seconds
+        setTimeout(() => {
+          setIsSuccess(false);
+        }, 3000);
       }
     } catch (error) {
       console.error('Error matching measurements:', error);
-      Alert.alert('Error', 'Failed to get size recommendation');
+      Alert.alert('Error', 'Failed to get size recommendation. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -486,10 +571,10 @@ export default function SizingScreen() {
               📏 <Text style={styles.highlightText}>{selectedCategory.toUpperCase()}</Text> requires these measurements:
             </ThemedText>
             <View style={styles.measurementTagsContainer}>
-              {Object.keys(measurements).map((field) => (
-                <View key={field} style={styles.measurementTagContainer}>
-                  <ThemedText style={styles.measurementTag}>
-                    {field.charAt(0).toUpperCase() + field.slice(1)}
+              {getRequiredFieldsForCategory(selectedCategory).map((field) => (
+                <View key={field} style={styles.requiredMeasurementTag}>
+                  <ThemedText style={styles.requiredMeasurementTagText}>
+                    {field.charAt(0).toUpperCase() + field.slice(1)} *
                   </ThemedText>
                 </View>
               ))}
@@ -498,7 +583,7 @@ export default function SizingScreen() {
               {getCategoryDescription(selectedCategory)}
             </ThemedText>
             <ThemedText style={styles.measurementCount}>
-              {Object.keys(measurements).length} measurement fields available
+              {getRequiredFieldsForCategory(selectedCategory).length} required measurement fields
             </ThemedText>
           </View>
         )}
@@ -530,6 +615,9 @@ export default function SizingScreen() {
                     <View style={styles.inputGroup}>
                       <ThemedText style={styles.inputLabel}>
                         {firstField[0].charAt(0).toUpperCase() + firstField[0].slice(1)}
+                        {getRequiredFieldsForCategory(selectedCategory).includes(firstField[0]) && (
+                          <Text style={styles.requiredAsterisk}> *</Text>
+                        )}
                       </ThemedText>
                       <TextInput
                         style={styles.input}
@@ -547,6 +635,9 @@ export default function SizingScreen() {
                       <View style={styles.inputGroup}>
                         <ThemedText style={styles.inputLabel}>
                           {secondField[0].charAt(0).toUpperCase() + secondField[0].slice(1)}
+                          {getRequiredFieldsForCategory(selectedCategory).includes(secondField[0]) && (
+                            <Text style={styles.requiredAsterisk}> *</Text>
+                          )}
                         </ThemedText>
                         <TextInput
                           style={styles.input}
@@ -576,22 +667,76 @@ export default function SizingScreen() {
           )}
         </View>
 
+        {/* Form Note */}
+        <View style={styles.formNote}>
+          <ThemedText style={styles.formNoteText}>
+            <Text style={styles.requiredAsterisk}>*</Text> Required measurements for {selectedCategory}
+          </ThemedText>
+        </View>
+
         <TouchableOpacity
           style={[
             styles.submitButton, 
-            (loading || selectedCategory === 'all' || selectedCategory === 'custom' || selectedGender === 'all') && styles.submitButtonDisabled
+            (loading || selectedCategory === 'all' || selectedCategory === 'custom' || selectedGender === 'all') && styles.submitButtonDisabled,
+            isSuccess && styles.submitButtonSuccess
           ]}
           onPress={handleMeasurementsSubmit}
           disabled={loading || selectedCategory === 'all' || selectedCategory === 'custom' || selectedGender === 'all'}
         >
           {loading ? (
             <ActivityIndicator size="small" color="white" />
+          ) : isSuccess ? (
+            <ThemedText style={styles.submitButtonText}>✅ Success! View Recommendations</ThemedText>
           ) : selectedCategory === 'all' || selectedCategory === 'custom' || selectedGender === 'all' ? (
             <ThemedText style={styles.submitButtonText}>Select Category & Gender</ThemedText>
           ) : (
             <ThemedText style={styles.submitButtonText}>Get Size Recommendation</ThemedText>
           )}
         </TouchableOpacity>
+
+        {/* Success Message Display */}
+        {isSuccess && (
+          <View style={styles.successMessageContainer}>
+            <ThemedText style={styles.successMessageIcon}>🎉</ThemedText>
+            <ThemedText style={styles.successMessageTitle}>Size Recommendation Complete!</ThemedText>
+            <ThemedText style={styles.successMessageText}>
+              Your measurements have been successfully processed and saved. 
+              You can now view your size recommendations in the Recommendations tab.
+            </ThemedText>
+            
+            {/* Measurement Summary */}
+            <View style={styles.measurementSummaryContainer}>
+              <ThemedText style={styles.measurementSummaryTitle}>
+                📏 Submitted Measurements:
+              </ThemedText>
+              <View style={styles.measurementSummaryGrid}>
+                {Object.entries(measurements).map(([key, value]) => (
+                  <View key={key} style={styles.measurementSummaryItem}>
+                    <ThemedText style={styles.measurementSummaryLabel}>
+                      {key.charAt(0).toUpperCase() + key.slice(1)}:
+                    </ThemedText>
+                    <ThemedText style={styles.measurementSummaryValue}>
+                      {value}" inches
+                    </ThemedText>
+                  </View>
+                ))}
+              </View>
+            </View>
+            
+            {/* Quick Action Button */}
+            <TouchableOpacity
+              style={styles.quickActionButton}
+              onPress={() => {
+                setActiveTab('recommendations');
+                loadRecommendations();
+              }}
+            >
+              <ThemedText style={styles.quickActionButtonText}>
+                📋 View My Recommendations
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -1076,6 +1221,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
   },
+  submitButtonSuccess: {
+    backgroundColor: Colors.success,
+    shadowColor: Colors.success,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
   submitButtonText: {
     color: Colors.text.inverse,
     fontSize: 16,
@@ -1298,5 +1451,124 @@ const styles = StyleSheet.create({
     color: Colors.text.muted,
     textAlign: 'center',
     marginTop: 10,
+  },
+  successMessageContainer: {
+    backgroundColor: Colors.success,
+    borderRadius: 15,
+    padding: 20,
+    marginTop: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    shadowColor: Colors.success,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  successMessageIcon: {
+    fontSize: 40,
+    marginBottom: 10,
+  },
+  successMessageTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.text.inverse,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  successMessageText: {
+    fontSize: 14,
+    color: Colors.text.inverse,
+    textAlign: 'center',
+    lineHeight: 20,
+    opacity: 0.9,
+  },
+  measurementSummaryContainer: {
+    backgroundColor: Colors.background.light,
+    borderRadius: 12,
+    padding: 15,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: Colors.border.medium,
+  },
+  measurementSummaryTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.text.primary,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  measurementSummaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  measurementSummaryItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '50%', // Two items per row
+    marginBottom: 8,
+  },
+  measurementSummaryLabel: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    fontWeight: '500',
+  },
+  measurementSummaryValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  quickActionButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 12,
+    marginTop: 20,
+    alignItems: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  quickActionButtonText: {
+    color: Colors.text.inverse,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  requiredMeasurementTag: {
+    backgroundColor: Colors.primary,
+    borderRadius: 15,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    marginHorizontal: 5,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  requiredMeasurementTagText: {
+    fontSize: 12,
+    color: Colors.text.inverse,
+    fontWeight: '600',
+  },
+  requiredAsterisk: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  formNote: {
+    backgroundColor: Colors.background.light,
+    borderRadius: 12,
+    padding: 15,
+    marginTop: 15,
+    borderWidth: 1,
+    borderColor: Colors.border.medium,
+  },
+  formNoteText: {
+    fontSize: 13,
+    color: Colors.text.secondary,
+    textAlign: 'center',
   },
 });

@@ -66,6 +66,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/rentals/{id}/set-quotation', [\App\Http\Controllers\RentalController::class, 'setQuotation']);
     Route::post('/rentals/{id}/accept-quotation', [\App\Http\Controllers\RentalController::class, 'customerAcceptQuotation']);
     Route::post('/rentals/{id}/reject-quotation', [\App\Http\Controllers\RentalController::class, 'customerRejectQuotation']);
+    // Penalty management for rentals
+    Route::get('/rentals/{id}/penalties', [\App\Http\Controllers\RentalController::class, 'getPenaltyBreakdown']);
+    Route::post('/rentals/{id}/calculate-penalties', [\App\Http\Controllers\RentalController::class, 'calculatePenalties']);
+    Route::post('/rentals/{id}/mark-penalties-paid', [\App\Http\Controllers\RentalController::class, 'markPenaltiesPaid']);
+    Route::post('/rentals/{id}/accept-agreement', [\App\Http\Controllers\RentalController::class, 'acceptAgreement']);
     // Admin accept/decline purchase order
     Route::post('/purchases/{id}/accept-order', [\App\Http\Controllers\PurchaseController::class, 'adminAccept']);
     Route::post('/purchases/{id}/decline-order', [\App\Http\Controllers\PurchaseController::class, 'adminDecline']);
@@ -83,6 +88,12 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Admin sizing routes
     Route::get('/admin/sizing/standards', [SizingController::class, 'getSizingStandards']);
+    Route::get('/admin/sizing/standards/all', [SizingController::class, 'getAllSizingStandards']);
+    Route::get('/admin/sizing/standards/active', [SizingController::class, 'getActiveSizingStandards']);
+    Route::get('/admin/sizing/standards/{id}/check-deletion', [SizingController::class, 'checkSizingStandardDeletion']);
     Route::post('/admin/sizing/standards', [SizingController::class, 'updateSizingStandard']);
     Route::put('/admin/sizing/standards/{id}/parameters', [SizingController::class, 'customizeSizeParameters']);
+    Route::delete('/admin/sizing/standards/{id}', [SizingController::class, 'deleteSizingStandard']);
+    Route::post('/admin/sizing/standards/{id}/deactivate', [SizingController::class, 'deactivateSizingStandard']);
+    Route::post('/admin/sizing/standards/{id}/reactivate', [SizingController::class, 'reactivateSizingStandard']);
 }); 
