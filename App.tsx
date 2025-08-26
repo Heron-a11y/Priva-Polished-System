@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Alert, Image } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
 const { width, height } = Dimensions.get('window');
@@ -37,6 +37,30 @@ export default function App() {
   const [visibilityIssues, setVisibilityIssues] = useState<string[]>([]);
   const [overallConfidence, setOverallConfidence] = useState<number>(0);
   const [permission, requestPermission] = useCameraPermissions();
+  const [unitSystem, setUnitSystem] = useState<'cm' | 'inches' | 'feet'>('cm');
+
+  // Helper function to convert measurements
+  const convertMeasurement = (value: number, fromUnit: 'cm' | 'inches', toUnit: 'cm' | 'inches' | 'feet'): any => {
+    if (fromUnit === toUnit) return value;
+    if (fromUnit === 'cm' && toUnit === 'inches') {
+      return Math.round((value / 2.54) * 10) / 10; // Convert to inches with 1 decimal place
+    }
+    if (fromUnit === 'cm' && toUnit === 'feet') {
+      const totalInches = value / 2.54;
+      const feet = Math.floor(totalInches / 12);
+      const inches = Math.round((totalInches % 12) * 10) / 10;
+      return { feet, inches };
+    }
+    if (fromUnit === 'inches' && toUnit === 'cm') {
+      return Math.round(value * 2.54); // Convert to cm
+    }
+    if (fromUnit === 'inches' && toUnit === 'feet') {
+      const feet = Math.floor(value / 12);
+      const inches = Math.round((value % 12) * 10) / 10;
+      return { feet, inches };
+    }
+    return value;
+  };
 
   const startBodyTracking = () => {
     // Simulate body tracking with realistic landmarks and confidence scores
@@ -229,7 +253,7 @@ export default function App() {
           >
             <Text style={styles.primaryButtonText}>▶ Start Measurement</Text>
           </TouchableOpacity>
-
+    
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() => setCurrentScreen('instructions')}
@@ -406,6 +430,37 @@ export default function App() {
                 </Text>
               </View>
 
+              {/* Silhouette Guide */}
+              <View style={styles.silhouetteContainer}>
+                {currentStep === 'front' ? (
+                  <View style={styles.frontSilhouette}>
+                    <Image 
+                      source={require('./assets/Front.png')} 
+                      style={styles.silhouetteImage}
+                      resizeMode="contain"
+                    />
+                    {/* Measurement Points */}
+                    <View style={styles.measurementPoint} />
+                    <View style={[styles.measurementPoint, styles.chestPoint]} />
+                    <View style={[styles.measurementPoint, styles.waistPoint]} />
+                    <View style={[styles.measurementPoint, styles.hipPoint]} />
+                  </View>
+                ) : (
+                  <View style={styles.sideSilhouette}>
+                    <Image 
+                      source={require('./assets/Side.png')} 
+                      style={styles.silhouetteImage}
+                      resizeMode="contain"
+                    />
+                    {/* Measurement Points */}
+                    <View style={styles.sideMeasurementPoint} />
+                    <View style={[styles.sideMeasurementPoint, styles.sideChestPoint]} />
+                    <View style={[styles.sideMeasurementPoint, styles.sideWaistPoint]} />
+                    <View style={[styles.sideMeasurementPoint, styles.sideHipPoint]} />
+                  </View>
+                )}
+              </View>
+
               {/* Center Instructions */}
               <View style={styles.centerInstructions}>
                 <Text style={styles.instructionText}>
@@ -494,10 +549,59 @@ export default function App() {
       </View>
 
       <View style={styles.content}>
+        {/* Unit Toggle */}
+        <View style={styles.unitToggleContainer}>
+          <Text style={styles.unitToggleLabel}>Units:</Text>
+          <View style={styles.unitToggle}>
+            <TouchableOpacity
+              style={[
+                styles.unitButton,
+                unitSystem === 'cm' && styles.unitButtonActive
+              ]}
+              onPress={() => setUnitSystem('cm')}
+            >
+              <Text style={[
+                styles.unitButtonText,
+                unitSystem === 'cm' && styles.unitButtonTextActive
+              ]}>
+                cm
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.unitButton,
+                unitSystem === 'inches' && styles.unitButtonActive
+              ]}
+              onPress={() => setUnitSystem('inches')}
+            >
+              <Text style={[
+                styles.unitButtonText,
+                unitSystem === 'inches' && styles.unitButtonTextActive
+              ]}>
+                inches
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.unitButton,
+                unitSystem === 'feet' && styles.unitButtonActive
+              ]}
+              onPress={() => setUnitSystem('feet')}
+            >
+              <Text style={[
+                styles.unitButtonText,
+                unitSystem === 'feet' && styles.unitButtonTextActive
+              ]}>
+                ft/in
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <View style={styles.infoBox}>
           <Text style={styles.infoIcon}>ℹ️</Text>
           <Text style={styles.infoText}>
-            Review and adjust your measurements if needed. All measurements are in centimeters.
+            Review and adjust your measurements if needed. All measurements are in {unitSystem === 'feet' ? 'feet and inches' : unitSystem}.
           </Text>
         </View>
 
@@ -508,7 +612,8 @@ export default function App() {
         >
           {Object.entries(measurements).map(([key, measurement]) => {
             const measurementObj = measurement as any;
-            const value = measurementObj?.value !== undefined ? measurementObj.value : measurement;
+            const originalValue = measurementObj?.value !== undefined ? measurementObj.value : measurement;
+            const convertedValue = convertMeasurement(originalValue, 'cm', unitSystem);
             const confidence = measurementObj?.confidence !== undefined ? measurementObj.confidence : 1.0;
             const confidenceColor = confidence > 0.9 ? '#4CAF50' : confidence > 0.7 ? '#FF9800' : '#F44336';
             
@@ -528,8 +633,14 @@ export default function App() {
                     {key.charAt(0).toUpperCase() + key.slice(1)}
                   </Text>
                   <View style={styles.measurementInput}>
-                    <Text style={styles.measurementValue}>{String(value)}</Text>
-                    <Text style={styles.measurementUnit}>cm</Text>
+                    <Text style={styles.measurementValue}>
+                      {unitSystem === 'inches' ? convertedValue.toFixed(1) : 
+                       unitSystem === 'feet' ? `${convertedValue.feet}' ${convertedValue.inches}"` : 
+                       String(convertedValue)}
+                    </Text>
+                    <Text style={styles.measurementUnit}>
+                      {unitSystem === 'feet' ? '' : unitSystem}
+                    </Text>
                   </View>
                   <View style={styles.confidenceIndicator}>
                     <Text style={[styles.confidenceText, { color: confidenceColor }]}>
@@ -1121,5 +1232,128 @@ const styles = StyleSheet.create({
     color: '#856404',
     fontSize: 12,
     marginBottom: 4,
+  },
+  // Silhouette Guide Styles
+  silhouetteContainer: {
+    position: 'absolute',
+    top: '40%',
+    left: '50%',
+    transform: [{ translateX: -200 }, { translateY: -250 }],
+    width: 400,
+    height: 700,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  frontSilhouette: {
+    width: 400,
+    height: 700,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sideSilhouette: {
+    width: 350,
+    height: 700,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  silhouetteImage: {
+    width: '100%',
+    height: '100%',
+    opacity: 0.7,
+  },
+  measurementPoint: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    backgroundColor: '#4CAF50',
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  chestPoint: {
+    top: 120,
+    left: '50%',
+    transform: [{ translateX: -4 }],
+  },
+  waistPoint: {
+    top: 200,
+    left: '50%',
+    transform: [{ translateX: -4 }],
+  },
+  hipPoint: {
+    top: 280,
+    left: '50%',
+    transform: [{ translateX: -4 }],
+  },
+
+  sideMeasurementPoint: {
+    position: 'absolute',
+    width: 6,
+    height: 6,
+    backgroundColor: '#4CAF50',
+    borderRadius: 3,
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  sideChestPoint: {
+    top: 110,
+    left: '50%',
+    transform: [{ translateX: -3 }],
+  },
+  sideWaistPoint: {
+    top: 180,
+    left: '50%',
+    transform: [{ translateX: -3 }],
+  },
+  sideHipPoint: {
+    top: 250,
+    left: '50%',
+    transform: [{ translateX: -3 }],
+  },
+  // Unit Toggle Styles
+  unitToggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  unitToggleLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  unitToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    padding: 4,
+  },
+  unitButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  unitButtonActive: {
+    backgroundColor: '#6366f1',
+  },
+  unitButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  unitButtonTextActive: {
+    color: 'white',
   },
 }); 
