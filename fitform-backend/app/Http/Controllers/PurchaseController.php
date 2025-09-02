@@ -199,4 +199,17 @@ class PurchaseController extends Controller
         $purchase = Purchase::create($data);
         return response()->json($purchase, 201);
     }
+
+    /**
+     * Get purchase history for customer
+     */
+    public function getHistory(Request $request)
+    {
+        $user = $request->user();
+        $purchases = Purchase::where('user_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json($purchases);
+    }
 } 

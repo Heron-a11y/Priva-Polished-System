@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
+import PasswordInput from '../components/PasswordInput';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -93,20 +94,16 @@ export default function LoginScreen() {
       />
       {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
       
-      <Text style={styles.label}>Password</Text>
-      <TextInput
-        style={[styles.input, errors.password && styles.inputError]}
+      <PasswordInput
+        label="Password"
         value={password}
         onChangeText={(text) => {
           setPassword(text);
           if (errors.password) setErrors({ ...errors, password: undefined });
         }}
         placeholder="Enter your password"
-        secureTextEntry
-        autoCapitalize="none"
-        autoCorrect={false}
+        error={errors.password}
       />
-      {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
       
       <TouchableOpacity 
         style={[styles.button, loading && styles.buttonDisabled]} 

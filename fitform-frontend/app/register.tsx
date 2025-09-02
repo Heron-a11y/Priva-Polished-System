@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
+import PasswordInput from '../components/PasswordInput';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
@@ -183,35 +184,27 @@ export default function RegisterScreen() {
       />
       {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
       
-      <Text style={styles.label}>Password</Text>
-      <TextInput
-        style={[styles.input, errors.password && styles.inputError]}
+      <PasswordInput
+        label="Password"
         value={password}
         onChangeText={(text) => {
           setPassword(text);
           if (errors.password) setErrors({ ...errors, password: undefined });
         }}
         placeholder="Enter your password"
-        secureTextEntry
-        autoCapitalize="none"
-        autoCorrect={false}
+        error={errors.password}
       />
-      {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
       
-      <Text style={styles.label}>Confirm Password</Text>
-      <TextInput
-        style={[styles.input, errors.confirmPassword && styles.inputError]}
+      <PasswordInput
+        label="Confirm Password"
         value={confirmPassword}
         onChangeText={(text) => {
           setConfirmPassword(text);
           if (errors.confirmPassword) setErrors({ ...errors, confirmPassword: undefined });
         }}
         placeholder="Confirm your password"
-        secureTextEntry
-        autoCapitalize="none"
-        autoCorrect={false}
+        error={errors.confirmPassword}
       />
-      {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
       
       <TouchableOpacity 
         style={[styles.button, loading && styles.buttonDisabled]} 

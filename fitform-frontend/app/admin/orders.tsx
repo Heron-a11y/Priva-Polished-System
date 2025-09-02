@@ -145,6 +145,66 @@ const OrdersScreen = () => {
   // Unique status options
   const statusOptions = Array.from(new Set(orders.map(o => o.status)));
 
+  const handleSendQuotation = async () => {
+    if (!quotationAmount || isNaN(Number(quotationAmount))) {
+      setQuotationError('Please enter a valid number for the quotation price.');
+      return;
+    }
+    if (!quotationSchedule) {
+      setQuotationError('Please select a schedule date.');
+      return;
+    }
+    setQuotationLoading(true);
+    try {
+      const endpoint = selectedOrder?.type === 'Rental'
+        ? `/rentals/${selectedOrder.id}/set-quotation`
+        : `/purchases/${selectedOrder.id}/set-quotation`;
+      const payload = selectedOrder?.type === 'Rental'
+        ? {
+            quotation_amount: Number(quotationAmount),
+            quotation_notes: quotationNotes,
+            quotation_schedule: quotationSchedule,
+          }
+        : {
+            quotation_price: Number(quotationAmount),
+            quotation_notes: quotationNotes,
+            quotation_schedule: quotationSchedule,
+          };
+      await apiService.request(endpoint, { method: 'POST', body: JSON.stringify(payload) });
+      Alert.alert('Success', 'Quotation sent!');
+      setQuotationAmount('');
+      setQuotationNotes('');
+      setQuotationSchedule('');
+      setQuotationScheduleDate(null);
+      setQuotationError('');
+      handleCloseDetails();
+      setLoading(true);
+      const rentalsRes = await apiService.request('/rentals');
+      const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
+      const rentals = (rentalsArr || []).map((r: any) => ({
+        id: r.id,
+        type: 'Rental',
+        customer: r.customer_name || r.customer_email || 'N/A',
+        status: r.status || 'N/A',
+        details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
+      }));
+      const purchasesRes = await apiService.request('/purchases');
+      const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
+      const purchases = (purchasesArr || []).map((p: any) => ({
+        id: p.id,
+        type: 'Purchase',
+        customer: p.customer_name || p.customer_email || 'N/A',
+        status: p.status || 'N/A',
+        details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
+      }));
+      setOrders([...rentals, ...purchases]);
+    } catch (err) {
+      Alert.alert('Error', 'Failed to send quotation.');
+    } finally {
+      setQuotationLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Manage Orders</Text>
@@ -300,9 +360,9 @@ const OrdersScreen = () => {
                       <Text style={styles.actionButtonTextClassic2}>View</Text>
                     </TouchableOpacity>
                   </View>
-                  {/* Add penalty status column for rentals */}
-                  {item.type === 'Rental' && (
-                    <View style={[styles.dataCell, { width: 120 }]}>
+                  {/* Add penalty status column for all orders - show data for rentals, empty for others */}
+                  <View style={[styles.dataCell, { width: 120 }]}>
+                    {item.type === 'Rental' ? (
                       <Text style={[
                         styles.orderCellClassic2,
                         { 
@@ -313,66 +373,96 @@ const OrdersScreen = () => {
                         {item.penalty_status === 'paid' ? '✅ Paid' : 
                          item.penalty_status === 'pending' ? '⚠️ Pending' : '—'}
                       </Text>
-                    </View>
-                  )}
+                    ) : (
+                      <Text style={[styles.orderCellClassic2, { color: '#ccc' }]}>—</Text>
+                    )}
+                  </View>
                 </View>
               ))}
             </View>
           </ScrollView>
         </View>
       )}
-      {/* Order Details Modal (simple inline for now) */}
+      {/* Order Details Modal */}
       {selectedOrder && (
         <View style={styles.detailsModal}>
-          <Text style={styles.detailsTitle}>Order Details</Text>
-          <View style={{ marginBottom: 10, gap: 4 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {/* Header */}
+          <View style={styles.modalHeader}>
+            <View style={styles.titleContainer}>
+              <Ionicons name="document-text-outline" size={24} color="#014D40" />
+              <Text style={styles.detailsTitle}>Order Details</Text>
+            </View>
+            <TouchableOpacity style={styles.closeButton} onPress={handleCloseDetails}>
+              <Ionicons name="close" size={20} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Scrollable Content */}
+          <ScrollView 
+            style={styles.modalScrollView}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            {/* Order Information */}
+            <View style={styles.orderInfoSection}>
+            <View style={styles.infoRow}>
               <Ionicons name="pricetag-outline" size={18} color="#388e3c" />
-              <Text>ID: <Text style={{ fontWeight: 'bold' }}>{selectedOrder.id}</Text></Text>
+              <Text style={styles.infoLabel}>ID:</Text>
+              <Text style={styles.infoValue}>{selectedOrder.id}</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={styles.infoRow}>
               <Ionicons name="cube-outline" size={18} color="#388e3c" />
-              <Text>Type: <Text style={{ fontWeight: 'bold' }}>{selectedOrder.type}</Text></Text>
+              <Text style={styles.infoLabel}>Type:</Text>
+              <Text style={styles.infoValue}>{selectedOrder.type}</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={styles.infoRow}>
               <Ionicons name="person-outline" size={18} color="#388e3c" />
-              <Text>Customer: <Text style={{ fontWeight: 'bold' }}>{selectedOrder.customer}</Text></Text>
+              <Text style={styles.infoLabel}>Customer:</Text>
+              <Text style={styles.infoValue}>{selectedOrder.customer}</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={styles.infoRow}>
               <Ionicons name="information-circle-outline" size={18} color="#388e3c" />
-              <Text>Status: <Text style={{ fontWeight: 'bold' }}>{selectedOrder.status}</Text></Text>
+              <Text style={styles.infoLabel}>Status:</Text>
+              <Text style={styles.infoValue}>{selectedOrder.status}</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <View style={styles.infoRow}>
               <Ionicons name="document-text-outline" size={18} color="#388e3c" />
-              <Text style={{ flex: 1 }}>Details: <Text style={{ fontWeight: 'bold' }}>{selectedOrder.details}</Text></Text>
+              <Text style={styles.infoLabel}>Details:</Text>
+              <Text style={[styles.infoValue, styles.detailsText]}>{selectedOrder.details}</Text>
             </View>
           </View>
-          <View style={{ borderBottomWidth: 1, borderBottomColor: '#e0e0e0', marginVertical: 10 }} />
-          {/* Quotation Accepted Section */}
+
+          {/* Divider */}
+          <View style={styles.divider} />
+
+          {/* Quotation Section */}
           {selectedOrder.status === 'in_progress' && (
-            <>
-              <View style={{ backgroundColor: '#e8f5e9', borderRadius: 8, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#388e3c', gap: 6 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                  <Ionicons name="checkmark-circle" size={20} color="#388e3c" style={{ marginRight: 6 }} />
-                  <Text style={{ fontWeight: 'bold', color: '#388e3c', fontSize: 16 }}>Quotation Accepted</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={styles.quotationSection}>
+              <Text style={styles.quotationTitle}>Quotation Accepted</Text>
+              <View style={styles.quotationInfo}>
+                <View style={styles.quotationRow}>
                   <Ionicons name="cash-outline" size={18} color="#388e3c" />
-                  <Text>Amount: <Text style={{ fontWeight: 'bold', color: '#388e3c' }}>₱{(selectedOrder.quotation_amount || selectedOrder.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text></Text>
+                  <Text style={styles.quotationLabel}>Amount:</Text>
+                  <Text style={styles.quotationValue}>
+                    ₱{(selectedOrder.quotation_amount || selectedOrder.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={styles.quotationRow}>
                   <Ionicons name="chatbubble-ellipses-outline" size={18} color="#388e3c" />
-                  <Text>Notes: <Text style={{ fontWeight: 'bold' }}>{selectedOrder.quotation_notes || '—'}</Text></Text>
+                  <Text style={styles.quotationLabel}>Notes:</Text>
+                  <Text style={styles.quotationValue}>{selectedOrder.quotation_notes || '—'}</Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={styles.quotationRow}>
                   <Ionicons name="person-circle-outline" size={18} color="#388e3c" />
-                  <Text>Customer Response: <Text style={{ fontWeight: 'bold', color: '#388e3c' }}>Accepted</Text></Text>
+                  <Text style={styles.quotationLabel}>Customer Response:</Text>
+                  <Text style={styles.quotationValue}>Accepted</Text>
                 </View>
               </View>
+
               {/* Mark as Ready for Pickup button for purchase orders */}
               {selectedOrder.type === 'Purchase' && (
                 <TouchableOpacity
-                  style={[styles.actionButton, { backgroundColor: '#FFD700', marginBottom: 12 }]}
+                  style={styles.readyButton}
                   onPress={async () => {
                     try {
                       await apiService.request(`/purchases/${selectedOrder.id}/ready-for-pickup`, { method: 'POST' });
@@ -387,6 +477,10 @@ const OrdersScreen = () => {
                         customer: r.customer_name || r.customer_email || 'N/A',
                         status: r.status || 'N/A',
                         details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
+                        quotation_amount: r.quotation_amount,
+                        quotation_notes: r.quotation_notes,
+                        quotation_schedule: r.quotation_schedule,
+                        penalty_status: r.penalty_status,
                       }));
                       const purchasesRes = await apiService.request('/purchases');
                       const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
@@ -396,428 +490,116 @@ const OrdersScreen = () => {
                         customer: p.customer_name || p.customer_email || 'N/A',
                         status: p.status || 'N/A',
                         details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
+                        quotation_price: p.quotation_price,
+                        quotation_notes: p.quotation_notes,
+                        quotation_schedule: p.quotation_schedule,
                       }));
                       setOrders([...rentals, ...purchases]);
-                    } catch (err) {
-                      Alert.alert('Error', 'Failed to mark as ready for pickup.');
-                    } finally {
                       setLoading(false);
+                    } catch (error) {
+                      Alert.alert('Error', 'Failed to mark order as ready for pickup.');
                     }
                   }}
                 >
-                  <Ionicons name="checkmark-done-circle-outline" size={20} color="#014D40" style={{ marginRight: 8 }} />
-                  <Text style={{ color: '#014D40', fontWeight: 'bold', fontSize: 16 }}>Mark as Ready for Pickup</Text>
+                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                  <Text style={styles.readyButtonText}>Mark as Ready for Pickup</Text>
                 </TouchableOpacity>
               )}
-            </>
-          )}
-
-          {/* Only show the yellow Quotation Details box if no status-specific section is shown */}
-          {!(selectedOrder.status === 'in_progress' || selectedOrder.status === 'cancelled' || selectedOrder.status === 'quotation_sent') &&
-            (selectedOrder.quotation_amount || selectedOrder.quotation_price || selectedOrder.quotation_notes || selectedOrder.quotation_schedule) && (
-              <View style={{ marginTop: 18, marginBottom: 8, padding: 12, backgroundColor: '#f9fbe7', borderRadius: 8, borderWidth: 1, borderColor: '#cddc39' }}>
-                <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#014D40', marginBottom: 6 }}>Quotation Details</Text>
-                <Text style={{ fontSize: 15, marginBottom: 2 }}>
-                  Amount: <Text style={{ fontWeight: 'bold', color: '#388e3c' }}>₱{(selectedOrder.quotation_amount || selectedOrder.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '—'}</Text>
-                </Text>
-                {selectedOrder.quotation_schedule && (
-                  <Text style={{ fontSize: 15, marginBottom: 2 }}>
-                    Schedule: <Text style={{ fontWeight: 'bold' }}>{selectedOrder.quotation_schedule}</Text>
-                  </Text>
-                )}
-                <Text style={{ fontSize: 15, marginBottom: 2 }}>
-                  Notes: <Text style={{ fontWeight: 'bold' }}>{selectedOrder.quotation_notes || '—'}</Text>
-                </Text>
-              </View>
-          )}
-
-          {/* Existing status-based sections remain below */}
-          {selectedOrder.status === 'pending' && (
-            <View style={{ marginTop: 16, gap: 10 }}>
-              <Text style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>Admin Action</Text>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
-                <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#388e3c', flex: 1, marginRight: 6 }]} onPress={async () => {
-                  // Accept order
-                  try {
-                    const endpoint = selectedOrder.type === 'Rental'
-                      ? `/rentals/${selectedOrder.id}/accept-order`
-                      : `/purchases/${selectedOrder.id}/accept-order`;
-                    await apiService.request(endpoint, { method: 'POST' });
-                    Alert.alert('Success', 'Order accepted!');
-                    handleCloseDetails();
-                    setLoading(true);
-                    const rentalsRes = await apiService.request('/rentals');
-                    const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
-                    const rentals = (rentalsArr || []).map((r: any) => ({
-                      id: r.id,
-                      type: 'Rental',
-                      customer: r.customer_name || r.customer_email || 'N/A',
-                      status: r.status || 'N/A',
-                      details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
-                    }));
-                    const purchasesRes = await apiService.request('/purchases');
-                    const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
-                    const purchases = (purchasesArr || []).map((p: any) => ({
-                      id: p.id,
-                      type: 'Purchase',
-                      customer: p.customer_name || p.customer_email || 'N/A',
-                      status: p.status || 'N/A',
-                      details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
-                    }));
-                    setOrders([...rentals, ...purchases]);
-                  } catch (err) {
-                    Alert.alert('Error', 'Failed to accept order.');
-                  } finally {
-                    setLoading(false);
-                  }
-                }}>
-                  <Text style={styles.actionButtonText}>Accept</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#d32f2f', flex: 1, marginLeft: 6 }]} onPress={async () => {
-                  // Decline order
-                  try {
-                    const endpoint = selectedOrder.type === 'Rental'
-                      ? `/rentals/${selectedOrder.id}/decline-order`
-                      : `/purchases/${selectedOrder.id}/decline-order`;
-                    await apiService.request(endpoint, { method: 'POST' });
-                    Alert.alert('Success', 'Order declined!');
-                    handleCloseDetails();
-                    setLoading(true);
-                    const rentalsRes = await apiService.request('/rentals');
-                    const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
-                    const rentals = (rentalsArr || []).map((r: any) => ({
-                      id: r.id,
-                      type: 'Rental',
-                      customer: r.customer_name || r.customer_email || 'N/A',
-                      status: r.status || 'N/A',
-                      details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
-                    }));
-                    const purchasesRes = await apiService.request('/purchases');
-                    const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
-                    const purchases = (purchasesArr || []).map((p: any) => ({
-                      id: p.id,
-                      type: 'Purchase',
-                      customer: p.customer_name || p.customer_email || 'N/A',
-                      status: p.status || 'N/A',
-                      details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
-                    }));
-                    setOrders([...rentals, ...purchases]);
-                  } catch (err) {
-                    Alert.alert('Error', 'Failed to decline order.');
-                  } finally {
-                    setLoading(false);
-                  }
-                }}>
-                  <Text style={styles.actionButtonText}>Decline</Text>
-                </TouchableOpacity>
-              </View>
             </View>
           )}
-          {selectedOrder.status === 'confirmed' && (
-            <View style={{ marginTop: 16, gap: 10 }}>
-              <Text style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>Set Quotation</Text>
-              <Text style={{ marginBottom: 2 }}>Amount (₱)</Text>
-              <TextInput
-                style={[styles.input, { marginBottom: 4 }]}
-                placeholder="Enter amount"
-                value={quotationAmount}
-                onChangeText={text => {
-                  setQuotationAmount(text);
-                  setQuotationError('');
-                }}
-                keyboardType="numeric"
-              />
-              <View style={{ marginBottom: 4 }}>
-                <Text style={{ marginBottom: 2 }}>Schedule</Text>
-                {Platform.OS === 'web' ? (
-                  <input
-                    type="date"
-                    style={{
-                      width: '100%',
-                      height: 40,
-                      borderRadius: 6,
-                      border: '1px solid #ccc',
-                      padding: '0 10px',
-                      fontSize: 16,
-                      color: '#014D40',
-                      marginBottom: 4,
-                    }}
-                    value={quotationSchedule}
-                    onChange={e => {
-                      setQuotationSchedule(e.target.value);
-                      setQuotationScheduleDate(e.target.value ? new Date(e.target.value) : null);
-                      setQuotationError('');
-                    }}
-                  />
-                ) : (
-                  <>
-                    <TouchableOpacity
-                      style={[styles.input, { justifyContent: 'center', height: 40 }]}
-                      onPress={() => setShowDatePicker(true)}
-                    >
-                      <Text style={{ color: quotationSchedule ? '#014D40' : '#888' }}>
-                        {quotationSchedule ? new Date(quotationSchedule).toLocaleDateString() : 'Select date'}
-                      </Text>
-                    </TouchableOpacity>
-                    {showDatePicker && (
-                      <DateTimePicker
-                        value={quotationScheduleDate || new Date()}
-                        mode="date"
-                        display="default"
-                        onChange={(event, selectedDate) => {
-                          setShowDatePicker(false);
-                          if (selectedDate) {
-                            setQuotationScheduleDate(selectedDate);
-                            setQuotationSchedule(selectedDate.toISOString().split('T')[0]);
-                            setQuotationError('');
-                          }
-                        }}
-                      />
-                    )}
-                  </>
-                )}
-                <Text style={{ fontSize: 12, color: '#888' }}>Select the date for the order schedule.</Text>
+
+          {/* Set Quotation Section */}
+          {selectedOrder.status === 'pending' && (
+            <View style={styles.setQuotationSection}>
+              <Text style={styles.quotationTitle}>Set Quotation</Text>
+              
+              {/* Amount Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Amount (₱)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={quotationAmount}
+                  onChangeText={setQuotationAmount}
+                  placeholder="Enter amount"
+                  keyboardType="numeric"
+                />
               </View>
-              <Text style={{ marginBottom: 2 }}>Notes (optional)</Text>
-              <TextInput
-                style={[styles.input, { marginBottom: 4 }]}
-                placeholder="Add any notes for the customer"
-                value={quotationNotes}
-                onChangeText={setQuotationNotes}
-                multiline
-                numberOfLines={2}
-              />
-              {quotationError ? (
-                <Text style={{ color: 'red', marginTop: 4 }}>{quotationError}</Text>
-              ) : null}
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: '#388e3c', marginTop: 8, minHeight: 40, justifyContent: 'center' }]}
-                disabled={quotationLoading}
-                onPress={async () => {
-                  if (!quotationAmount || isNaN(Number(quotationAmount))) {
-                    setQuotationError('Please enter a valid number for the quotation price.');
-                    return;
-                  }
-                  if (!quotationSchedule) {
-                    setQuotationError('Please select a schedule date.');
-                    return;
-                  }
-                  setQuotationLoading(true);
-                  try {
-                    const endpoint = selectedOrder.type === 'Rental'
-                      ? `/rentals/${selectedOrder.id}/set-quotation`
-                      : `/purchases/${selectedOrder.id}/set-quotation`;
-                    const payload = selectedOrder.type === 'Rental'
-                      ? {
-                          quotation_amount: Number(quotationAmount),
-                          quotation_notes: quotationNotes,
-                          quotation_schedule: quotationSchedule,
-                        }
-                      : {
-                          quotation_price: Number(quotationAmount),
-                          quotation_notes: quotationNotes,
-                          quotation_schedule: quotationSchedule,
-                        };
-                    await apiService.request(endpoint, { method: 'POST', body: JSON.stringify(payload) });
-                    Alert.alert('Success', 'Quotation sent!');
+
+              {/* Schedule Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Schedule</Text>
+                <View style={styles.scheduleContainer}>
+                  <TextInput
+                    style={[styles.textInput, styles.scheduleInput]}
+                    value={quotationSchedule}
+                    onChangeText={setQuotationSchedule}
+                    placeholder="dd/mm/yyyy"
+                  />
+                  <TouchableOpacity
+                    style={styles.calendarButton}
+                    onPress={() => setShowDatePicker(true)}
+                  >
+                    <Ionicons name="calendar-outline" size={20} color="#014D40" />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.helperText}>Select the date for the order schedule.</Text>
+              </View>
+
+              {/* Notes Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Notes (optional)</Text>
+                <TextInput
+                  style={[styles.textInput, styles.notesInput]}
+                  value={quotationNotes}
+                  onChangeText={setQuotationNotes}
+                  placeholder="Add any notes for the customer"
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.quotationActions}>
+                <TouchableOpacity
+                  style={styles.sendQuotationButton}
+                  onPress={handleSendQuotation}
+                  disabled={quotationLoading}
+                >
+                  <Ionicons name="paper-plane" size={20} color="#fff" />
+                  <Text style={styles.sendQuotationText} numberOfLines={1} adjustsFontSizeToFit={true}>Send Quotation</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => {
                     setQuotationAmount('');
                     setQuotationNotes('');
                     setQuotationSchedule('');
-                    setQuotationScheduleDate(null);
-                    setQuotationError('');
-                    handleCloseDetails();
-                    setLoading(true);
-                    const rentalsRes = await apiService.request('/rentals');
-                    const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
-                    const rentals = (rentalsArr || []).map((r: any) => ({
-                      id: r.id,
-                      type: 'Rental',
-                      customer: r.customer_name || r.customer_email || 'N/A',
-                      status: r.status || 'N/A',
-                      details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
-                    }));
-                    const purchasesRes = await apiService.request('/purchases');
-                    const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
-                    const purchases = (purchasesArr || []).map((p: any) => ({
-                      id: p.id,
-                      type: 'Purchase',
-                      customer: p.customer_name || p.customer_email || 'N/A',
-                      status: p.status || 'N/A',
-                      details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
-                    }));
-                    setOrders([...rentals, ...purchases]);
-                  } catch (err) {
-                    Alert.alert('Error', 'Failed to send quotation.');
-                  } finally {
-                    setQuotationLoading(false);
-                  }
-                }}
-              >
-                <Text style={styles.actionButtonText}>Send Quotation</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          {/* Show quotation details if available */}
-          {selectedOrder.status === 'quotation_sent' && (
-            <View style={{ marginTop: 16 }}>
-              <Text style={{ fontWeight: 'bold' }}>Quotation Details</Text>
-              <Text>Amount: ₱{selectedOrder.quotation_amount || selectedOrder.quotation_price}</Text>
-              <Text>Notes: {selectedOrder.quotation_notes}</Text>
-              <Text>Customer Response: Waiting</Text>
-            </View>
-          )}
-          {selectedOrder.status === 'cancelled' && (
-            <View style={{ backgroundColor: '#ffebee', borderRadius: 8, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#d32f2f', gap: 6 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                <Ionicons name="close-circle" size={20} color="#d32f2f" style={{ marginRight: 6 }} />
-                <Text style={{ fontWeight: 'bold', color: '#d32f2f', fontSize: 16 }}>Quotation Rejected</Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="cash-outline" size={18} color="#d32f2f" />
-                <Text>Amount: <Text style={{ fontWeight: 'bold', color: '#d32f2f' }}>₱{(selectedOrder.quotation_amount || selectedOrder.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text></Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="chatbubble-ellipses-outline" size={18} color="#d32f2f" />
-                <Text>Notes: <Text style={{ fontWeight: 'bold' }}>{selectedOrder.quotation_notes || '—'}</Text></Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="person-circle-outline" size={18} color="#d32f2f" />
-                <Text>Customer Response: <Text style={{ fontWeight: 'bold', color: '#d32f2f' }}>Rejected</Text></Text>
+                  }}
+                >
+                  <Ionicons name="close" size={20} color="#fff" />
+                  <Text style={styles.cancelButtonText} numberOfLines={1} adjustsFontSizeToFit={true}>Cancel</Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
-          {/* Penalty Management Section for Rental Orders */}
-          {selectedOrder.type === 'Rental' && (
-            <View style={{ marginTop: 16, padding: 16, backgroundColor: '#fff3e0', borderRadius: 8, borderWidth: 1, borderColor: '#ff9800' }}>
-              <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#e65100', marginBottom: 12 }}>
-                🚨 Penalty Management
-              </Text>
-              
-              <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontWeight: '600', marginBottom: 6 }}>Damage Assessment:</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  {(['none', 'minor', 'major', 'severe'] as const).map((level) => (
-                    <TouchableOpacity
-                      key={level}
-                      style={[
-                        { 
-                          paddingHorizontal: 12, 
-                          paddingVertical: 6, 
-                          borderRadius: 16, 
-                          borderWidth: 1,
-                          borderColor: penaltyDamageLevel === level ? '#ff9800' : '#ccc'
-                        },
-                        penaltyDamageLevel === level 
-                          ? { backgroundColor: '#ff9800', borderColor: '#ff9800' }
-                          : { backgroundColor: '#fff' }
-                      ]}
-                      onPress={() => setPenaltyDamageLevel(level)}
-                    >
-                      <Text style={[
-                        { fontSize: 12, fontWeight: '500' },
-                        penaltyDamageLevel === level 
-                          ? { color: '#fff' }
-                          : { color: '#666' }
-                      ]}>
-                        {level.charAt(0).toUpperCase() + level.slice(1)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-              
-              <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontWeight: '600', marginBottom: 6 }}>Penalty Notes:</Text>
-                <TextInput
-                  style={[styles.input, { marginBottom: 0 }]}
-                  placeholder="Add notes about damage or penalties..."
-                  value={penaltyNotes}
-                  onChangeText={setPenaltyNotes}
-                  multiline
-                  numberOfLines={2}
-                />
-              </View>
-              
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: '#ff9800', marginBottom: 8 }]}
-                disabled={penaltyLoading}
-                onPress={async () => {
-                  setPenaltyLoading(true);
-                  try {
-                    await apiService.request(`/rentals/${selectedOrder.id}/calculate-penalties`, {
-                      method: 'POST',
-                      body: JSON.stringify({
-                        damage_level: penaltyDamageLevel,
-                        penalty_notes: penaltyNotes
-                      })
-                    });
-                    Alert.alert('Success', 'Penalties calculated and applied!');
-                    setPenaltyDamageLevel('none');
-                    setPenaltyNotes('');
-                    // Refresh orders
-                    setLoading(true);
-                    const rentalsRes = await apiService.request('/rentals');
-                    const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
-                    const rentals = (rentalsArr || []).map((r: any) => ({
-                      id: r.id,
-                      type: 'Rental',
-                      customer: r.customer_name || r.customer_email || 'N/A',
-                      status: r.status || 'N/A',
-                      details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
-                      quotation_amount: r.quotation_amount,
-                      quotation_notes: r.quotation_notes,
-                      quotation_schedule: r.quotation_schedule,
-                    }));
-                    const purchasesRes = await apiService.request('/purchases');
-                    const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
-                    const purchases = (purchasesArr || []).map((p: any) => ({
-                      id: p.id,
-                      type: 'Purchase',
-                      customer: p.customer_name || p.customer_email || 'N/A',
-                      status: p.status || 'N/A',
-                      details: p.item_name + (r.notes ? ` - ${r.notes}` : ''),
-                      quotation_price: p.quotation_price,
-                      quotation_notes: p.quotation_notes,
-                      quotation_schedule: p.quotation_schedule,
-                    }));
-                    setOrders([...rentals, ...purchases]);
-                  } catch (err) {
-                    Alert.alert('Error', 'Failed to calculate penalties.');
-                  } finally {
-                    setPenaltyLoading(false);
-                  }
-                }}
-              >
-                <Ionicons name="calculator-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
-                  {penaltyLoading ? 'Calculating...' : 'Calculate Penalties'}
-                </Text>
-              </TouchableOpacity>
-              
-              <Text style={{ fontSize: 12, color: '#e65100', textAlign: 'center' }}>
-                Penalties: ₱500 cancellation, ₱100/day delay, ₱200+ damage fees
-              </Text>
-            </View>
+
+          {/* Date Picker Modal */}
+          {showDatePicker && (
+            <DateTimePicker
+              value={quotationScheduleDate || new Date()}
+              mode="date"
+              display="default"
+              onChange={(event, selectedDate) => {
+                setShowDatePicker(false);
+                if (selectedDate) {
+                  setQuotationScheduleDate(selectedDate);
+                  setQuotationSchedule(selectedDate.toLocaleDateString());
+                }
+              }}
+            />
           )}
-          {/* Existing action buttons */}
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.cancelButton]}
-              activeOpacity={0.85}
-              onPress={() => handleOrderAction('cancel')}
-            >
-              <Ionicons name="close-circle-outline" size={20} color="#FFD700" style={{ marginRight: 8 }} />
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
-            style={[styles.closeButton, styles.enhancedCloseButton]}
-            activeOpacity={0.85}
-            onPress={handleCloseDetails}
-          >
-            <Ionicons name="arrow-back-circle-outline" size={22} color="#FFD700" style={{ marginRight: 8 }} />
-            <Text style={styles.closeButtonText}>Close</Text>
-          </TouchableOpacity>
+            </ScrollView>
         </View>
       )}
     </View>
@@ -1195,13 +977,221 @@ const styles = StyleSheet.create({
     padding: 20,
     elevation: 10,
     zIndex: 1000,
+    maxHeight: '85%',
+    overflow: 'scroll',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+  },
+  closeButton: {
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   detailsTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 10,
     color: '#014D40',
   },
+  orderInfoSection: {
+    marginBottom: 20,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  infoLabel: {
+    fontSize: 15,
+    color: '#666',
+    fontWeight: '500',
+  },
+  infoValue: {
+    fontSize: 15,
+    color: '#014D40',
+    fontWeight: 'bold',
+  },
+  detailsText: {
+    flex: 1,
+    flexWrap: 'wrap',
+    marginLeft: 8,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 15,
+  },
+  quotationSection: {
+    backgroundColor: '#f9fbe7',
+    borderRadius: 8,
+    padding: 14,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#cddc39',
+  },
+  quotationTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#014D40',
+    marginBottom: 8,
+  },
+  quotationInfo: {
+    gap: 6,
+  },
+  quotationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  quotationLabel: {
+    fontSize: 14,
+    color: '#388e3c',
+    fontWeight: '500',
+  },
+  quotationValue: {
+    fontSize: 14,
+    color: '#388e3c',
+    fontWeight: 'bold',
+  },
+  readyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#388e3c',
+    borderRadius: 8,
+    paddingVertical: 10,
+    marginTop: 10,
+    gap: 8,
+  },
+  readyButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  setQuotationSection: {
+    marginBottom: 15,
+  },
+  quotationActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 16,
+    marginTop: 20,
+    marginBottom: 10,
+    paddingHorizontal: 0,
+  },
+  sendQuotationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#388e3c',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    flex: 1.4,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    minWidth: 160,
+  },
+  sendQuotationText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+    flexShrink: 0,
+    textAlign: 'center',
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#666',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flex: 0.6,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    minWidth: 90,
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+    flexShrink: 0,
+    textAlign: 'center',
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  textInput: {
+    backgroundColor: '#fff',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    fontSize: 15,
+    color: '#014D40',
+    minHeight: 44,
+  },
+  scheduleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  scheduleInput: {
+    flex: 1,
+    marginRight: 8,
+  },
+  calendarButton: {
+    padding: 5,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 4,
+  },
+  notesInput: {
+    height: 100,
+    textAlignVertical: 'top',
+  },
+
   dropdownButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1301,6 +1291,30 @@ const styles = StyleSheet.create({
   searchContainer: {
     marginTop: 8, // Space between filters and search bar
   },
+  // Modal styles
+  detailsModal: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 0,
+    elevation: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    zIndex: 1000,
+    maxHeight: '85%',
+  },
+  modalScrollView: {
+    flex: 1,
+  },
+  modalScrollContent: {
+    padding: 24,
+  },
+
 });
 
 export default OrdersScreen; 

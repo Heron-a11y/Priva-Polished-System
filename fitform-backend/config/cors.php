@@ -29,7 +29,11 @@ return [
         'exp://localhost:19000',
         'exp://localhost:19006',
         
-        // Common local network IPs (will be updated dynamically)
+        // Your specific local IP address
+        'http://192.168.1.55:19006',
+        'exp://192.168.1.55:19000',
+        
+        // Common local network IPs
         'http://192.168.1.*:19006',
         'http://192.168.0.*:19006',
         'http://10.0.0.*:19006',
@@ -40,6 +44,10 @@ return [
         'exp://192.168.0.*:19000',
         'exp://10.0.0.*:19000',
         'exp://172.16.*.*:19000',
+        
+        // Allow all origins for development (remove in production)
+        // This is important for tunnel mode to work from external networks
+        '*',
     ],
 
     'allowed_origins_patterns' => [
@@ -50,6 +58,11 @@ return [
         'http://192\.168\..*:19006',
         'http://10\.0\..*:19006',
         'http://172\.16\..*:19006',
+        
+        // Expo Go tunnel patterns
+        'https://.*\.exp\.direct',
+        'https://.*\.ngrok-free\.app',
+        'https://.*\.ngrok\.io',
     ],
 
     'allowed_headers' => ['*'],

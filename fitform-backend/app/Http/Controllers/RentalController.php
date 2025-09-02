@@ -10,7 +10,19 @@ class RentalController extends Controller
 {
     public function index(Request $request)
     {
-        $rentals = Rental::with('user:id,name')->get();
+        $user = $request->user();
+        if ($user && isset($user->role) && $user->role === 'admin') {
+            $rentals = Rental::with('user:id,name')->get();
+            $rentals->transform(function ($rental) {
+                $rental->customer_name = $rental->user ? $rental->user->name : null;
+                // Add penalty breakdown to each rental
+                $rental->penalty_breakdown = $rental->getPenaltyBreakdown();
+                unset($rental->user);
+                return $rental;
+            });
+            return response()->json($rentals);
+        }
+        $rentals = Rental::with('user:id,name')->where('user_id', $user->id)->get();
         $rentals->transform(function ($rental) {
             $rental->customer_name = $rental->user ? $rental->user->name : null;
             // Add penalty breakdown to each rental
@@ -281,5 +293,23 @@ class RentalController extends Controller
         $rental->save();
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Get rental history for customer
+     */
+    public function getHistory(Request $request)
+    {
+        $user = $request->user();
+        $rentals = Rental::where('user_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $rentals->transform(function ($rental) {
+            $rental->penalty_breakdown = $rental->getPenaltyBreakdown();
+            return $rental;
+        });
+
+        return response()->json($rentals);
     }
 } 

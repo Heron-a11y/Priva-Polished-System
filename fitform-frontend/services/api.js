@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Base API configuration
-// IMPORTANT: Change this to your computer's IP address for mobile testing
-// Find your IP by running 'ipconfig' (Windows) or 'ifconfig' (Mac/Linux)
-const API_BASE_URL = 'http://192.168.1.55:8000/api'; // Your actual IP address
+// IMPORTANT: This will be automatically updated by update-api-ip.js script
+// For external network access, this should be your computer's public IP or a domain
+const API_BASE_URL = 'https://2f37311b9350.ngrok-free.app/api'; // Public IP for external access
 
 class ApiService {
     constructor() {
@@ -209,6 +209,10 @@ class ApiService {
         return this.request('/purchases');
     }
 
+    async getPurchaseHistory() {
+        return this.request('/purchases/history');
+    }
+
     async getPurchase(id) {
         return this.request(`/purchases/${id}`);
     }
@@ -229,6 +233,10 @@ class ApiService {
     // Rental Methods
     async getRentals() {
         return this.request('/rentals');
+    }
+
+    async getRentalHistory() {
+        return this.request('/rentals/history');
     }
 
     async getRental(id) {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Platform, Image, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Platform, Image, Alert, ScrollView } from 'react-native';
 import { Link, usePathname, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
@@ -42,7 +42,7 @@ const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
     { name: 'Dashboard', icon: 'home', path: '/customer/dashboard' },
     { name: 'Appointments', icon: 'calendar', path: '/customer/appointments' },
     { name: 'Orders', icon: 'list', path: '/customer/orders' },
-    { name: 'Sizing', icon: 'resize', path: '/customer/sizing' },
+    { name: 'Sizing', icon: 'body', path: '/customer/sizing' },
     { name: 'Preferences', icon: 'settings', path: '/customer/preferences' },
   ];
 
@@ -67,7 +67,13 @@ const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
             <Text style={styles.brandName}>Priva Atelier</Text>
             <Text style={styles.brandSubtitle}>GOWN SUITS BARONG</Text>
           </View>
-          <View style={styles.menuContainer}>
+          <ScrollView 
+            style={styles.menuContainer} 
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.menuScrollContent}
+            bounces={false}
+            overScrollMode="never"
+          >
             {menuItems.map((item) => (
               <Link key={item.path} href={item.path as any} asChild>
                 <TouchableOpacity
@@ -121,6 +127,12 @@ const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
                     }
                     onPress={() => handleSetOpen(false)}
                   >
+                    <Ionicons
+                      name="analytics"
+                      size={18}
+                      color={pathname === '/measurement-history' ? '#FFD700' : '#fff'}
+                      style={styles.dropdownIcon}
+                    />
                     <Text
                       style={
                         pathname === '/measurement-history'
@@ -132,18 +144,24 @@ const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
                     </Text>
                   </TouchableOpacity>
                 </Link>
-                <Link href={"/rental-purchase-history" as any} asChild>
+                <Link href={"/customer/rental-purchase-history" as any} asChild>
                   <TouchableOpacity
                     style={
-                      pathname === '/rental-purchase-history'
+                      pathname === '/customer/rental-purchase-history'
                         ? { ...styles.dropdownItem, ...styles.activeDropdownItem }
                         : styles.dropdownItem
                     }
                     onPress={() => handleSetOpen(false)}
                   >
+                    <Ionicons
+                      name="receipt"
+                      size={18}
+                      color={pathname === '/customer/rental-purchase-history' ? '#FFD700' : '#fff'}
+                      style={styles.dropdownIcon}
+                    />
                     <Text
                       style={
-                        pathname === '/rental-purchase-history'
+                        pathname === '/customer/rental-purchase-history'
                           ? { ...styles.dropdownText, ...styles.activeDropdownText }
                           : styles.dropdownText
                       }
@@ -154,7 +172,7 @@ const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
                 </Link>
               </View>
             )}
-          </View>
+          </ScrollView>
         </View>
       </>
     );
@@ -168,7 +186,13 @@ const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
         <Text style={styles.brandName}>Priva Atelier</Text>
         <Text style={styles.brandSubtitle}>GOWN SUITS BARONG</Text>
       </View>
-      <View style={styles.menuContainer}>
+      <ScrollView 
+        style={styles.menuContainer} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.menuScrollContent}
+        bounces={false}
+        overScrollMode="never"
+      >
         {menuItems.map((item) => (
           <Link key={item.path} href={item.path as any} asChild>
             <TouchableOpacity
@@ -222,6 +246,12 @@ const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
                 }
                 onPress={() => handleSetOpen(false)}
               >
+                <Ionicons
+                  name="analytics"
+                  size={18}
+                  color={pathname === '/measurement-history' ? '#FFD700' : '#fff'}
+                  style={styles.dropdownIcon}
+                />
                 <Text
                   style={
                     pathname === '/measurement-history'
@@ -233,18 +263,24 @@ const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
                 </Text>
               </TouchableOpacity>
             </Link>
-            <Link href={"/rental-purchase-history" as any} asChild>
+            <Link href={"/customer/rental-purchase-history" as any} asChild>
               <TouchableOpacity
                 style={
-                  pathname === '/rental-purchase-history'
+                  pathname === '/customer/rental-purchase-history'
                     ? { ...styles.dropdownItem, ...styles.activeDropdownItem }
                     : styles.dropdownItem
                 }
                 onPress={() => handleSetOpen(false)}
               >
+                <Ionicons
+                  name="receipt"
+                  size={18}
+                  color={pathname === '/customer/rental-purchase-history' ? '#FFD700' : '#fff'}
+                  style={styles.dropdownIcon}
+                />
                 <Text
                   style={
-                    pathname === '/rental-purchase-history'
+                    pathname === '/customer/rental-purchase-history'
                       ? { ...styles.dropdownText, ...styles.activeDropdownText }
                       : styles.dropdownText
                   }
@@ -255,7 +291,7 @@ const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
             </Link>
           </View>
         )}
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -332,6 +368,11 @@ const styles = StyleSheet.create({
   menuContainer: {
     padding: 10,
     marginTop: 10,
+    flex: 1,
+  },
+  menuScrollContent: {
+    paddingBottom: 20,
+    minHeight: '100%',
   },
   menuItem: {
     flexDirection: 'row',
@@ -358,6 +399,8 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 10,
     paddingHorizontal: 10,
     borderRadius: 8,
@@ -368,6 +411,9 @@ const styles = StyleSheet.create({
   dropdownText: {
     color: '#fff',
     fontSize: 15,
+  },
+  dropdownIcon: {
+    marginRight: 12,
   },
   activeDropdownText: {
     color: '#FFD700',

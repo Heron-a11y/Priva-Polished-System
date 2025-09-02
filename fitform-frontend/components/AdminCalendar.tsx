@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import apiService from '../services/api';
 
@@ -26,9 +27,7 @@ interface AdminCalendarProps {
 }
 
 const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) => {
-  const [currentDate, setCurrentDate] = useState(new Date());
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
@@ -50,30 +49,17 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
     }
   };
 
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDay = firstDay.getDay();
-
-    const days = [];
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < startingDay; i++) {
-      days.push(null);
+  const handleDatePress = (day: any) => {
+    const selectedDate = day.dateString;
+    const dayAppointments = getAppointmentsForDate(selectedDate);
+    
+    if (dayAppointments.length > 0) {
+      setSelectedAppointment(dayAppointments[0]);
+      setShowAppointmentModal(true);
     }
-
-    // Add days of the month
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(new Date(year, month, i));
-    }
-
-    return days;
   };
 
-  const getAppointmentsForDate = (date: Date) => {
-    const dateString = date.toISOString().split('T')[0];
+  const getAppointmentsForDate = (dateString: string) => {
     return appointments.filter(appointment => 
       appointment.appointment_date.startsWith(dateString)
     );
@@ -105,15 +91,6 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
     }
   };
 
-  const handleDatePress = (date: Date) => {
-    setSelectedDate(date);
-    const dayAppointments = getAppointmentsForDate(date);
-    if (dayAppointments.length > 0) {
-      setSelectedAppointment(dayAppointments[0]);
-      setShowAppointmentModal(true);
-    }
-  };
-
   const handleAppointmentStatusUpdate = async (appointmentId: number, newStatus: 'confirmed' | 'cancelled') => {
     try {
       await apiService.updateAppointmentStatus(appointmentId, newStatus);
@@ -126,23 +103,54 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
     }
   };
 
-  const previousMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-  };
-
-  const nextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-  };
-
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', { 
-      month: 'long', 
-      year: 'numeric' 
+  const getMarkedDates = () => {
+    const marked: { [date: string]: any } = {};
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Mark today's date with special highlighting
+    marked[today] = {
+      selected: true,
+      selectedColor: '#007AFF',
+      selectedTextColor: '#FFFFFF',
+      marked: true,
+      dotColor: '#007AFF',
+    };
+    
+    appointments.forEach((appointment) => {
+      // Handle different date formats
+      let date;
+      if (appointment.appointment_date.includes('T')) {
+        date = appointment.appointment_date.split('T')[0];
+      } else {
+        // If it's already in YYYY-MM-DD format
+        date = appointment.appointment_date.split(' ')[0];
+      }
+      
+      let color = getStatusColor(appointment.status);
+      
+      // If this date already has today's highlighting, merge the properties
+      if (date === today && marked[date]) {
+        marked[date] = {
+          ...marked[date],
+          selected: true,
+          selectedColor: color,
+          selectedTextColor: '#fff',
+          marked: true,
+          dotColor: color,
+        };
+      } else {
+        marked[date] = {
+          selected: true,
+          selectedColor: color,
+          selectedTextColor: '#fff',
+          marked: true,
+          dotColor: color,
+        };
+      }
     });
+    
+    return marked;
   };
-
-  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const days = getDaysInMonth(currentDate);
 
   if (loading) {
     return (
@@ -155,76 +163,64 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
 
   return (
     <View style={styles.container}>
-      {/* Calendar Header */}
-      <View style={styles.calendarHeader}>
-        <TouchableOpacity onPress={previousMonth} style={styles.navButton}>
-          <Ionicons name="chevron-back" size={24} color="#014D40" />
-        </TouchableOpacity>
-        <Text style={styles.monthYear}>{formatDate(currentDate)}</Text>
-        <TouchableOpacity onPress={nextMonth} style={styles.navButton}>
-          <Ionicons name="chevron-forward" size={24} color="#014D40" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Days of Week Header */}
-      <View style={styles.daysHeader}>
-        {daysOfWeek.map(day => (
-          <Text key={day} style={styles.dayHeader}>{day}</Text>
-        ))}
-      </View>
-
-      {/* Calendar Grid */}
-      <View style={styles.calendarGrid}>
-        {days.map((day, index) => {
-          if (!day) {
-            return <View key={index} style={styles.emptyDay} />;
-          }
-
-          const dayAppointments = getAppointmentsForDate(day);
-          const isToday = day.toDateString() === new Date().toDateString();
-          const isSelected = selectedDate && day.toDateString() === selectedDate.toDateString();
-
-          return (
-            <TouchableOpacity
-              key={index}
-              style={[
-                styles.day,
-                isToday && styles.today,
-                isSelected && styles.selectedDay,
-                dayAppointments.length > 0 && styles.hasAppointment
-              ]}
-              onPress={() => handleDatePress(day)}
-            >
-              <Text style={[
-                styles.dayText,
-                isToday && styles.todayText,
-                isSelected && styles.selectedDayText
-              ]}>
-                {day.getDate()}
-              </Text>
-              {dayAppointments.length > 0 && (
-                <View style={styles.appointmentIndicator}>
-                  <Text style={styles.appointmentCount}>{dayAppointments.length}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
+      {/* Calendar */}
+      <View style={styles.calendarContainer}>
+        <Calendar
+          onDayPress={handleDatePress}
+          markedDates={getMarkedDates()}
+          minDate={new Date().toISOString().split('T')[0]}
+          theme={{
+            backgroundColor: '#fff',
+            calendarBackground: '#fff',
+            textSectionTitleColor: '#014D40',
+            selectedDayBackgroundColor: '#014D40',
+            selectedDayTextColor: '#fff',
+            todayTextColor: '#014D40',
+            dayTextColor: '#333',
+            textDisabledColor: '#d9e1e8',
+            dotColor: '#014D40',
+            selectedDotColor: '#fff',
+            arrowColor: '#014D40',
+            monthTextColor: '#014D40',
+            indicatorColor: '#014D40',
+            textDayFontFamily: 'System',
+            textDayHeaderFontFamily: 'System',
+            textDayFontWeight: '300',
+            textMonthFontWeight: 'bold',
+            textDayHeaderFontWeight: '600',
+            textDayFontSize: 16,
+            textMonthFontSize: 18,
+            textDayHeaderFontSize: 14,
+          }}
+        />
       </View>
 
       {/* Legend */}
-      <View style={styles.legend}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
-          <Text style={styles.legendText}>Confirmed</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
-          <Text style={styles.legendText}>Pending</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#F44336' }]} />
-          <Text style={styles.legendText}>Cancelled</Text>
+      <View style={styles.legendContainer}>
+        <Text style={styles.legendTitle}>Appointment Status</Text>
+        <View style={styles.legendItems}>
+          {/* First Row: Today, Confirmed, Pending */}
+          <View style={styles.legendRow}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#007AFF' }]} />
+              <Text style={styles.legendText}>Today</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
+              <Text style={styles.legendText}>Confirmed</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
+              <Text style={styles.legendText}>Pending</Text>
+            </View>
+          </View>
+          {/* Second Row: Cancelled */}
+          <View style={styles.legendRow}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#F44336' }]} />
+              <Text style={styles.legendText}>Cancelled</Text>
+            </View>
+          </View>
         </View>
       </View>
 
@@ -328,14 +324,12 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    margin: 16,
+    borderRadius: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
   },
   loadingContainer: {
     flex: 1,
@@ -348,107 +342,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#014D40',
   },
-  calendarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+  calendarContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    overflow: 'hidden',
   },
-  navButton: {
-    padding: 8,
-  },
-  monthYear: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#014D40',
-  },
-  daysHeader: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  dayHeader: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  day: {
-    width: '14.28%',
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    position: 'relative',
-  },
-  emptyDay: {
-    width: '14.28%',
-    aspectRatio: 1,
-  },
-  today: {
-    backgroundColor: '#E8F5E8',
-    borderColor: '#014D40',
-  },
-  selectedDay: {
-    backgroundColor: '#014D40',
-  },
-  hasAppointment: {
-    backgroundColor: '#FFF3E0',
-  },
-  dayText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  todayText: {
-    color: '#014D40',
-    fontWeight: 'bold',
-  },
-  selectedDayText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  appointmentIndicator: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: '#FF9800',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  appointmentCount: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  legend: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 16,
-    paddingTop: 16,
+  legendContainer: {
+    padding: 20,
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',
+  },
+  legendTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#014D40',
+    marginBottom: 16,
+  },
+  legendItems: {
+    gap: 16,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 16,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   legendDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    marginRight: 4,
   },
   legendText: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#666',
+    fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
@@ -458,40 +389,48 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     width: '90%',
     maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#014D40',
   },
   modalBody: {
-    padding: 20,
+    padding: 24,
   },
   detailRow: {
     flexDirection: 'row',
-    marginBottom: 12,
+    marginBottom: 16,
+    alignItems: 'flex-start',
   },
   detailLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: '#014D40',
-    width: 80,
+    width: 100,
+    marginTop: 2,
   },
   detailValue: {
     fontSize: 16,
     color: '#333',
     flex: 1,
+    lineHeight: 24,
   },
   statusContainer: {
     flexDirection: 'row',
@@ -507,17 +446,23 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    padding: 20,
+    padding: 24,
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',
+    gap: 16,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    minWidth: 100,
+    padding: 16,
+    borderRadius: 12,
+    minWidth: 120,
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   confirmButton: {
     backgroundColor: '#4CAF50',
@@ -529,7 +474,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
-    marginLeft: 4,
+    marginLeft: 6,
   },
 });
 

@@ -4,6 +4,7 @@ import { Stack, usePathname } from 'expo-router';
 import AdminSidebar from './components/AdminSidebar';
 import Header from '../../components/Header';
 import { NotificationProvider } from '../../contexts/NotificationContext';
+import { Colors } from '../../constants/Colors';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const isMobile = SCREEN_WIDTH < 768; // More reliable mobile detection
@@ -20,7 +21,12 @@ export default function AdminLayout() {
         <View style={[styles.content, isMobile && styles.mobileContent]}>
           <AdminSidebar open={isMobile ? sidebarOpen : true} setOpen={setSidebarOpen} />
           <View style={styles.stackContainer}>
-            <Stack screenOptions={{ headerShown: false }} />
+            <Stack 
+              screenOptions={{ 
+                headerShown: false,
+                contentStyle: { backgroundColor: Colors.background.light }
+              }} 
+            />
           </View>
         </View>
       </View>
@@ -33,7 +39,7 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: Colors.background.light,
   },
   content: {
     flex: 1,
@@ -44,6 +50,7 @@ const styles = StyleSheet.create({
   },
   stackContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: Colors.background.light,
+    paddingLeft: isMobile ? 0 : 8, // Add some spacing from sidebar on desktop
   },
 }); 
