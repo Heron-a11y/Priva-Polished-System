@@ -500,20 +500,6 @@ export default function RentalOrderFlow() {
                   <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
                 </TouchableOpacity>
                 
-                <View style={styles.agreementSummary}>
-                  <View style={styles.agreementItem}>
-                    <Ionicons name="time" size={16} color={Colors.warning} />
-                    <Text style={styles.agreementItemText}>5-day rental period</Text>
-                  </View>
-                  <View style={styles.agreementItem}>
-                    <Ionicons name="cash" size={16} color={Colors.success} />
-                    <Text style={styles.agreementItemText}>₱500 rental fee</Text>
-                  </View>
-                  <View style={styles.agreementItem}>
-                    <Ionicons name="warning" size={16} color={Colors.error} />
-                    <Text style={styles.agreementItemText}>Penalties apply for delays/damage</Text>
-                  </View>
-                </View>
                 
                 <TouchableOpacity
                   style={[
@@ -1593,25 +1579,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.primary,
-    marginLeft: 8,
-  },
-  agreementSummary: {
-    backgroundColor: Colors.background.card,
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.border.light,
-  },
-  agreementItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  agreementItemText: {
-    fontSize: 14,
-    color: Colors.text.secondary,
     marginLeft: 8,
   },
   errorContainer: {

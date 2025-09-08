@@ -16,6 +16,7 @@ import { ThemedText } from '../../components/ThemedText';
 import { Colors } from '../../constants/Colors';
 import apiService from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
@@ -71,6 +72,35 @@ export default function SizingScreen() {
 
   const categories = ['all', 'shirts', 'pants', 'dresses', 'jackets', 'skirts', 'shoes', 'hats', 'suits', 'activewear', 'custom'];
   const genders = ['all', 'male', 'female', 'unisex'];
+
+  // Get category icon
+  const getCategoryIcon = (category: string): string => {
+    switch (category) {
+      case 'all': return 'apps';
+      case 'shirts': return 'shirt';
+      case 'pants': return 'body';
+      case 'dresses': return 'woman';
+      case 'jackets': return 'snow';
+      case 'skirts': return 'ellipse';
+      case 'shoes': return 'footsteps';
+      case 'hats': return 'ellipse-outline';
+      case 'suits': return 'business';
+      case 'activewear': return 'fitness';
+      case 'custom': return 'create';
+      default: return 'shirt';
+    }
+  };
+
+  // Get gender icon
+  const getGenderIcon = (gender: string): string => {
+    switch (gender) {
+      case 'all': return 'people';
+      case 'male': return 'man';
+      case 'female': return 'woman';
+      case 'unisex': return 'person';
+      default: return 'person';
+    }
+  };
 
   // Category-based default measurements
   const getDefaultMeasurements = (category: string): Record<string, string> => {
@@ -388,53 +418,85 @@ export default function SizingScreen() {
     </View>
   );
 
-  const renderSizeCharts = () => (
-    <View style={styles.tabContent}>
-      <View style={styles.filterContainer}>
-        <View style={styles.filterRow}>
-          <ThemedText style={styles.filterLabel}>Category:</ThemedText>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-            {categories.map((cat) => (
-              <TouchableOpacity
-                key={cat}
-                style={[
-                  styles.filterChip,
-                  selectedCategory === cat && styles.filterChipActive
-                ]}
-                onPress={() => handleCategorySelect(cat)}
-              >
-                <ThemedText style={[
-                  styles.filterChipText,
-                  selectedCategory === cat && styles.filterChipTextActive
-                ]}>
-                  {cat === 'custom' ? 'Custom' : cat.charAt(0).toUpperCase() + cat.slice(1)}
-                </ThemedText>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+   const renderSizeCharts = () => (
+     <View style={styles.tabContent}>
+       <View style={styles.filterContainer}>
+         <View style={styles.filterRow}>
+           <ThemedText style={styles.filterLabel}>Category:</ThemedText>
+           <View style={styles.scrollContainer}>
+             <ScrollView 
+               horizontal 
+               showsHorizontalScrollIndicator={false} 
+               style={styles.filterScroll}
+               contentContainerStyle={styles.scrollContent}
+             >
+               {categories.map((cat) => (
+                 <TouchableOpacity
+                   key={cat}
+                   style={[
+                     styles.filterChip,
+                     selectedCategory === cat && styles.filterChipActive
+                   ]}
+                   onPress={() => handleCategorySelect(cat)}
+                 >
+                   <Ionicons 
+                     name={getCategoryIcon(cat) as any} 
+                     size={16} 
+                     color={selectedCategory === cat ? Colors.text.inverse : Colors.text.secondary}
+                     style={styles.chipIcon}
+                   />
+                   <ThemedText style={[
+                     styles.filterChipText,
+                     selectedCategory === cat && styles.filterChipTextActive
+                   ]}>
+                     {cat === 'custom' ? 'Custom' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                   </ThemedText>
+                 </TouchableOpacity>
+               ))}
+             </ScrollView>
+             <View style={styles.scrollIndicator}>
+               <Ionicons name="chevron-forward" size={16} color={Colors.text.muted} />
+             </View>
+           </View>
+         </View>
         
         <View style={styles.filterRow}>
           <ThemedText style={styles.filterLabel}>Gender:</ThemedText>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-            {genders.map((gender) => (
-              <TouchableOpacity
-                key={gender}
-                style={[
-                  styles.filterChip,
-                  selectedGender === gender && styles.filterChipActive
-                ]}
-                onPress={() => setSelectedGender(gender)}
-              >
-                <ThemedText style={[
-                  styles.filterChipText,
-                  selectedGender === gender && styles.filterChipTextActive
-                ]}>
-                  {gender.charAt(0).toUpperCase() + gender.slice(1)}
-                </ThemedText>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <View style={styles.scrollContainer}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              style={styles.filterScroll}
+              contentContainerStyle={styles.scrollContent}
+            >
+              {genders.map((gender) => (
+                <TouchableOpacity
+                  key={gender}
+                  style={[
+                    styles.filterChip,
+                    selectedGender === gender && styles.filterChipActive
+                  ]}
+                  onPress={() => setSelectedGender(gender)}
+                >
+                  <Ionicons 
+                    name={getGenderIcon(gender) as any} 
+                    size={16} 
+                    color={selectedGender === gender ? Colors.text.inverse : Colors.text.secondary}
+                    style={styles.chipIcon}
+                  />
+                  <ThemedText style={[
+                    styles.filterChipText,
+                    selectedGender === gender && styles.filterChipTextActive
+                  ]}>
+                    {gender.charAt(0).toUpperCase() + gender.slice(1)}
+                  </ThemedText>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <View style={styles.scrollIndicator}>
+              <Ionicons name="chevron-forward" size={16} color={Colors.text.muted} />
+            </View>
+          </View>
         </View>
 
         {selectedCategory !== 'all' && (
@@ -451,14 +513,9 @@ export default function SizingScreen() {
           <ActivityIndicator size="large" color={Colors.secondary} />
           <ThemedText style={styles.loadingText}>Loading size charts...</ThemedText>
         </View>
-      ) : standards.length > 0 ? (
-        <>
-          <View style={styles.debugInfo}>
-            <ThemedText style={styles.debugText}>
-              Found {standards.length} size chart(s) for category: "{selectedCategory}" and gender: "{selectedGender}"
-            </ThemedText>
-          </View>
-          {standards.map((standard) => (
+       ) : standards.length > 0 ? (
+         <>
+           {standards.map((standard) => (
             <View key={standard.id} style={styles.standardCard}>
               <View style={styles.standardHeader}>
                 <ThemedText style={styles.standardTitle}>{standard.name}</ThemedText>
@@ -505,48 +562,80 @@ export default function SizingScreen() {
       <View style={styles.filterContainer}>
         <View style={styles.filterRow}>
           <ThemedText style={styles.filterLabel}>Category:</ThemedText>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-            {categories.map((cat) => (
-              <TouchableOpacity
-                key={cat}
-                style={[
-                  styles.filterChip,
-                  selectedCategory === cat && styles.filterChipActive
-                ]}
-                onPress={() => handleCategorySelect(cat)}
-              >
-                <ThemedText style={[
-                  styles.filterChipText,
-                  selectedCategory === cat && styles.filterChipTextActive
-                ]}>
-                  {cat === 'custom' ? 'Custom' : cat.charAt(0).toUpperCase() + cat.slice(1)}
-                </ThemedText>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <View style={styles.scrollContainer}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              style={styles.filterScroll}
+              contentContainerStyle={styles.scrollContent}
+            >
+              {categories.map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[
+                    styles.filterChip,
+                    selectedCategory === cat && styles.filterChipActive
+                  ]}
+                  onPress={() => handleCategorySelect(cat)}
+                >
+                  <Ionicons 
+                    name={getCategoryIcon(cat) as any} 
+                    size={16} 
+                    color={selectedCategory === cat ? Colors.text.inverse : Colors.text.secondary}
+                    style={styles.chipIcon}
+                  />
+                  <ThemedText style={[
+                    styles.filterChipText,
+                    selectedCategory === cat && styles.filterChipTextActive
+                  ]}>
+                    {cat === 'custom' ? 'Custom' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                  </ThemedText>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <View style={styles.scrollIndicator}>
+              <Ionicons name="chevron-forward" size={16} color={Colors.text.muted} />
+            </View>
+          </View>
         </View>
         
         <View style={styles.filterRow}>
           <ThemedText style={styles.filterLabel}>Gender:</ThemedText>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-            {genders.map((gender) => (
-              <TouchableOpacity
-                key={gender}
-                style={[
-                  styles.filterChip,
-                  selectedGender === gender && styles.filterChipActive
-                ]}
-                onPress={() => setSelectedGender(gender)}
-              >
-                <ThemedText style={[
-                  styles.filterChipText,
-                  selectedGender === gender && styles.filterChipTextActive
-                ]}>
-                  {gender.charAt(0).toUpperCase() + gender.slice(1)}
-                </ThemedText>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <View style={styles.scrollContainer}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              style={styles.filterScroll}
+              contentContainerStyle={styles.scrollContent}
+            >
+              {genders.map((gender) => (
+                <TouchableOpacity
+                  key={gender}
+                  style={[
+                    styles.filterChip,
+                    selectedGender === gender && styles.filterChipActive
+                  ]}
+                  onPress={() => setSelectedGender(gender)}
+                >
+                  <Ionicons 
+                    name={getGenderIcon(gender) as any} 
+                    size={16} 
+                    color={selectedGender === gender ? Colors.text.inverse : Colors.text.secondary}
+                    style={styles.chipIcon}
+                  />
+                  <ThemedText style={[
+                    styles.filterChipText,
+                    selectedGender === gender && styles.filterChipTextActive
+                  ]}>
+                    {gender.charAt(0).toUpperCase() + gender.slice(1)}
+                  </ThemedText>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <View style={styles.scrollIndicator}>
+              <Ionicons name="chevron-forward" size={16} color={Colors.text.muted} />
+            </View>
+          </View>
         </View>
 
         {selectedCategory !== 'all' && (
@@ -667,12 +756,6 @@ export default function SizingScreen() {
           )}
         </View>
 
-        {/* Form Note */}
-        <View style={styles.formNote}>
-          <ThemedText style={styles.formNoteText}>
-            <Text style={styles.requiredAsterisk}>*</Text> Required measurements for {selectedCategory}
-          </ThemedText>
-        </View>
 
         <TouchableOpacity
           style={[
@@ -832,7 +915,10 @@ export default function SizingScreen() {
           style={[styles.tab, activeTab === 'recommendations' && styles.activeTab]}
           onPress={() => setActiveTab('recommendations')}
         >
-          <ThemedText style={[styles.tabText, activeTab === 'recommendations' && styles.activeTabText]}>
+          <ThemedText 
+            style={[styles.tabText, activeTab === 'recommendations' && styles.activeTabText]}
+            numberOfLines={1}
+          >
             Recommendations
           </ThemedText>
         </TouchableOpacity>
@@ -841,7 +927,10 @@ export default function SizingScreen() {
           style={[styles.tab, activeTab === 'charts' && styles.activeTab]}
           onPress={() => setActiveTab('charts')}
         >
-          <ThemedText style={[styles.tabText, activeTab === 'charts' && styles.activeTabText]}>
+          <ThemedText 
+            style={[styles.tabText, activeTab === 'charts' && styles.activeTabText]}
+            numberOfLines={1}
+          >
             Size Charts
           </ThemedText>
         </TouchableOpacity>
@@ -850,7 +939,10 @@ export default function SizingScreen() {
           style={[styles.tab, activeTab === 'measurements' && styles.activeTab]}
           onPress={() => setActiveTab('measurements')}
         >
-          <ThemedText style={[styles.tabText, activeTab === 'measurements' && styles.activeTabText]}>
+          <ThemedText 
+            style={[styles.tabText, activeTab === 'measurements' && styles.activeTabText]}
+            numberOfLines={1}
+          >
             Measurements
           </ThemedText>
         </TouchableOpacity>
@@ -876,21 +968,24 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background.light,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    marginBottom: 25,
+    marginBottom: 30,
     textAlign: 'center',
     color: Colors.primary,
     textShadowColor: 'rgba(1, 77, 64, 0.2)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
+    letterSpacing: 0.5,
+    lineHeight: 38,
+    includeFontPadding: false,
   },
   tabContainer: {
     flexDirection: 'row',
     marginBottom: 25,
     backgroundColor: Colors.background.light,
     borderRadius: 15,
-    padding: 6,
+    padding: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -901,11 +996,13 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 2,
     alignItems: 'center',
     borderRadius: 12,
-    marginHorizontal: 2,
+    marginHorizontal: 1,
+    minHeight: 48,
+    justifyContent: 'center',
   },
   activeTab: {
     backgroundColor: Colors.primary,
@@ -916,15 +1013,17 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   tabText: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '600',
     color: Colors.text.secondary,
     textAlign: 'center',
+    lineHeight: 14,
   },
   activeTabText: {
     color: Colors.text.inverse,
     fontWeight: '700',
-    fontSize: 13,
+    fontSize: 11,
+    lineHeight: 14,
   },
   content: {
     flex: 1,
@@ -964,18 +1063,35 @@ const styles = StyleSheet.create({
     minWidth: 80,
     color: Colors.primary,
   },
-  filterScroll: {
-    flex: 1,
-  },
-  filterChip: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    backgroundColor: Colors.background.light,
-    borderRadius: 25,
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: Colors.border.medium,
-  },
+   filterScroll: {
+     flex: 1,
+   },
+   scrollContainer: {
+     flex: 1,
+     flexDirection: 'row',
+     alignItems: 'center',
+   },
+   scrollContent: {
+     paddingRight: 10,
+   },
+   scrollIndicator: {
+     paddingLeft: 8,
+     paddingRight: 4,
+   },
+   chipIcon: {
+     marginRight: 6,
+   },
+   filterChip: {
+     paddingHorizontal: 16,
+     paddingVertical: 10,
+     backgroundColor: Colors.background.light,
+     borderRadius: 25,
+     marginRight: 12,
+     borderWidth: 1,
+     borderColor: Colors.border.medium,
+     flexDirection: 'row',
+     alignItems: 'center',
+   },
   filterChipActive: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
@@ -1394,19 +1510,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text.inverse,
   },
-  debugInfo: {
-    backgroundColor: Colors.background.light,
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: Colors.border.medium,
-  },
-  debugText: {
-    fontSize: 14,
-    color: Colors.text.secondary,
-    textAlign: 'center',
-  },
   categoryInfo: {
     backgroundColor: Colors.background.light,
     borderRadius: 12,
@@ -1557,18 +1660,5 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: 14,
     fontWeight: 'bold',
-  },
-  formNote: {
-    backgroundColor: Colors.background.light,
-    borderRadius: 12,
-    padding: 15,
-    marginTop: 15,
-    borderWidth: 1,
-    borderColor: Colors.border.medium,
-  },
-  formNoteText: {
-    fontSize: 13,
-    color: Colors.text.secondary,
-    textAlign: 'center',
   },
 });

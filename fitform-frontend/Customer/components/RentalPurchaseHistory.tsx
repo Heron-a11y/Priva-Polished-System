@@ -571,7 +571,13 @@ export default function RentalPurchaseHistory() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      bounces={true}
+      overScrollMode="never"
+      contentContainerStyle={styles.scrollContainer}
+    >
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
@@ -606,6 +612,55 @@ export default function RentalPurchaseHistory() {
         </View>
       </View>
 
+      {/* Summary Section */}
+      {history.length > 0 && (
+        <View style={styles.summaryContainer}>
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryIcon}>
+                <Ionicons name="list" size={24} color="#014D40" />
+              </View>
+              <Text style={styles.summaryValue}>{history.length}</Text>
+              <Text style={styles.summaryLabel}>Total Orders</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryIcon}>
+                <Ionicons name="shirt" size={24} color="#014D40" />
+              </View>
+              <Text style={styles.summaryValue}>
+                {history.filter(item => item.type === 'rental').length}
+              </Text>
+              <Text style={styles.summaryLabel}>Rentals</Text>
+            </View>
+          </View>
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryIcon}>
+                <Ionicons name="bag" size={24} color="#014D40" />
+              </View>
+              <Text style={styles.summaryValue}>
+                {history.filter(item => item.type === 'purchase').length}
+              </Text>
+              <Text style={styles.summaryLabel}>Purchases</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryIcon}>
+                <Ionicons name="wallet" size={24} color="#014D40" />
+              </View>
+              <Text style={styles.summaryValue}>
+                {formatCurrency(
+                  history.reduce((total, item) => {
+                    const amount = typeof item.amount === 'string' ? Number(item.amount) : (item.amount || 0);
+                    return total + amount;
+                  }, 0)
+                )}
+              </Text>
+              <Text style={styles.summaryLabel}>Total Spent</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* Search and Filters */}
       <View style={styles.filtersContainer}>
         <View style={styles.searchContainer}>
@@ -639,51 +694,6 @@ export default function RentalPurchaseHistory() {
 
       </View>
 
-      {/* Summary Section */}
-      {history.length > 0 && (
-        <View style={styles.summaryContainer}>
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryIcon}>
-              <Ionicons name="list" size={24} color="#014D40" />
-            </View>
-            <Text style={styles.summaryLabel}>Total Orders</Text>
-            <Text style={styles.summaryValue}>{history.length}</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryIcon}>
-              <Ionicons name="shirt" size={24} color="#014D40" />
-            </View>
-            <Text style={styles.summaryLabel}>Rentals</Text>
-            <Text style={styles.summaryValue}>
-              {history.filter(item => item.type === 'rental').length}
-            </Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryIcon}>
-              <Ionicons name="bag" size={24} color="#014D40" />
-            </View>
-            <Text style={styles.summaryLabel}>Purchases</Text>
-            <Text style={styles.summaryValue}>
-              {history.filter(item => item.type === 'purchase').length}
-            </Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryIcon}>
-              <Ionicons name="wallet" size={24} color="#014D40" />
-            </View>
-            <Text style={styles.summaryLabel}>Total Spent</Text>
-            <Text style={styles.summaryValue}>
-              {formatCurrency(
-                history.reduce((total, item) => {
-                  const amount = typeof item.amount === 'string' ? Number(item.amount) : (item.amount || 0);
-                  return total + amount;
-                }, 0)
-              )}
-            </Text>
-          </View>
-        </View>
-      )}
-
       {/* History List */}
       <View style={styles.historyContainer}>
         {history.length === 0 ? (
@@ -697,27 +707,19 @@ export default function RentalPurchaseHistory() {
             </Text>
           </View>
         ) : (
-          <FlatList
-            data={history}
-            renderItem={renderHistoryItem}
-            keyExtractor={(item) => `${item.type}-${item.id}`}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.historyList}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={['#014D40']}
-                tintColor="#014D40"
-              />
-            }
-          />
+          <View style={styles.historyListContainer}>
+            {history.map((item) => (
+              <View key={`${item.type}-${item.id}`}>
+                {renderHistoryItem({ item })}
+              </View>
+            ))}
+          </View>
         )}
       </View>
 
       {/* Details Modal */}
       {renderDetailsModal()}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -727,6 +729,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
     position: 'relative',
     zIndex: 1,
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    paddingBottom: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -937,59 +943,53 @@ const styles = StyleSheet.create({
     zIndex: 9999998,
   },
   historyContainer: {
-    flex: 1,
     backgroundColor: '#F9FAFB',
+    minHeight: 200,
+  },
+  historyListContainer: {
+    padding: isSmallMobile ? 12 : isMediumMobile ? 14 : isLargeMobile ? 16 : 24,
   },
   summaryContainer: {
+    padding: 16,
+  },
+  summaryRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: isSmallMobile ? 12 : isMediumMobile ? 14 : isLargeMobile ? 16 : 24,
-    backgroundColor: '#fff',
-    gap: isSmallMobile ? 8 : isMediumMobile ? 10 : isLargeMobile ? 12 : 16,
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    position: 'relative',
-    zIndex: 1,
+    marginBottom: 12,
   },
   summaryCard: {
-    width: isSmallMobile ? '48%' : isMediumMobile ? '48%' : isLargeMobile ? '48%' : '23%',
     backgroundColor: '#fff',
-    borderRadius: isSmallMobile ? 10 : isMediumMobile ? 11 : isLargeMobile ? 12 : 16,
-    padding: isSmallMobile ? 10 : isMediumMobile ? 12 : isLargeMobile ? 14 : 18,
+    borderRadius: 12,
+    padding: 16,
+    flex: 1,
+    marginHorizontal: 6,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-    minHeight: isSmallMobile ? 80 : isMediumMobile ? 85 : isLargeMobile ? 90 : 100,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   summaryIcon: {
-    width: isSmallMobile ? 28 : isMediumMobile ? 30 : isLargeMobile ? 32 : 36,
-    height: isSmallMobile ? 28 : isMediumMobile ? 30 : isLargeMobile ? 32 : 36,
-    borderRadius: isSmallMobile ? 14 : isMediumMobile ? 15 : isLargeMobile ? 16 : 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#F0FDF4',
-    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: isSmallMobile ? 4 : isMediumMobile ? 5 : isLargeMobile ? 6 : 8,
+    justifyContent: 'center',
+    marginBottom: 8,
   },
   summaryLabel: {
-    fontSize: isSmallMobile ? 9 : isMediumMobile ? 10 : isLargeMobile ? 11 : 12,
-    color: '#6B7280',
-    marginBottom: isSmallMobile ? 2 : isMediumMobile ? 3 : isLargeMobile ? 4 : 6,
+    fontSize: 12,
+    color: '#666',
     textAlign: 'center',
-    fontWeight: '500',
+    marginBottom: 4,
   },
   summaryValue: {
-    fontSize: isSmallMobile ? 14 : isMediumMobile ? 15 : isLargeMobile ? 16 : 18,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#111827',
+    color: '#014D40',
     textAlign: 'center',
-  },
-  historyList: {
-    padding: isSmallMobile ? 12 : isMediumMobile ? 14 : isLargeMobile ? 16 : 24,
   },
   historyItem: {
     backgroundColor: '#fff',

@@ -3,13 +3,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Base API configuration
 // IMPORTANT: This will be automatically updated by update-api-ip.js script
 // For external network access, this should be your computer's public IP or a domain
-const API_BASE_URL = 'https://2f37311b9350.ngrok-free.app/api'; // Public IP for external access
+const API_BASE_URL = 'https://b6e512836c9c.ngrok-free.app/api'; // Public IP for external access
 
 class ApiService {
     constructor() {
         this.baseURL = API_BASE_URL;
         this.token = null;
-    }
+    }  
 
     // Set auth token
     setToken(token) {

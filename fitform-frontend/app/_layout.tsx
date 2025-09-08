@@ -5,12 +5,28 @@ import Sidebar from '../components/Sidebar';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { NotificationProvider } from '../contexts/NotificationContext';
+import * as Font from 'expo-font';
+import '../web-font-config'; // Import web font configuration
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const isMobile = SCREEN_WIDTH < 768; // More reliable mobile detection
 
+// Font loading configuration
+const loadFonts = async () => {
+  try {
+    // Load custom fonts with error handling
+    await Font.loadAsync({
+      'SpaceMono': require('../assets/fonts/SpaceMono-Regular.ttf'),
+    });
+  } catch (error) {
+    console.warn('Font loading failed:', error);
+    // Continue without custom fonts
+  }
+};
+
 function AppContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [fontsLoaded, setFontsLoaded] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -22,16 +38,21 @@ function AppContent() {
   const showGenericSidebar = !isRoleSpecificPage;
 
   useEffect(() => {
-    if (!isLoading) {
+    // Load fonts when component mounts
+    loadFonts().then(() => setFontsLoaded(true));
+  }, []);
+
+  useEffect(() => {
+    if (!isLoading && fontsLoaded) {
       // Always redirect to login first, regardless of authentication status
       if (pathname !== '/login' && pathname !== '/register' && !isRoleSpecificPage) {
         router.replace('/login');
       }
     }
-  }, [isLoading, pathname, router, isRoleSpecificPage]);
+  }, [isLoading, fontsLoaded, pathname, router, isRoleSpecificPage]);
 
-  // Show loading screen while checking authentication
-  if (isLoading) {
+  // Show loading screen while checking authentication and loading fonts
+  if (isLoading || !fontsLoaded) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <ActivityIndicator size="large" color="#014D40" />
