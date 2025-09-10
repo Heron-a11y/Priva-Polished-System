@@ -248,8 +248,9 @@ export default function RentalPurchaseHistory() {
       const rentalsRes = await apiService.getRentalHistory();
       const purchasesRes = await apiService.getPurchaseHistory();
 
-      const rentals = Array.isArray(rentalsRes) ? rentalsRes : [];
-      const purchases = Array.isArray(purchasesRes) ? purchasesRes : [];
+      // Backend returns {data: [...]}, so we need to extract the data property
+      const rentals = Array.isArray(rentalsRes?.data) ? rentalsRes.data : [];
+      const purchases = Array.isArray(purchasesRes?.data) ? purchasesRes.data : [];
 
       setOriginalRentals(rentals);
       setOriginalPurchases(purchases);
@@ -455,7 +456,10 @@ export default function RentalPurchaseHistory() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Order Details</Text>
+              <View style={styles.titleWithIcon}>
+                <Ionicons name="document-text-outline" size={24} color="#014D40" />
+                <Text style={styles.modalTitle}>Order Details</Text>
+              </View>
               <TouchableOpacity
                 onPress={() => setShowDetails(false)}
                 style={styles.closeButton}
@@ -464,93 +468,78 @@ export default function RentalPurchaseHistory() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={true}>
               <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Type</Text>
-                <View style={styles.detailValue}>
-                  <View style={[
-                    styles.typeBadge,
-                    { backgroundColor: selectedItem.type === 'rental' ? '#014D40' : '#FFD700' }
-                  ]}>
-                    <Ionicons 
-                      name={selectedItem.type === 'rental' ? 'shirt' : 'bag'} 
-                      size={16} 
-                      color="#fff" 
-                    />
-                    <Text style={styles.typeText}>
-                      {selectedItem.type === 'rental' ? 'Rental' : 'Purchase'}
-                    </Text>
-                  </View>
-                </View>
+                <Text style={styles.detailLabel}>Type:</Text>
+                <Text style={styles.detailValue}>
+                  {selectedItem.type === 'rental' ? 'Rental' : 'Purchase'}
+                </Text>
               </View>
 
               <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Item Name</Text>
+                <Text style={styles.detailLabel}>Item Name:</Text>
                 <Text style={styles.detailValue}>{selectedItem.item_name}</Text>
               </View>
 
               <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Clothing Type</Text>
+                <Text style={styles.detailLabel}>Clothing Type:</Text>
                 <Text style={styles.detailValue}>{selectedItem.clothing_type}</Text>
               </View>
 
               <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Status</Text>
-                <View style={styles.detailValue}>
-                  <View style={[
-                    styles.statusBadge,
-                    { backgroundColor: getStatusColor(selectedItem.status) }
-                  ]}>
-                    <Text style={styles.statusText}>
-                      {getStatusText(selectedItem.status)}
-                    </Text>
-                  </View>
-                </View>
+                <Text style={styles.detailLabel}>Status:</Text>
+                <Text style={styles.detailValue}>{getStatusText(selectedItem.status)}</Text>
               </View>
 
               <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Date</Text>
+                <Text style={styles.detailLabel}>Date:</Text>
                 <Text style={styles.detailValue}>{formatDate(selectedItem.date)}</Text>
               </View>
 
               <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Amount</Text>
+                <Text style={styles.detailLabel}>Amount:</Text>
                 <Text style={styles.detailValue}>{formatCurrency(selectedItem.amount)}</Text>
               </View>
 
               {selectedItem.notes && (
                 <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Notes</Text>
+                  <Text style={styles.detailLabel}>Notes:</Text>
                   <Text style={styles.detailValue}>{selectedItem.notes}</Text>
                 </View>
               )}
 
               {selectedItem.penalty_status && selectedItem.penalty_status !== 'none' && (
                 <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Penalty Status</Text>
-                  <View style={styles.detailValue}>
-                    <Text style={[styles.penaltyStatus, { color: '#ef4444' }]}>
-                      {selectedItem.penalty_status.toUpperCase()}
-                    </Text>
-                    <Text style={styles.penaltyAmount}>
-                      Total: {formatCurrency(selectedItem.total_penalties || 0)}
-                    </Text>
-                  </View>
+                  <Text style={styles.detailLabel}>Penalty Status:</Text>
+                  <Text style={styles.detailValue}>
+                    {selectedItem.penalty_status.toUpperCase()} - Total: {formatCurrency(selectedItem.total_penalties || 0)}
+                  </Text>
                 </View>
               )}
 
               {originalItem && 'measurements' in originalItem && originalItem.measurements && (
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Measurements</Text>
+                <View style={styles.measurementsSection}>
+                  <Text style={styles.measurementsTitle}>Measurements:</Text>
                   <View style={styles.measurementsGrid}>
-                    {Object.entries(originalItem.measurements).map(([key, value]) => (
-                      <View key={key} style={styles.measurementItem}>
-                        <Text style={styles.measurementLabel}>
-                          {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </Text>
-                        <Text style={styles.measurementValue}>{value}</Text>
-                      </View>
-                    ))}
+                    {Object.entries(originalItem.measurements)
+                      .filter(([key, value]) => value !== null && value !== undefined && value !== '')
+                      .length > 0 ? (
+                        Object.entries(originalItem.measurements)
+                          .filter(([key, value]) => value !== null && value !== undefined && value !== '')
+                          .map(([key, value]) => (
+                            <View key={key} style={styles.measurementItem}>
+                              <Text style={styles.measurementLabel}>
+                                {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:
+                              </Text>
+                              <Text style={styles.measurementValue}>{value}</Text>
+                            </View>
+                          ))
+                      ) : (
+                        <View style={styles.measurementItem}>
+                          <Text style={styles.measurementLabel}>No measurements available</Text>
+                          <Text style={styles.measurementValue}>-</Text>
+                        </View>
+                      )}
                   </View>
                 </View>
               )}
@@ -1133,13 +1122,22 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '80%',
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '95%',
+    minHeight: 600,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1148,32 +1146,63 @@ const styles = StyleSheet.create({
     padding: 24,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  titleWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#111827',
+    marginLeft: 8,
   },
   closeButton: {
-    padding: 8,
-    borderRadius: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   modalBody: {
     padding: 24,
+    paddingBottom: 40,
+    flex: 1,
+    minHeight: 500,
   },
   detailSection: {
-    marginBottom: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    flexWrap: 'wrap',
   },
   detailLabel: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
     color: '#374151',
-    marginBottom: 8,
+    flex: 1,
+    marginRight: 8,
   },
   detailValue: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    fontSize: 16,
+    color: '#059669',
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+    flexWrap: 'wrap',
   },
   penaltyStatus: {
     fontSize: 16,
@@ -1184,30 +1213,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6B7280',
   },
+  measurementsSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  measurementsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+  },
   measurementsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 12,
+    flexDirection: 'column',
   },
   measurementItem: {
-    width: '48%',
-    backgroundColor: '#F9FAFB',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    flexWrap: 'wrap',
   },
   measurementLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 8,
-    fontWeight: '500',
-    textTransform: 'capitalize',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    flex: 1,
+    marginRight: 8,
   },
   measurementValue: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
+    color: '#059669',
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+    flexWrap: 'wrap',
   },
 });

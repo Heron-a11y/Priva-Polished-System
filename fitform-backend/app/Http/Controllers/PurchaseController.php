@@ -108,8 +108,8 @@ class PurchaseController extends Controller
     public function setQuotation(Request $request, $id)
     {
         $purchase = Purchase::findOrFail($id);
-        if ($purchase->status !== 'confirmed') {
-            return response()->json(['error' => 'Order must be accepted by admin before sending quotation.'], 400);
+        if ($purchase->status !== 'pending' && $purchase->status !== 'confirmed') {
+            return response()->json(['error' => 'Order must be pending or confirmed before sending quotation.'], 400);
         }
         $data = $request->validate([
             'quotation_price' => 'required|numeric',
@@ -210,6 +210,6 @@ class PurchaseController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-        return response()->json($purchases);
+        return response()->json(['data' => $purchases]);
     }
 } 

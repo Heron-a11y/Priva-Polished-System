@@ -18,6 +18,7 @@ import apiService from '../../services/api';
 import { useNotificationContext } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Colors } from '../../constants/Colors';
+import SuccessModal from '../../components/SuccessModal';
 
 const CLOTHING_TYPES = [
   { id: 'gown', label: 'Gown', icon: '👗', description: 'Elegant formal gowns' },
@@ -93,6 +94,7 @@ export default function PurchaseOrderFlow() {
   const [showQuotationModal, setShowQuotationModal] = useState(false);
   const [showNewPurchaseModal, setShowNewPurchaseModal] = useState(false);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [loading, setLoading] = useState(false);
 
 
@@ -228,8 +230,8 @@ export default function PurchaseOrderFlow() {
         customer_email: user?.email,
         clothing_type: finalClothingType,
       };
-      await apiService.createPurchaseTransaction(payload);
-      setStep(4); // Await Quotation
+        await apiService.createPurchaseTransaction(payload);
+        setShowSuccessModal(true);
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to submit order');
     } finally {
@@ -349,40 +351,96 @@ export default function PurchaseOrderFlow() {
       {showQuotationModal && selectedOrder && (
         <View style={styles.modalOverlay}>
           <View style={styles.quotationModalContent}>
-            <Text style={styles.modalTitle}>Review Quotation</Text>
-            <Text style={styles.quotationAmount}>
-              Quotation: ₱{(selectedOrder?.quotation_amount ?? selectedOrder?.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </Text>
-            <Text style={styles.quotationNotes}>Notes: {selectedOrder?.quotation_notes || 'No notes provided.'}</Text>
+            {/* Header with Close Button */}
+            <View style={styles.quotationHeader}>
+              <View style={styles.titleWithIcon}>
+                <Ionicons name="document-text-outline" size={24} color={Colors.primary} />
+                <Text style={styles.modalTitle}>Review Quotation</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.closeButtonX}
+                onPress={() => { setShowQuotationModal(false); clearOrderReview(); }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close" size={24} color={Colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Quotation Details Card */}
+            <View style={styles.quotationDetailsCard}>
+              <View style={styles.quotationDetailRow}>
+                <View style={styles.quotationDetailIcon}>
+                  <Ionicons name="cash" size={20} color={Colors.success} />
+                </View>
+                <View style={styles.quotationDetailContent}>
+                  <Text style={styles.quotationDetailLabel}>Quotation Amount</Text>
+                  <Text style={styles.quotationAmount}>
+                    ₱{(selectedOrder?.quotation_amount ?? selectedOrder?.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.quotationDetailRow}>
+                <View style={styles.quotationDetailIcon}>
+                  <Ionicons name="document-text-outline" size={20} color={Colors.info} />
+                </View>
+                <View style={styles.quotationDetailContent}>
+                  <Text style={styles.quotationDetailLabel}>Notes</Text>
+                  <Text style={styles.quotationNotes}>
+                    {selectedOrder?.quotation_notes || 'No additional notes provided.'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.quotationDetailRow}>
+                <View style={styles.quotationDetailIcon}>
+                  <Ionicons name="calendar-outline" size={20} color={Colors.warning} />
+                </View>
+                <View style={styles.quotationDetailContent}>
+                  <Text style={styles.quotationDetailLabel}>Order ID</Text>
+                  <Text style={styles.quotationOrderId}>#{selectedOrder?.id}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Action Buttons - Side by Side */}
             <View style={styles.modalButtonGroup}>
-              <TouchableOpacity style={styles.acceptBtn} onPress={async () => { 
-                try {
-                  await apiService.request(`/purchases/${selectedOrder?.id}/accept-quotation`, { method: 'POST' }); 
-                  setShowQuotationModal(false);
-                  // Refresh orders after accepting
-                  const res = await apiService.getPurchases();
-                  setOrders(Array.isArray(res) ? res : res.data || []);
-                } catch (error) {
-                  Alert.alert('Error', 'Failed to accept quotation');
-                }
-              }}>
-                <Text style={styles.acceptBtnText}>Accept Quotation</Text>
+              <TouchableOpacity 
+                style={styles.acceptBtn} 
+                onPress={async () => { 
+                  try {
+                    await apiService.request(`/purchases/${selectedOrder?.id}/accept-quotation`, { method: 'POST' }); 
+                    setShowQuotationModal(false);
+                    // Refresh orders after accepting
+                    const res = await apiService.getPurchases();
+                    setOrders(Array.isArray(res) ? res : res.data || []);
+                  } catch (error) {
+                    Alert.alert('Error', 'Failed to accept quotation');
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="checkmark-circle" size={20} color={Colors.text.inverse} />
+                <Text style={styles.acceptBtnText}>Accept</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.rejectBtn} onPress={async () => { 
-                try {
-                  await apiService.request(`/purchases/${selectedOrder?.id}/reject-quotation`, { method: 'POST' }); 
-                  setShowQuotationModal(false);
-                  // Refresh orders after rejecting
-                  const res = await apiService.getPurchases();
-                  setOrders(Array.isArray(res) ? res : res.data || []);
-                } catch (error) {
-                  Alert.alert('Error', 'Failed to reject quotation');
-                }
-              }}>
-                <Text style={styles.rejectBtnText}>Reject Quotation</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.closeBtn} onPress={() => { setShowQuotationModal(false); clearOrderReview(); }}>
-                <Text style={styles.closeBtnText}>Close</Text>
+              
+              <TouchableOpacity 
+                style={styles.rejectBtn} 
+                onPress={async () => { 
+                  try {
+                    await apiService.request(`/purchases/${selectedOrder?.id}/reject-quotation`, { method: 'POST' }); 
+                    setShowQuotationModal(false);
+                    // Refresh orders after rejecting
+                    const res = await apiService.getPurchases();
+                    setOrders(Array.isArray(res) ? res : res.data || []);
+                  } catch (error) {
+                    Alert.alert('Error', 'Failed to reject quotation');
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close-circle" size={20} color={Colors.text.inverse} />
+                <Text style={styles.rejectBtnText}>Reject</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -459,7 +517,10 @@ export default function PurchaseOrderFlow() {
             {/* Step 1: Measurements */}
       {step === 1 && (
               <View style={styles.formSection}>
-          <Text style={styles.label}>Body Measurements (cm)</Text>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="resize" size={24} color={Colors.primary} />
+                  <Text style={styles.label}>Body Measurements (cm)</Text>
+                </View>
           <Text style={styles.subtitle}>
             Required measurements for {clothingType === 'other' ? otherClothing : CLOTHING_TYPES.find(t => t.id === clothingType)?.label}
           </Text>
@@ -644,35 +705,13 @@ export default function PurchaseOrderFlow() {
                   ) : (
                     <TouchableOpacity style={styles.submitBtn} onPress={submitOrder}>
                       <Ionicons name="checkmark-circle" size={18} color={Colors.text.inverse} style={{ marginRight: 8 }} />
-                      <Text style={styles.submitBtnText}>Submit Order</Text>
+                      <Text style={styles.submitBtnText} numberOfLines={1} adjustsFontSizeToFit={true}>Submit Order</Text>
                     </TouchableOpacity>
                 )}
               </View>
         </View>
       )}
 
-            {/* Step 4: Await Quotation */}
-            {step === 4 && (
-              <View style={styles.formSection}>
-                <View style={styles.successState}>
-                  <Ionicons name="checkmark-circle" size={64} color={Colors.success} />
-                  <Text style={styles.successTitle}>Order Submitted Successfully!</Text>
-                  <Text style={styles.successSubtitle}>
-                    Your purchase order has been submitted. We'll send you a quotation soon.
-            </Text>
-                  <TouchableOpacity
-                    style={styles.successButton}
-                    onPress={() => {
-                      setShowNewPurchaseModal(false);
-                      setStep(0);
-                      resetForm();
-                    }}
-                  >
-                    <Text style={styles.successButtonText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-            )}
           </ScrollView>
         </View>
       </Modal>
@@ -759,6 +798,20 @@ export default function PurchaseOrderFlow() {
           </View>
         )}
       </Modal>
+
+      {/* Success Modal */}
+      <SuccessModal
+        visible={showSuccessModal}
+        onClose={() => {
+          setShowSuccessModal(false);
+          setShowNewPurchaseModal(false);
+          setStep(0);
+          resetForm();
+        }}
+        title="Order Submitted Successfully!"
+        message="Your purchase order has been submitted. We'll send you a quotation soon."
+        orderType="purchase"
+      />
     </View>
   );
 }
@@ -873,7 +926,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 24,
+    marginTop: 20,
     borderWidth: 1,
     borderColor: Colors.border.light,
     flex: 1,
@@ -891,19 +944,22 @@ const styles = StyleSheet.create({
     fontSize: Platform.OS === 'ios' ? 17 : 16 
   },
   submitBtn: { 
-    backgroundColor: Colors.success, 
+    backgroundColor: Colors.primary, 
     borderRadius: 12, 
     paddingVertical: 16, 
     paddingHorizontal: 20,
-    alignItems: 'center', 
-    marginTop: 16,
-    flex: 0.6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    flex: 1,
     marginLeft: 8,
-    shadowColor: Colors.success,
+    shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
-    elevation: 4
+    elevation: 4,
+    minHeight: 48,
   },
   submitBtnText: { 
     color: Colors.text.inverse, 
@@ -913,7 +969,7 @@ const styles = StyleSheet.create({
   rowBtns: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
-    alignItems: 'center',
+    alignItems: 'stretch',
     marginTop: 20,
     gap: 12,
   },
@@ -947,89 +1003,176 @@ const styles = StyleSheet.create({
   },
   quotationModalContent: {
     backgroundColor: Colors.background.card,
-    borderRadius: 16,
-    padding: 24,
-    width: '85%',
-    alignItems: 'center',
+    borderRadius: 24,
+    padding: 0,
+    width: '92%',
+    maxWidth: 420,
+    minHeight: 500,
+    maxHeight: '85%',
     shadowColor: Colors.neutral[900],
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+    elevation: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.border.light + '20',
   },
-  modalTitle: { 
-    fontSize: Platform.OS === 'ios' ? 23 : 22, 
-    fontWeight: '700', 
-    color: Colors.text.primary, 
-    marginBottom: 16, 
-    textAlign: 'center' 
-  },
-  quotationAmount: { 
-    fontSize: Platform.OS === 'ios' ? 21 : 20, 
-    fontWeight: '700', 
-    color: Colors.success, 
-    marginBottom: 12 
-  },
-  quotationNotes: { 
-    fontSize: Platform.OS === 'ios' ? 17 : 16, 
-    color: Colors.text.secondary, 
-    marginBottom: 24, 
-    textAlign: 'center',
-    lineHeight: Platform.OS === 'ios' ? 24 : 22
-  },
-  modalButtonGroup: { 
-    width: '100%', 
-    marginTop: 8 
-  },
-  acceptBtn: { 
-    backgroundColor: Colors.success, 
-    borderRadius: 12, 
-    paddingVertical: 16, 
-    marginBottom: 12, 
+  quotationHeader: {
+    backgroundColor: Colors.primary + '08',
+    padding: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: Colors.success,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light + '30',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
-  acceptBtnText: { 
-    color: Colors.text.inverse, 
-    fontWeight: '700', 
-    fontSize: Platform.OS === 'ios' ? 17 : 16 
-  },
-  rejectBtn: { 
-    backgroundColor: Colors.error, 
-    borderRadius: 12, 
-    paddingVertical: 16, 
-    marginBottom: 12, 
+  closeButtonX: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.background.card,
     alignItems: 'center',
-    shadowColor: Colors.error,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4
-  },
-  rejectBtnText: { 
-    color: Colors.text.inverse, 
-    fontWeight: '700', 
-    fontSize: Platform.OS === 'ios' ? 17 : 16 
-  },
-  closeBtn: { 
-    backgroundColor: Colors.neutral[400], 
-    borderRadius: 12, 
-    paddingVertical: 16, 
-    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: Colors.neutral[900],
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 2
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.border.light + '30',
   },
-  closeBtnText: {
-    color: Colors.text.inverse,
+  quotationIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.primary + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  titleWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalTitle: { 
+    fontSize: Platform.OS === 'ios' ? 22 : 20, 
+    fontWeight: '700', 
+    color: Colors.text.primary, 
+    marginLeft: 8,
+  },
+  modalSubtitle: {
+    fontSize: Platform.OS === 'ios' ? 15 : 14,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: Platform.OS === 'ios' ? 22 : 20,
+  },
+  quotationDetailsCard: {
+    padding: 24,
+    backgroundColor: Colors.background.light,
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  quotationDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light + '20',
+    marginBottom: 4,
+  },
+  quotationDetailIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.background.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: Colors.border.light + '40',
+  },
+  quotationDetailContent: {
+    flex: 1,
+  },
+  quotationDetailLabel: {
+    fontSize: Platform.OS === 'ios' ? 14 : 13,
     fontWeight: '600',
-    fontSize: Platform.OS === 'ios' ? 17 : 16
+    color: Colors.text.secondary,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  quotationAmount: { 
+    fontSize: Platform.OS === 'ios' ? 22 : 20, 
+    fontWeight: '700', 
+    color: Colors.success,
+  },
+  quotationNotes: { 
+    fontSize: Platform.OS === 'ios' ? 16 : 15, 
+    color: Colors.text.primary,
+    lineHeight: Platform.OS === 'ios' ? 22 : 20,
+    fontWeight: '500',
+  },
+  quotationOrderId: {
+    fontSize: Platform.OS === 'ios' ? 18 : 17,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  modalButtonGroup: { 
+    padding: 20,
+    backgroundColor: Colors.background.card,
+    flexDirection: 'row',
+    gap: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border.light + '20',
+  },
+  acceptBtn: { 
+    backgroundColor: Colors.primary, 
+    borderRadius: 16, 
+    paddingVertical: 18, 
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  acceptBtnText: { 
+    color: Colors.text.inverse, 
+    fontWeight: '700', 
+    fontSize: Platform.OS === 'ios' ? 17 : 16,
+    marginLeft: 8,
+  },
+  rejectBtn: { 
+    backgroundColor: Colors.error, 
+    borderRadius: 16, 
+    paddingVertical: 18, 
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.error,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  rejectBtnText: { 
+    color: Colors.text.inverse, 
+    fontWeight: '700', 
+    fontSize: Platform.OS === 'ios' ? 17 : 16,
+    marginLeft: 8,
   },
   reviewQuotationBtn: {
     backgroundColor: Colors.info,
@@ -1046,10 +1189,11 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
     paddingHorizontal: 12,
+    gap: 8,
   },
   reviewMainHeader: {
     flexDirection: 'row',
@@ -1162,13 +1306,16 @@ const styles = StyleSheet.create({
   },
   orderDetailRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 6,
+    flexWrap: 'wrap',
   },
   orderDetailText: {
     fontSize: 14,
     color: '#666',
     marginLeft: 6,
+    flex: 1,
+    flexWrap: 'wrap',
   },
   orderActions: {
     flexDirection: 'row',
@@ -1251,7 +1398,19 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border.light,
   },
   closeButton: {
-    padding: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.background.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.border.light + '30',
   },
   modalContent: {
     flex: 1,
@@ -1260,36 +1419,6 @@ const styles = StyleSheet.create({
   },
   formSection: {
     marginBottom: 32,
-  },
-  successState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  successTitle: {
-    fontSize: Platform.OS === 'ios' ? 21 : 20,
-    fontWeight: '700',
-    color: Colors.text.primary,
-    marginTop: 16,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  successSubtitle: {
-    fontSize: Platform.OS === 'ios' ? 17 : 16,
-    color: Colors.text.secondary,
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: Platform.OS === 'ios' ? 24 : 22,
-  },
-  successButton: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Platform.OS === 'ios' ? 26 : 24,
-    paddingVertical: Platform.OS === 'ios' ? 14 : 12,
-    borderRadius: 12,
-  },
-  successButtonText: {
-    color: Colors.text.inverse,
-    fontWeight: '600',
-    fontSize: Platform.OS === 'ios' ? 17 : 16,
   },
   ordersList: {
     paddingBottom: 20,
@@ -1399,25 +1528,30 @@ const styles = StyleSheet.create({
   orderDetailItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border.light,
+    flexWrap: 'wrap',
   },
   orderDetailLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.text.secondary,
+    flex: 1,
+    marginRight: 8,
   },
   orderDetailValue: {
     fontSize: 16,
     color: Colors.text.primary,
     fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+    flexWrap: 'wrap',
   },
   notesValue: {
     flex: 1,
     flexWrap: 'wrap',
-    textAlign: 'left',
-    paddingLeft: 8,
+    textAlign: 'right',
   },
 }); 

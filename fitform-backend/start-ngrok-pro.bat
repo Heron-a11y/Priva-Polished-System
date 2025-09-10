@@ -3,6 +3,21 @@ echo 🌐 FitForm - Professional Ngrok Setup
 echo =====================================
 echo.
 
+echo 🔍 Checking for existing ngrok processes...
+tasklist | findstr ngrok >nul
+if %errorlevel% equ 0 (
+    echo ⚠️  Found running ngrok processes. Terminating...
+    for /f "tokens=2" %%i in ('tasklist ^| findstr ngrok') do (
+        echo    Killing process %%i...
+        taskkill /PID %%i /F >nul 2>&1
+    )
+    echo ✅ All ngrok processes terminated.
+    echo.
+) else (
+    echo ✅ No ngrok processes found.
+    echo.
+)
+
 echo ✅ Ngrok authtoken is configured and ready!
 echo.
 

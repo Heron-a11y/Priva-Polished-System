@@ -1014,7 +1014,7 @@ export default function SizingManagementScreen() {
   return (
     <ThemedView style={styles.container}>
       <View style={styles.header}>
-        <ThemedText style={styles.title}>Sizing Standards Management</ThemedText>
+        <ThemedText style={styles.title}>Manage Sizing Standards</ThemedText>
         <ThemedText style={styles.subtitle}>Manage garment sizing standards for different categories and genders</ThemedText>
       </View>
 
@@ -1153,9 +1153,11 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: 30,
+    paddingHorizontal: 20,
+    paddingTop: 10,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 10,
     textAlign: 'center',
@@ -1163,6 +1165,8 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(1, 77, 64, 0.2)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
+    lineHeight: 30,
+    paddingHorizontal: 10,
   },
   subtitle: {
     fontSize: 16,

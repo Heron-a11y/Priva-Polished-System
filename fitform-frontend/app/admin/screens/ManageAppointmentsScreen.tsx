@@ -372,58 +372,60 @@ const ManageAppointmentsScreen = () => {
       
       {/* Filters and Search */}
       <View style={styles.filtersContainer}>
+        {/* Search Input - Moved to top */}
+        <View style={styles.searchContainer}>
+          <Ionicons 
+            name="search" 
+            size={18} 
+            color="#014D40" 
+            style={styles.searchIcon} 
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search customers, services, notes..."
+            placeholderTextColor="#999"
+            value={search}
+            onChangeText={setSearch}
+          />
+        </View>
+        
         <View style={styles.filtersRow}>
           {/* Status Filter */}
           <View style={styles.filterGroup}>
             <Text style={styles.filterLabel}>Status:</Text>
-            <TouchableOpacity 
-              style={styles.dropdownButton}
-              onPress={() => setShowStatusDropdown(!showStatusDropdown)}
-            >
-              <Text style={styles.dropdownButtonText}>
-                {getStatusLabel(statusFilter)}
-              </Text>
-              <Ionicons 
-                name={showStatusDropdown ? "chevron-up" : "chevron-down"} 
-                size={18} 
-                color="#014D40" 
-              />
-            </TouchableOpacity>
-            
-            {showStatusDropdown && (
-              <View style={styles.dropdownMenu}>
-                {STATUS_OPTIONS.map(opt => (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={styles.dropdownItem}
-                    onPress={() => {
-                      setStatusFilter(opt.value);
-                      setShowStatusDropdown(false);
-                    }}
-                  >
-                    <Ionicons name={opt.icon as any} size={18} color={opt.color} />
-                    <Text style={styles.dropdownItemText}>{opt.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-          
-          {/* Search Input */}
-          <View style={styles.searchContainer}>
-            <Ionicons 
-              name="search" 
-              size={18} 
-              color="#014D40" 
-              style={styles.searchIcon} 
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search customers, services, notes..."
-              placeholderTextColor="#999"
-              value={search}
-              onChangeText={setSearch}
-            />
+            <View style={styles.dropdownContainer}>
+              <TouchableOpacity 
+                style={styles.dropdownButton}
+                onPress={() => setShowStatusDropdown(!showStatusDropdown)}
+              >
+                <Text style={styles.dropdownButtonText}>
+                  {getStatusLabel(statusFilter)}
+                </Text>
+                <Ionicons 
+                  name={showStatusDropdown ? "chevron-up" : "chevron-down"} 
+                  size={18} 
+                  color="#014D40" 
+                />
+              </TouchableOpacity>
+              
+              {showStatusDropdown && (
+                <View style={styles.dropdownMenu}>
+                  {STATUS_OPTIONS.map(opt => (
+                    <TouchableOpacity
+                      key={opt.value}
+                      style={styles.dropdownItem}
+                      onPress={() => {
+                        setStatusFilter(opt.value);
+                        setShowStatusDropdown(false);
+                      }}
+                    >
+                      <Ionicons name={opt.icon as any} size={18} color={opt.color} />
+                      <Text style={styles.dropdownItemText}>{opt.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
           </View>
         </View>
         
@@ -666,11 +668,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
     marginBottom: 12,
+    marginTop: 12,
   },
   filterGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  dropdownContainer: {
+    position: 'relative',
   },
   filterLabel: {
     fontSize: 15,
@@ -687,7 +693,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    minWidth: 120,
+    minWidth: 150,
+    width: 150,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
@@ -703,12 +710,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '100%',
     left: 0,
-    right: 0,
+    width: 150,
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#b0bec5',
     borderRadius: 8,
-    marginTop: 4,
+    marginTop: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
@@ -731,7 +738,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   searchContainer: {
-    flex: 1,
+    width: '100%',
     position: 'relative',
   },
   searchIcon: {

@@ -13,7 +13,6 @@ const adminMenuItems = [
   { name: 'Manage Appointments', icon: 'calendar', path: '/admin/appointments' },
   { name: 'Manage Orders', icon: 'file-tray-full', path: '/admin/orders' },
   { name: 'Sizing Standards', icon: 'resize', path: '/admin/sizing' },
-  { name: 'Reports', icon: 'bar-chart', path: '/admin/reports' },
   { name: 'Settings', icon: 'settings', path: '/admin/settings' },
 ];
 

@@ -85,6 +85,8 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         Route::post('/rentals/{id}/decline-order', [\App\Http\Controllers\RentalController::class, 'adminDecline']);
         // Mark purchase as ready for pickup
         Route::post('/purchases/{id}/ready-for-pickup', [\App\Http\Controllers\PurchaseController::class, 'markReadyForPickup']);
+        // Mark rental as ready for pickup
+        Route::post('/rentals/{id}/ready-for-pickup', [\App\Http\Controllers\RentalController::class, 'markReadyForPickup']);
         
         // Sizing System Routes
         // Customer sizing routes

@@ -20,7 +20,7 @@ class RentalController extends Controller
                 unset($rental->user);
                 return $rental;
             });
-            return response()->json($rentals);
+            return response()->json(['data' => $rentals]);
         }
         $rentals = Rental::with('user:id,name')->where('user_id', $user->id)->get();
         $rentals->transform(function ($rental) {
@@ -30,7 +30,7 @@ class RentalController extends Controller
             unset($rental->user);
             return $rental;
         });
-        return response()->json($rentals);
+        return response()->json(['data' => $rentals]);
     }
 
     public function store(Request $request)
@@ -127,6 +127,9 @@ class RentalController extends Controller
     public function setQuotation(Request $request, $id)
     {
         $rental = Rental::findOrFail($id);
+        if ($rental->status !== 'pending' && $rental->status !== 'confirmed') {
+            return response()->json(['error' => 'Order must be pending or confirmed before sending quotation.'], 400);
+        }
         $data = $request->validate([
             'quotation_amount' => 'required|numeric',
             'quotation_notes' => 'nullable|string',
@@ -296,6 +299,26 @@ class RentalController extends Controller
     }
 
     /**
+     * Mark rental as ready for pickup
+     */
+    public function markReadyForPickup($id)
+    {
+        $rental = Rental::findOrFail($id);
+        if ($rental->status !== 'in_progress') {
+            return response()->json(['error' => 'Order is not in progress.'], 400);
+        }
+        $rental->status = 'ready_for_pickup';
+        $rental->save();
+        Notification::create([
+            'user_id' => $rental->user_id,
+            'sender_role' => 'admin',
+            'message' => 'Your rental order #' . $rental->id . ' is ready for pickup!',
+            'read' => false,
+        ]);
+        return response()->json(['success' => true, 'status' => 'ready_for_pickup']);
+    }
+
+    /**
      * Get rental history for customer
      */
     public function getHistory(Request $request)
@@ -310,6 +333,6 @@ class RentalController extends Controller
             return $rental;
         });
 
-        return response()->json($rentals);
+        return response()->json(['data' => $rentals]);
     }
 } 

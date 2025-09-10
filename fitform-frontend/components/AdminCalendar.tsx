@@ -40,7 +40,15 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
     try {
       setLoading(true);
       const data = await apiService.getAllAppointments();
-      setAppointments(data);
+      console.log('Fetched appointments data:', data);
+      console.log('Data type:', typeof data);
+      console.log('Is array:', Array.isArray(data));
+      
+      // Handle different response formats
+      const appointmentsData = Array.isArray(data) ? data : (data?.data || []);
+      console.log('Processed appointments:', appointmentsData);
+      
+      setAppointments(appointmentsData);
     } catch (error) {
       console.error('Error fetching appointments:', error);
       Alert.alert('Error', 'Failed to load appointments');
@@ -53,16 +61,41 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
     const selectedDate = day.dateString;
     const dayAppointments = getAppointmentsForDate(selectedDate);
     
+    console.log('Selected date:', selectedDate);
+    console.log('Appointments for date:', dayAppointments);
+    
     if (dayAppointments.length > 0) {
+      console.log('Setting selected appointment:', dayAppointments[0]);
       setSelectedAppointment(dayAppointments[0]);
       setShowAppointmentModal(true);
     }
   };
 
   const getAppointmentsForDate = (dateString: string) => {
-    return appointments.filter(appointment => 
-      appointment.appointment_date.startsWith(dateString)
-    );
+    console.log('Filtering appointments for date:', dateString);
+    console.log('All appointments:', appointments);
+    
+    const filteredAppointments = appointments.filter(appointment => {
+      console.log('Checking appointment:', appointment);
+      console.log('Appointment date:', appointment.appointment_date);
+      console.log('Date string:', dateString);
+      
+      // Handle different date formats
+      let appointmentDate;
+      if (appointment.appointment_date.includes('T')) {
+        appointmentDate = appointment.appointment_date.split('T')[0];
+      } else {
+        appointmentDate = appointment.appointment_date.split(' ')[0];
+      }
+      
+      console.log('Processed appointment date:', appointmentDate);
+      console.log('Matches:', appointmentDate === dateString);
+      
+      return appointmentDate === dateString;
+    });
+    
+    console.log('Filtered appointments:', filteredAppointments);
+    return filteredAppointments;
   };
 
   const getStatusColor = (status: string) => {
@@ -226,18 +259,26 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
 
       {/* Appointment Details Modal */}
       <Modal
-        visible={showAppointmentModal}
+        visible={showAppointmentModal && selectedAppointment !== null}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => setShowAppointmentModal(false)}
+        onRequestClose={() => {
+          setShowAppointmentModal(false);
+          setSelectedAppointment(null);
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            {selectedAppointment && (
+            {console.log('Modal rendering - selectedAppointment:', selectedAppointment)}
+            {console.log('Modal visible:', showAppointmentModal)}
+            {selectedAppointment ? (
               <>
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>Appointment Details</Text>
-                  <TouchableOpacity onPress={() => setShowAppointmentModal(false)}>
+                  <TouchableOpacity onPress={() => {
+                    setShowAppointmentModal(false);
+                    setSelectedAppointment(null);
+                  }}>
                     <Ionicons name="close" size={24} color="#666" />
                   </TouchableOpacity>
                 </View>
@@ -245,33 +286,39 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
                 <ScrollView style={styles.modalBody}>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Customer:</Text>
-                    <Text style={styles.detailValue}>{selectedAppointment.customer_name}</Text>
+                    <Text style={styles.detailValue}>{selectedAppointment.customer_name || 'Unknown Customer'}</Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Date:</Text>
                     <Text style={styles.detailValue}>
-                      {new Date(selectedAppointment.appointment_date).toLocaleDateString()}
+                      {selectedAppointment.appointment_date ? 
+                        new Date(selectedAppointment.appointment_date).toLocaleDateString() : 
+                        'Date not available'
+                      }
                     </Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Time:</Text>
                     <Text style={styles.detailValue}>
-                      {new Date(selectedAppointment.appointment_date).toLocaleTimeString()}
+                      {selectedAppointment.appointment_date ? 
+                        new Date(selectedAppointment.appointment_date).toLocaleTimeString() : 
+                        'Time not available'
+                      }
                     </Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Service:</Text>
-                    <Text style={styles.detailValue}>{selectedAppointment.service_type}</Text>
+                    <Text style={styles.detailValue}>{selectedAppointment.service_type || 'Service not specified'}</Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Status:</Text>
                     <View style={styles.statusContainer}>
                       <View style={[
                         styles.statusDot,
-                        { backgroundColor: getStatusColor(selectedAppointment.status) }
+                        { backgroundColor: getStatusColor(selectedAppointment.status || 'unknown') }
                       ]} />
                       <Text style={styles.detailValue}>
-                        {getStatusText(selectedAppointment.status)}
+                        {getStatusText(selectedAppointment.status || 'unknown')}
                       </Text>
                     </View>
                   </View>
@@ -313,6 +360,19 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
                   )}
                 </View>
               </>
+            ) : (
+              <View style={styles.modalBody}>
+                <Text style={styles.errorText}>No appointment data available</Text>
+                <TouchableOpacity 
+                  style={styles.closeButton}
+                  onPress={() => {
+                    setShowAppointmentModal(false);
+                    setSelectedAppointment(null);
+                  }}
+                >
+                  <Text style={styles.closeButtonText}>Close</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </View>
@@ -475,6 +535,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 6,
+  },
+  errorText: {
+    color: '#F44336',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  closeButton: {
+    backgroundColor: '#014D40',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignSelf: 'center',
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

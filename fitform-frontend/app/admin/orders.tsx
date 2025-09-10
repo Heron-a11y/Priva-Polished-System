@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, 
 import apiService from '../../services/api';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../../constants/Colors';
 
 interface Order {
   id: number;
@@ -44,6 +45,40 @@ const OrdersScreen = () => {
 
   const SCREEN_WIDTH = Dimensions.get('window').width;
   const isMobile = SCREEN_WIDTH < 600;
+  const isIOS = Platform.OS === 'ios';
+  
+  // FlatList render function for mobile table
+  const renderFlatListItem = ({ item }: { item: Order }) => {
+    return (
+      <View style={styles.orderRowClassic2}>
+        <View style={[styles.dataCell, { width: 60 }]}><Text style={styles.orderCellClassic2}>{item.id}</Text></View>
+        <View style={[styles.dataCell, { width: 80 }]}><Text style={styles.orderCellClassic2}>{item.type}</Text></View>
+        <View style={[styles.dataCell, { width: 120 }]}><Text style={styles.orderCellClassic2}>{item.customer}</Text></View>
+        <View style={[styles.dataCell, { width: 100 }]}><Text style={styles.orderCellClassic2}>{item.status}</Text></View>
+        <View style={[styles.dataCell, { width: 80 }]}>
+          <TouchableOpacity style={styles.actionButtonClassic2} onPress={() => handleViewDetails(item)}>
+            <Text style={styles.actionButtonTextClassic2}>View</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={[styles.dataCell, { width: 100 }]}>
+          {item.type === 'Rental' ? (
+            <Text style={[
+              styles.orderCellClassic2,
+              { 
+                color: item.penalty_status === 'paid' ? '#388e3c' : 
+                       item.penalty_status === 'pending' ? '#ff9800' : '#666'
+              }
+            ]}>
+              {item.penalty_status === 'paid' ? '✅ Paid' : 
+               item.penalty_status === 'pending' ? '⚠️ Pending' : '—'}
+            </Text>
+          ) : (
+            <Text style={[styles.orderCellClassic2, { color: '#ccc' }]}>—</Text>
+          )}
+        </View>
+      </View>
+    );
+  };
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -60,7 +95,7 @@ const OrdersScreen = () => {
           quotation_amount: r.quotation_amount,
           quotation_notes: r.quotation_notes,
           quotation_schedule: r.quotation_schedule,
-          penalty_status: r.penalty_status, // Assuming penalty_status is returned from the API
+          penalty_status: r.penalty_status,
         }));
         const purchasesRes = await apiService.request('/purchases');
         const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
@@ -86,10 +121,21 @@ const OrdersScreen = () => {
 
   const handleViewDetails = (order: Order) => {
     setSelectedOrder(order);
+    setQuotationError(''); // Clear any previous errors
+  };
+
+  const clearQuotationForm = () => {
+    setQuotationAmount('');
+    setQuotationNotes('');
+    setQuotationSchedule('');
+    setQuotationScheduleDate(null);
+    setQuotationError('');
+    setShowDatePicker(false);
   };
 
   const handleCloseDetails = () => {
     setSelectedOrder(null);
+    clearQuotationForm();
   };
 
   // Action handlers
@@ -113,7 +159,10 @@ const OrdersScreen = () => {
         customer: r.customer_name || r.customer_email || 'N/A',
         status: r.status || 'N/A',
         details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
-        penalty_status: r.penalty_status, // Assuming penalty_status is returned from the API
+        quotation_amount: r.quotation_amount,
+        quotation_notes: r.quotation_notes,
+        quotation_schedule: r.quotation_schedule,
+        penalty_status: r.penalty_status,
       }));
       const purchasesRes = await apiService.request('/purchases');
       const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
@@ -123,6 +172,9 @@ const OrdersScreen = () => {
         customer: p.customer_name || p.customer_email || 'N/A',
         status: p.status || 'N/A',
         details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
+        quotation_price: p.quotation_price,
+        quotation_notes: p.quotation_notes,
+        quotation_schedule: p.quotation_schedule,
       }));
       setOrders([...rentals, ...purchases]);
     } catch (err) {
@@ -150,56 +202,50 @@ const OrdersScreen = () => {
       setQuotationError('Please enter a valid number for the quotation price.');
       return;
     }
-    if (!quotationSchedule) {
+    // Only require schedule for purchase orders, not rental orders
+    if (selectedOrder?.type === 'Purchase' && !quotationSchedule) {
       setQuotationError('Please select a schedule date.');
       return;
     }
     setQuotationLoading(true);
     try {
       const endpoint = selectedOrder?.type === 'Rental'
-        ? `/rentals/${selectedOrder.id}/set-quotation`
-        : `/purchases/${selectedOrder.id}/set-quotation`;
+        ? `/rentals/${selectedOrder?.id}/set-quotation`
+        : `/purchases/${selectedOrder?.id}/set-quotation`;
       const payload = selectedOrder?.type === 'Rental'
         ? {
             quotation_amount: Number(quotationAmount),
             quotation_notes: quotationNotes,
-            quotation_schedule: quotationSchedule,
           }
         : {
             quotation_price: Number(quotationAmount),
             quotation_notes: quotationNotes,
-            quotation_schedule: quotationSchedule,
+            quotation_schedule: quotationScheduleDate ? quotationScheduleDate.toISOString().split('T')[0] : quotationSchedule,
           };
       await apiService.request(endpoint, { method: 'POST', body: JSON.stringify(payload) });
       Alert.alert('Success', 'Quotation sent!');
-      setQuotationAmount('');
-      setQuotationNotes('');
-      setQuotationSchedule('');
-      setQuotationScheduleDate(null);
-      setQuotationError('');
+      
+      // Update the specific order's status locally without reloading the entire table
+      if (selectedOrder) {
+        setOrders(prevOrders => 
+          prevOrders.map(order => 
+            order.id === selectedOrder.id 
+              ? { 
+                  ...order, 
+                  status: selectedOrder.type === 'Rental' ? 'quotation_sent' : 'in_progress' 
+                }
+              : order
+          )
+        );
+      }
+      
+      clearQuotationForm();
       handleCloseDetails();
-      setLoading(true);
-      const rentalsRes = await apiService.request('/rentals');
-      const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
-      const rentals = (rentalsArr || []).map((r: any) => ({
-        id: r.id,
-        type: 'Rental',
-        customer: r.customer_name || r.customer_email || 'N/A',
-        status: r.status || 'N/A',
-        details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
-      }));
-      const purchasesRes = await apiService.request('/purchases');
-      const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
-      const purchases = (purchasesArr || []).map((p: any) => ({
-        id: p.id,
-        type: 'Purchase',
-        customer: p.customer_name || p.customer_email || 'N/A',
-        status: p.status || 'N/A',
-        details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
-      }));
-      setOrders([...rentals, ...purchases]);
-    } catch (err) {
-      Alert.alert('Error', 'Failed to send quotation.');
+    } catch (err: any) {
+      console.error('Quotation error:', err);
+      const errorMessage = err?.message || 'Failed to send quotation.';
+      setQuotationError(errorMessage);
+      Alert.alert('Error', errorMessage);
     } finally {
       setQuotationLoading(false);
     }
@@ -207,29 +253,46 @@ const OrdersScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Manage Orders</Text>
+      <View style={styles.header}>
+        <View style={styles.titleContainer}>
+          <Ionicons name="file-tray-full" size={28} color={Colors.primary} />
+          <Text style={styles.title}>Manage Orders</Text>
+        </View>
+      </View>
       {/* Filters */}
-      <View style={styles.filtersRow}>
+      <TouchableOpacity 
+        style={styles.filtersRow}
+        activeOpacity={1}
+        onPress={() => {
+          setShowTypeDropdown(false);
+          setShowStatusDropdown(false);
+        }}
+      >
         {/* Type Filter */}
         <View style={styles.filterItem}>
           <Text style={styles.filterLabel}>Type:</Text>
-          <TouchableOpacity 
-            style={styles.dropdownButton}
-            onPress={() => setShowTypeDropdown(!showTypeDropdown)}
-          >
+            <TouchableOpacity 
+              style={styles.dropdownButton}
+              onPress={() => {
+                setShowTypeDropdown(!showTypeDropdown);
+                if (!showTypeDropdown) {
+                  setShowStatusDropdown(false);
+                }
+              }}
+            >
             <Text style={styles.dropdownButtonText}>
               {typeFilter}
             </Text>
             <Ionicons 
               name={showTypeDropdown ? "chevron-up" : "chevron-down"} 
               size={18} 
-              color="#014D40" 
+              color={Colors.primary} 
             />
           </TouchableOpacity>
           
           {/* Type Dropdown Menu */}
           {showTypeDropdown && (
-            <View style={[styles.dropdownMenuAbsolute, { top: 45, zIndex: 1002 }]}>
+            <View style={[styles.dropdownMenuAbsolute, { top: 45, zIndex: 99999, left: 0 }]}>
               <TouchableOpacity
                 style={styles.dropdownItem}
                 onPress={() => {
@@ -237,7 +300,7 @@ const OrdersScreen = () => {
                   setShowTypeDropdown(false);
                 }}
               >
-                <Text style={styles.dropdownItemText}>🔎 All</Text>
+                <Text style={styles.dropdownItemText}>All</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.dropdownItem}
@@ -246,7 +309,7 @@ const OrdersScreen = () => {
                   setShowTypeDropdown(false);
                 }}
               >
-                <Text style={styles.dropdownItemText}>📦 Rental</Text>
+                <Text style={styles.dropdownItemText}>Rental</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.dropdownItem}
@@ -255,7 +318,7 @@ const OrdersScreen = () => {
                   setShowTypeDropdown(false);
                 }}
               >
-                <Text style={styles.dropdownItemText}>🛍️ Purchase</Text>
+                <Text style={styles.dropdownItemText}>Purchase</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -264,23 +327,28 @@ const OrdersScreen = () => {
         {/* Status Filter */}
         <View style={styles.filterItem}>
           <Text style={styles.filterLabel}>Status:</Text>
-          <TouchableOpacity 
-            style={styles.dropdownButton}
-            onPress={() => setShowStatusDropdown(!showStatusDropdown)}
-          >
+            <TouchableOpacity 
+              style={styles.dropdownButton}
+              onPress={() => {
+                setShowStatusDropdown(!showStatusDropdown);
+                if (!showStatusDropdown) {
+                  setShowTypeDropdown(false);
+                }
+              }}
+            >
             <Text style={styles.dropdownButtonText}>
               {statusFilter}
             </Text>
             <Ionicons 
               name={showStatusDropdown ? "chevron-up" : "chevron-down"} 
               size={18} 
-              color="#014D40" 
+              color={Colors.primary} 
             />
           </TouchableOpacity>
           
           {/* Status Dropdown Menu */}
           {showStatusDropdown && (
-            <View style={[styles.dropdownMenuAbsolute, { top: 45, zIndex: 1001 }]}>
+            <View style={[styles.dropdownMenuAbsolute, { top: 45, zIndex: 99999, left: 0 }]}>
               <TouchableOpacity
                 style={styles.dropdownItem}
                 onPress={() => {
@@ -288,7 +356,16 @@ const OrdersScreen = () => {
                   setShowStatusDropdown(false);
                 }}
               >
-                <Text style={styles.dropdownItemText}>🔎 All</Text>
+                <Text style={styles.dropdownItemText}>All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.dropdownItem}
+                onPress={() => {
+                  setStatusFilter('pending');
+                  setShowStatusDropdown(false);
+                }}
+              >
+                <Text style={styles.dropdownItemText}>Pending</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.dropdownItem}
@@ -297,16 +374,16 @@ const OrdersScreen = () => {
                   setShowStatusDropdown(false);
                 }}
               >
-                <Text style={styles.dropdownItemText}>⏳ In Progress</Text>
+                <Text style={styles.dropdownItemText}>In Progress</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.dropdownItem}
                 onPress={() => {
-                  setStatusFilter('cancelled');
+                  setStatusFilter('quotation_sent');
                   setShowStatusDropdown(false);
                 }}
               >
-                <Text style={styles.dropdownItemText}>❌ Cancelled</Text>
+                <Text style={styles.dropdownItemText}>Quotation Sent</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.dropdownItem}
@@ -315,12 +392,21 @@ const OrdersScreen = () => {
                   setShowStatusDropdown(false);
                 }}
               >
-                <Text style={styles.dropdownItemText}>✅ Ready for Pickup</Text>
+                <Text style={styles.dropdownItemText}>Ready for Pickup</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.dropdownItem, { borderBottomWidth: 0 }]}
+                onPress={() => {
+                  setStatusFilter('cancelled');
+                  setShowStatusDropdown(false);
+                }}
+              >
+                <Text style={styles.dropdownItemText}>Cancelled</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
-      </View>
+      </TouchableOpacity>
       
       {/* Search Bar - Below the filters */}
       <View style={styles.searchContainer}>
@@ -329,6 +415,10 @@ const OrdersScreen = () => {
           placeholder="Search customer..."
           value={search}
           onChangeText={setSearch}
+          onFocus={() => {
+            setShowTypeDropdown(false);
+            setShowStatusDropdown(false);
+          }}
         />
       </View>
 
@@ -336,10 +426,56 @@ const OrdersScreen = () => {
       <View style={styles.tableSpacing} />
 
       {loading ? (
-        <ActivityIndicator size="large" color="#014D40" />
+        <ActivityIndicator size="large" color={Colors.primary} />
+      ) : filteredOrders.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>No orders found</Text>
+        </View>
+      ) : isMobile ? (
+        <View style={styles.tableWrapper}>
+          <ScrollView 
+            style={styles.tableScroll} 
+            horizontal={true} 
+            showsHorizontalScrollIndicator={true}
+            contentContainerStyle={styles.tableScrollContent}
+            bounces={false}
+            scrollEventThrottle={16}
+            nestedScrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.tableContainerClassic}>
+              <View style={styles.orderRowHeaderClassic}>
+                <View style={[styles.headerCell, { width: 60 }]}><Text style={styles.orderCellHeaderClassic}>ID</Text></View>
+                <View style={[styles.headerCell, { width: 80 }]}><Text style={styles.orderCellHeaderClassic}>Type</Text></View>
+                <View style={[styles.headerCell, { width: 120 }]}><Text style={styles.orderCellHeaderClassic}>Customer</Text></View>
+                <View style={[styles.headerCell, { width: 100 }]}><Text style={styles.orderCellHeaderClassic}>Status</Text></View>
+                <View style={[styles.headerCell, { width: 80 }]}><Text style={styles.orderCellHeaderClassic}>Actions</Text></View>
+                <View style={[styles.headerCell, { width: 100 }]}><Text style={styles.orderCellHeaderClassic}>Penalty</Text></View>
+              </View>
+              <FlatList
+                data={filteredOrders}
+                renderItem={renderFlatListItem}
+                keyExtractor={(item) => `${item.type}-${item.id}`}
+                showsVerticalScrollIndicator={true}
+                contentContainerStyle={{ paddingBottom: 20 }}
+                style={{ height: 400 }}
+                nestedScrollEnabled={true}
+              />
+            </View>
+          </ScrollView>
+        </View>
       ) : (
         <View style={styles.tableWrapper}>
-          <ScrollView style={styles.tableScroll} horizontal={true} contentContainerStyle={styles.tableScrollContent}>
+          <ScrollView 
+            style={styles.tableScroll} 
+            horizontal={true} 
+            showsHorizontalScrollIndicator={true}
+            contentContainerStyle={styles.tableScrollContent}
+            bounces={false}
+            scrollEventThrottle={16}
+            nestedScrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={styles.tableContainerClassic}> 
               <View style={styles.orderRowHeaderClassic}> 
                 <View style={[styles.headerCell, { width: 80 }]}><Text style={styles.orderCellHeaderClassic}>Order ID</Text></View>
@@ -349,258 +485,323 @@ const OrdersScreen = () => {
                 <View style={[styles.headerCell, { width: 100 }]}><Text style={styles.orderCellHeaderClassic}>Actions</Text></View>
                 <View style={[styles.headerCell, { width: 120 }]}><Text style={styles.orderCellHeaderClassic}>Penalty Status</Text></View>
               </View>
-              {filteredOrders.map((item) => (
-                <View key={`${item.type}-${item.id}`} style={styles.orderRowClassic2}>
-                  <View style={[styles.dataCell, { width: 80 }]}><Text style={styles.orderCellClassic2}>{item.id}</Text></View>
-                  <View style={[styles.dataCell, { width: 100 }]}><Text style={styles.orderCellClassic2}>{item.type}</Text></View>
-                  <View style={[styles.dataCell, { width: 140 }]}><Text style={styles.orderCellClassic2}>{item.customer}</Text></View>
-                  <View style={[styles.dataCell, { width: 120 }]}><Text style={styles.orderCellClassic2}>{item.status}</Text></View>
-                  <View style={[styles.dataCell, { width: 100 }]}>
-                    <TouchableOpacity style={styles.actionButtonClassic2} onPress={() => handleViewDetails(item)}>
-                      <Text style={styles.actionButtonTextClassic2}>View</Text>
-                    </TouchableOpacity>
+              <FlatList
+                data={filteredOrders}
+                renderItem={({ item }) => (
+                  <View style={styles.orderRowClassic2}>
+                    <View style={[styles.dataCell, { width: 80 }]}><Text style={styles.orderCellClassic2}>{item.id}</Text></View>
+                    <View style={[styles.dataCell, { width: 100 }]}><Text style={styles.orderCellClassic2}>{item.type}</Text></View>
+                    <View style={[styles.dataCell, { width: 140 }]}><Text style={styles.orderCellClassic2}>{item.customer}</Text></View>
+                    <View style={[styles.dataCell, { width: 120 }]}><Text style={styles.orderCellClassic2}>{item.status}</Text></View>
+                    <View style={[styles.dataCell, { width: 100 }]}>
+                      <TouchableOpacity style={styles.actionButtonClassic2} onPress={() => handleViewDetails(item)}>
+                        <Text style={styles.actionButtonTextClassic2}>View</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {/* Add penalty status column for all orders - show data for rentals, empty for others */}
+                    <View style={[styles.dataCell, { width: 120 }]}>
+                      {item.type === 'Rental' ? (
+                        <Text style={[
+                          styles.orderCellClassic2,
+                          { 
+                            color: item.penalty_status === 'paid' ? '#388e3c' : 
+                                   item.penalty_status === 'pending' ? '#ff9800' : '#666'
+                          }
+                        ]}>
+                          {item.penalty_status === 'paid' ? '✅ Paid' : 
+                           item.penalty_status === 'pending' ? '⚠️ Pending' : '—'}
+                        </Text>
+                      ) : (
+                        <Text style={[styles.orderCellClassic2, { color: '#ccc' }]}>—</Text>
+                      )}
+                    </View>
                   </View>
-                  {/* Add penalty status column for all orders - show data for rentals, empty for others */}
-                  <View style={[styles.dataCell, { width: 120 }]}>
-                    {item.type === 'Rental' ? (
-                      <Text style={[
-                        styles.orderCellClassic2,
-                        { 
-                          color: item.penalty_status === 'paid' ? '#388e3c' : 
-                                 item.penalty_status === 'pending' ? '#ff9800' : '#666'
-                        }
-                      ]}>
-                        {item.penalty_status === 'paid' ? '✅ Paid' : 
-                         item.penalty_status === 'pending' ? '⚠️ Pending' : '—'}
-                      </Text>
-                    ) : (
-                      <Text style={[styles.orderCellClassic2, { color: '#ccc' }]}>—</Text>
-                    )}
-                  </View>
-                </View>
-              ))}
+                )}
+                keyExtractor={(item) => `${item.type}-${item.id}`}
+                showsVerticalScrollIndicator={true}
+                contentContainerStyle={{ paddingBottom: 20 }}
+                style={{ height: 400 }}
+                nestedScrollEnabled={true}
+              />
             </View>
           </ScrollView>
         </View>
       )}
       {/* Order Details Modal */}
       {selectedOrder && (
-        <View style={styles.detailsModal}>
-          {/* Header */}
-          <View style={styles.modalHeader}>
-            <View style={styles.titleContainer}>
-              <Ionicons name="document-text-outline" size={24} color="#014D40" />
-              <Text style={styles.detailsTitle}>Order Details</Text>
-            </View>
-            <TouchableOpacity style={styles.closeButton} onPress={handleCloseDetails}>
-              <Ionicons name="close" size={20} color="#666" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Scrollable Content */}
-          <ScrollView 
-            style={styles.modalScrollView}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.modalScrollContent}
-          >
-            {/* Order Information */}
-            <View style={styles.orderInfoSection}>
-            <View style={styles.infoRow}>
-              <Ionicons name="pricetag-outline" size={18} color="#388e3c" />
-              <Text style={styles.infoLabel}>ID:</Text>
-              <Text style={styles.infoValue}>{selectedOrder.id}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="cube-outline" size={18} color="#388e3c" />
-              <Text style={styles.infoLabel}>Type:</Text>
-              <Text style={styles.infoValue}>{selectedOrder.type}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="person-outline" size={18} color="#388e3c" />
-              <Text style={styles.infoLabel}>Customer:</Text>
-              <Text style={styles.infoValue}>{selectedOrder.customer}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="information-circle-outline" size={18} color="#388e3c" />
-              <Text style={styles.infoLabel}>Status:</Text>
-              <Text style={styles.infoValue}>{selectedOrder.status}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="document-text-outline" size={18} color="#388e3c" />
-              <Text style={styles.infoLabel}>Details:</Text>
-              <Text style={[styles.infoValue, styles.detailsText]}>{selectedOrder.details}</Text>
-            </View>
-          </View>
-
-          {/* Divider */}
-          <View style={styles.divider} />
-
-          {/* Quotation Section */}
-          {selectedOrder.status === 'in_progress' && (
-            <View style={styles.quotationSection}>
-              <Text style={styles.quotationTitle}>Quotation Accepted</Text>
-              <View style={styles.quotationInfo}>
-                <View style={styles.quotationRow}>
-                  <Ionicons name="cash-outline" size={18} color="#388e3c" />
-                  <Text style={styles.quotationLabel}>Amount:</Text>
-                  <Text style={styles.quotationValue}>
-                    ₱{(selectedOrder.quotation_amount || selectedOrder.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </Text>
+        <Modal
+          visible={true}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={handleCloseDetails}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ 
+              backgroundColor: '#fff', 
+              borderRadius: 16, 
+              padding: 20, 
+              elevation: 20, 
+              shadowColor: '#000', 
+              shadowOffset: { width: 0, height: 8 }, 
+              shadowOpacity: 0.3, 
+              shadowRadius: 20, 
+              maxHeight: '95%', 
+              width: '90%', 
+              minHeight: (selectedOrder?.status === 'ready_for_pickup' || selectedOrder?.status === 'quotation_sent' || selectedOrder?.status === 'cancelled') ? 400 : 600 
+            }}>
+              {/* Header */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: '#e0e0e0', paddingBottom: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <Ionicons name="document-text-outline" size={24} color="#014D40" />
+                  <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#014D40' }}>Order Details</Text>
                 </View>
-                <View style={styles.quotationRow}>
-                  <Ionicons name="chatbubble-ellipses-outline" size={18} color="#388e3c" />
-                  <Text style={styles.quotationLabel}>Notes:</Text>
-                  <Text style={styles.quotationValue}>{selectedOrder.quotation_notes || '—'}</Text>
-                </View>
-                <View style={styles.quotationRow}>
-                  <Ionicons name="person-circle-outline" size={18} color="#388e3c" />
-                  <Text style={styles.quotationLabel}>Customer Response:</Text>
-                  <Text style={styles.quotationValue}>Accepted</Text>
-                </View>
+                <TouchableOpacity style={{ padding: 8, borderRadius: 8, backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#e0e0e0' }} onPress={handleCloseDetails}>
+                  <Ionicons name="close" size={20} color="#666" />
+                </TouchableOpacity>
               </View>
 
-              {/* Mark as Ready for Pickup button for purchase orders */}
-              {selectedOrder.type === 'Purchase' && (
-                <TouchableOpacity
-                  style={styles.readyButton}
-                  onPress={async () => {
-                    try {
-                      await apiService.request(`/purchases/${selectedOrder.id}/ready-for-pickup`, { method: 'POST' });
-                      Alert.alert('Success', 'Order marked as ready for pickup!');
-                      handleCloseDetails();
-                      setLoading(true);
-                      const rentalsRes = await apiService.request('/rentals');
-                      const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
-                      const rentals = (rentalsArr || []).map((r: any) => ({
-                        id: r.id,
-                        type: 'Rental',
-                        customer: r.customer_name || r.customer_email || 'N/A',
-                        status: r.status || 'N/A',
-                        details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
-                        quotation_amount: r.quotation_amount,
-                        quotation_notes: r.quotation_notes,
-                        quotation_schedule: r.quotation_schedule,
-                        penalty_status: r.penalty_status,
+              {/* Order Details Content */}
+              <ScrollView 
+                style={{ flex: 1, minHeight: (selectedOrder?.status === 'ready_for_pickup' || selectedOrder?.status === 'quotation_sent' || selectedOrder?.status === 'cancelled') ? 300 : 500 }}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }}
+              >
+                {/* Order Information */}
+                <View style={{ backgroundColor: '#e8f5e8', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#c8e6c9' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                    <Ionicons name="information-circle" size={24} color="#014D40" style={{ marginRight: 8 }} />
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#014D40' }}>Order Information</Text>
+                  </View>
+                  
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
+                    <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Order ID:</Text>
+                    <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600' }}>{selectedOrder.id}</Text>
+                  </View>
+                  
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
+                    <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Order Type:</Text>
+                    <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600' }}>{selectedOrder.type}</Text>
+                  </View>
+                  
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
+                    <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Customer Name:</Text>
+                    <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600' }}>{selectedOrder.customer}</Text>
+                  </View>
+                  
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
+                    <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Status:</Text>
+                    <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600' }}>{selectedOrder.status}</Text>
+                  </View>
+                  
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 0, paddingBottom: 8 }}>
+                    <Text style={{ fontSize: 16, color: '#666', fontWeight: '600', flex: 1, marginRight: 10 }}>Details:</Text>
+                    <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600', flex: 2, textAlign: 'right' }}>{selectedOrder.details}</Text>
+                  </View>
+                </View>
+
+                {/* Quotation Section */}
+                {selectedOrder.status === 'in_progress' && (
+                  <View style={{ backgroundColor: '#f9fbe7', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#cddc39' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                      <Ionicons name="checkmark-circle" size={24} color="#014D40" style={{ marginRight: 8 }} />
+                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#014D40' }}>Quotation Accepted</Text>
+                    </View>
+                    
+                    <View style={{ marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                        <Ionicons name="cash-outline" size={20} color="#388e3c" />
+                        <Text style={{ fontSize: 16, color: '#666', marginLeft: 8, fontWeight: '600' }}>Amount:</Text>
+                      </View>
+                      <Text style={{ fontSize: 18, color: '#388e3c', fontWeight: 'bold', marginLeft: 28 }}>
+                        ₱{(selectedOrder.quotation_amount || selectedOrder.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </Text>
+                    </View>
+                    
+                    <View style={{ marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                        <Ionicons name="chatbubble-ellipses-outline" size={20} color="#388e3c" />
+                        <Text style={{ fontSize: 16, color: '#666', marginLeft: 8, fontWeight: '600' }}>Notes:</Text>
+                      </View>
+                      <Text style={{ fontSize: 16, color: '#388e3c', fontWeight: 'bold', marginLeft: 28 }}>{selectedOrder.quotation_notes || '—'}</Text>
+                    </View>
+                    
+                    <View style={{ marginBottom: 16 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                        <Ionicons name="person-circle-outline" size={20} color="#388e3c" />
+                        <Text style={{ fontSize: 16, color: '#666', marginLeft: 8, fontWeight: '600' }}>Customer Response:</Text>
+                      </View>
+                      <Text style={{ fontSize: 16, color: '#388e3c', fontWeight: 'bold', marginLeft: 28 }}>Accepted</Text>
+                    </View>
+
+                    {/* Mark as Ready for Pickup button */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#014D40', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16 }}
+                      onPress={async () => {
+                        try {
+                          const endpoint = selectedOrder.type === 'Purchase' 
+                            ? `/purchases/${selectedOrder.id}/ready-for-pickup`
+                            : `/rentals/${selectedOrder.id}/ready-for-pickup`;
+                          
+                          await apiService.request(endpoint, { method: 'POST' });
+                          Alert.alert('Success', 'Order marked as ready for pickup!');
+                          handleCloseDetails();
+                          
+                          // Refresh orders
+                          setLoading(true);
+                          const rentalsRes = await apiService.request('/rentals');
+                          const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
+                          const rentals = (rentalsArr || []).map((r: any) => ({
+                            id: r.id,
+                            type: 'Rental',
+                            customer: r.customer_name || r.customer_email || 'N/A',
+                            status: r.status || 'N/A',
+                            details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
+                            quotation_amount: r.quotation_amount,
+                            quotation_notes: r.quotation_notes,
+                            quotation_schedule: r.quotation_schedule,
+                            penalty_status: r.penalty_status,
+                          }));
+                          const purchasesRes = await apiService.request('/purchases');
+                          const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
+                          const purchases = (purchasesArr || []).map((p: any) => ({
+                            id: p.id,
+                            type: 'Purchase',
+                            customer: p.customer_name || p.customer_email || 'N/A',
+                            status: p.status || 'N/A',
+                            details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
+                            quotation_price: p.quotation_price,
+                            quotation_notes: p.quotation_notes,
+                            quotation_schedule: p.quotation_schedule,
+                          }));
+                          setOrders([...rentals, ...purchases]);
+                          setLoading(false);
+                        } catch (error) {
+                          Alert.alert('Error', 'Failed to mark order as ready for pickup.');
+                        }
+                      }}
+                    >
+                      <Ionicons name="checkmark-circle" size={20} color="#FFD700" />
+                      <Text style={{ color: '#FFD700', fontWeight: 'bold', fontSize: 16 }}>Mark as Ready for Pickup</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Set Quotation Section */}
+                {(selectedOrder.status as string) === 'pending' && (
+                  <View style={{ backgroundColor: '#fff3e0', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#ffb74d' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                      <Ionicons name="calculator" size={24} color="#014D40" style={{ marginRight: 8 }} />
+                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#014D40' }}>Set Quotation</Text>
+                    </View>
+                    
+                    {/* Error Display */}
+                    {quotationError ? (
+                      <View style={{ backgroundColor: '#ffebee', borderColor: '#f44336', borderWidth: 1, borderRadius: 6, padding: 12, marginBottom: 16 }}>
+                        <Text style={{ color: '#f44336', fontSize: 14, fontWeight: '500', textAlign: 'center' }}>{quotationError}</Text>
+                      </View>
+                    ) : null}
+                    
+                    {/* Amount Input */}
+                    <View style={{ marginBottom: 16 }}>
+                      <Text style={{ fontSize: 16, color: '#666', marginBottom: 8, fontWeight: '600' }}>Amount (₱)</Text>
+                      <TextInput
+                        style={{ backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: '#e0e0e0', fontSize: 16, color: '#014D40', minHeight: 48 }}
+                        value={quotationAmount}
+                        onChangeText={(text) => {
+                          setQuotationAmount(text);
+                          if (quotationError) setQuotationError('');
+                        }}
+                        placeholder="Enter amount"
+                        keyboardType="numeric"
+                      />
+                    </View>
+
+                    {/* Schedule Input - Only for Purchase Orders */}
+                    {selectedOrder?.type === 'Purchase' && (
+                      <View style={{ marginBottom: 16 }}>
+                        <Text style={{ fontSize: 16, color: '#666', marginBottom: 8, fontWeight: '600' }}>Schedule</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e0e0e0', paddingHorizontal: 16, paddingVertical: 12, minHeight: 48 }}>
+                          <TextInput
+                            style={{ flex: 1, marginRight: 8, backgroundColor: 'transparent', borderWidth: 0, paddingHorizontal: 0, paddingVertical: 0, fontSize: 16, color: '#014D40' }}
+                            value={quotationSchedule}
+                            onChangeText={(text) => {
+                              setQuotationSchedule(text);
+                              if (quotationError) setQuotationError('');
+                            }}
+                            placeholder="DD/MM/YYYY"
+                          />
+                          <TouchableOpacity
+                            style={{ padding: 8, borderRadius: 6, backgroundColor: '#014D40' }}
+                            onPress={() => setShowDatePicker(true)}
+                          >
+                            <Ionicons name="calendar-outline" size={20} color="#FFD700" />
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={{ fontSize: 12, color: '#999', marginTop: 6 }}>Select the date for the order schedule</Text>
+                      </View>
+                    )}
+
+                    {/* Notes Input */}
+                    <View style={{ marginBottom: 20 }}>
+                      <Text style={{ fontSize: 16, color: '#666', marginBottom: 8, fontWeight: '600' }}>Notes (optional)</Text>
+                      <TextInput
+                        style={{ backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: '#e0e0e0', fontSize: 16, color: '#014D40', height: 100, textAlignVertical: 'top' }}
+                        value={quotationNotes}
+                        onChangeText={setQuotationNotes}
+                        placeholder="Add any notes for the customer"
+                        multiline
+                        numberOfLines={3}
+                      />
+                    </View>
+
+                    {/* Action Buttons */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingHorizontal: 0 }}>
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#014D40', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 16, flex: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 48 }}
+                        onPress={handleSendQuotation}
+                        disabled={quotationLoading}
+                      >
+                        <Ionicons name="paper-plane" size={18} color="#FFD700" />
+                        <Text style={{ color: '#FFD700', fontWeight: 'bold', fontSize: 13, flexShrink: 0 }}>Send Quotation</Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#666', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 16, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 48 }}
+                        onPress={() => {
+                          clearQuotationForm();
+                          handleCloseDetails();
+                        }}
+                      >
+                        <Ionicons name="close" size={18} color="#fff" />
+                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15, flexShrink: 0 }}>Cancel</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </ScrollView>
+
+              {/* Date Picker Modal */}
+              {showDatePicker && (
+                <DateTimePicker
+                  value={quotationScheduleDate || new Date()}
+                  mode="date"
+                  display="default"
+                  onChange={(event, selectedDate) => {
+                    setShowDatePicker(false);
+                    if (selectedDate) {
+                      setQuotationScheduleDate(selectedDate);
+                      setQuotationSchedule(selectedDate.toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric'
                       }));
-                      const purchasesRes = await apiService.request('/purchases');
-                      const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
-                      const purchases = (purchasesArr || []).map((p: any) => ({
-                        id: p.id,
-                        type: 'Purchase',
-                        customer: p.customer_name || p.customer_email || 'N/A',
-                        status: p.status || 'N/A',
-                        details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
-                        quotation_price: p.quotation_price,
-                        quotation_notes: p.quotation_notes,
-                        quotation_schedule: p.quotation_schedule,
-                      }));
-                      setOrders([...rentals, ...purchases]);
-                      setLoading(false);
-                    } catch (error) {
-                      Alert.alert('Error', 'Failed to mark order as ready for pickup.');
                     }
                   }}
-                >
-                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                  <Text style={styles.readyButtonText}>Mark as Ready for Pickup</Text>
-                </TouchableOpacity>
+                />
               )}
             </View>
-          )}
-
-          {/* Set Quotation Section */}
-          {selectedOrder.status === 'pending' && (
-            <View style={styles.setQuotationSection}>
-              <Text style={styles.quotationTitle}>Set Quotation</Text>
-              
-              {/* Amount Input */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Amount (₱)</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={quotationAmount}
-                  onChangeText={setQuotationAmount}
-                  placeholder="Enter amount"
-                  keyboardType="numeric"
-                />
-              </View>
-
-              {/* Schedule Input */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Schedule</Text>
-                <View style={styles.scheduleContainer}>
-                  <TextInput
-                    style={[styles.textInput, styles.scheduleInput]}
-                    value={quotationSchedule}
-                    onChangeText={setQuotationSchedule}
-                    placeholder="dd/mm/yyyy"
-                  />
-                  <TouchableOpacity
-                    style={styles.calendarButton}
-                    onPress={() => setShowDatePicker(true)}
-                  >
-                    <Ionicons name="calendar-outline" size={20} color="#014D40" />
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.helperText}>Select the date for the order schedule.</Text>
-              </View>
-
-              {/* Notes Input */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Notes (optional)</Text>
-                <TextInput
-                  style={[styles.textInput, styles.notesInput]}
-                  value={quotationNotes}
-                  onChangeText={setQuotationNotes}
-                  placeholder="Add any notes for the customer"
-                  multiline
-                  numberOfLines={3}
-                />
-              </View>
-
-              {/* Action Buttons */}
-              <View style={styles.quotationActions}>
-                <TouchableOpacity
-                  style={styles.sendQuotationButton}
-                  onPress={handleSendQuotation}
-                  disabled={quotationLoading}
-                >
-                  <Ionicons name="paper-plane" size={20} color="#fff" />
-                  <Text style={styles.sendQuotationText} numberOfLines={1} adjustsFontSizeToFit={true}>Send Quotation</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={styles.cancelButton}
-                  onPress={() => {
-                    setQuotationAmount('');
-                    setQuotationNotes('');
-                    setQuotationSchedule('');
-                  }}
-                >
-                  <Ionicons name="close" size={20} color="#fff" />
-                  <Text style={styles.cancelButtonText} numberOfLines={1} adjustsFontSizeToFit={true}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* Date Picker Modal */}
-          {showDatePicker && (
-            <DateTimePicker
-              value={quotationScheduleDate || new Date()}
-              mode="date"
-              display="default"
-              onChange={(event, selectedDate) => {
-                setShowDatePicker(false);
-                if (selectedDate) {
-                  setQuotationScheduleDate(selectedDate);
-                  setQuotationSchedule(selectedDate.toLocaleDateString());
-                }
-              }}
-            />
-          )}
-            </ScrollView>
-        </View>
+          </View>
+        </Modal>
       )}
     </View>
   );
@@ -610,19 +811,32 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: Colors.background.light,
   },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, color: '#014D40' },
+  header: {
+    marginBottom: 20,
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: Colors.primary,
+  },
   tableContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 12,
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
     minWidth: 640,
   },
   tableContainerMobile: {
@@ -718,23 +932,28 @@ const styles = StyleSheet.create({
     maxWidth: 180,
   },
   cancelButton: {
-    backgroundColor: '#757575',
+    backgroundColor: Colors.neutral[500],
     borderWidth: 0,
-    minWidth: 180,
-    maxWidth: 180,
-    alignSelf: 'center',
-    marginBottom: 12,
-    paddingVertical: 10,
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    minHeight: 48,
   },
   cancelButtonText: {
-    color: '#FFD700',
+    color: Colors.text.inverse,
     fontWeight: 'bold',
-    fontSize: 18,
-    letterSpacing: 0.5,
+    fontSize: 16,
+    letterSpacing: 0.2,
   },
   closeButton: {
     flexDirection: 'row',
@@ -765,54 +984,65 @@ const styles = StyleSheet.create({
   filtersRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 8, // Very small spacing below filters
+    marginBottom: 8, // Minimal spacing below filters
     gap: 20, // Space between Type and Status filters
     position: 'relative',
+    overflow: 'visible', // Allow dropdowns to extend beyond container
+    zIndex: 99999,
   },
   filterItem: {
     position: 'relative',
-    zIndex: 1000,
+    zIndex: 99999,
     minHeight: 60, // Ensure consistent height for filter items
     flex: 1, // Make filters take equal width
     maxWidth: '48%', // Ensure they don't get too wide
+    overflow: 'visible', // Allow dropdown to extend beyond container
   },
   filterGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     position: 'relative',
-    zIndex: 1000,
+    zIndex: 9999,
     minHeight: 40,
   },
   filterLabel: {
     fontWeight: 'bold',
-    color: '#014D40',
+    color: Colors.primary,
     marginRight: 4,
   },
   filterButton: {
-    backgroundColor: '#eee',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    backgroundColor: Colors.background.light,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     marginHorizontal: 2,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
   },
   filterButtonActive: {
-    backgroundColor: '#FFD700',
+    backgroundColor: Colors.secondary,
   },
   filterButtonText: {
-    color: '#014D40',
+    color: Colors.primary,
     fontWeight: 'bold',
   },
   searchInput: {
-    backgroundColor: '#fff',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: '#ccc',
+    backgroundColor: Colors.background.card,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.border.medium,
     width: '100%',
-    color: '#014D40',
+    color: Colors.text.primary,
     fontSize: 15,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    zIndex: 1, // Lower z-index to ensure dropdowns appear above
   },
   actionRow: {
     flexDirection: 'row',
@@ -850,6 +1080,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 1,
+  },
+  cardRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   cardLabel: {
     color: '#014D40',
@@ -895,120 +1131,146 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   tableContainerClassic: {
-    width: '100%',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 8,
+    minWidth: 540, // Total width: 60 + 80 + 120 + 100 + 80 + 100 = 540
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: Colors.border.light,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+    flex: 1,
+    maxHeight: 600,
   },
   orderRowHeaderClassic: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#014D40',
-    borderRadius: 8,
-    marginBottom: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    width: '100%',
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    minWidth: 540, // Total width: 60 + 80 + 120 + 100 + 80 + 100 = 540
     borderWidth: 1,
-    borderColor: '#014D40',
+    borderColor: Colors.primary,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   orderCellHeaderClassic: { 
-    fontSize: 13, 
-    color: '#FFD700', 
+    fontSize: 14, 
+    color: '#ffffff', 
     fontWeight: 'bold', 
-    paddingHorizontal: 2, 
-    paddingVertical: 2, 
+    paddingHorizontal: 4, 
+    paddingVertical: 4, 
     flexWrap: 'wrap', 
-    letterSpacing: 0.1, 
+    letterSpacing: 0.2, 
     textAlign: 'center' 
   },
   orderRowClassic2: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fcfce6',
-    borderRadius: 8,
-    marginBottom: 6,
-    paddingVertical: 7,
-    paddingHorizontal: 4,
-    width: '100%',
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
+    backgroundColor: Colors.background.light,
+    borderRadius: 12,
+    marginBottom: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    minWidth: 540, // Total width: 60 + 80 + 120 + 100 + 80 + 100 = 540
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
   },
   orderCellClassic2: { 
-    fontSize: 12, 
-    color: '#014D40', 
-    paddingHorizontal: 2, 
-    paddingVertical: 2, 
+    fontSize: 14, 
+    color: Colors.text.primary, 
+    paddingHorizontal: 4, 
+    paddingVertical: 4, 
     flexWrap: 'wrap', 
-    letterSpacing: 0.05, 
-    textAlign: 'center' 
+    letterSpacing: 0.1, 
+    textAlign: 'center',
+    fontWeight: '500',
   },
   actionButtonClassic2: {
-    backgroundColor: '#014D40',
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 6,
+    backgroundColor: Colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 40,
-    height: 28,
-    marginLeft: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 1,
-    elevation: 1,
-    textAlign: 'center',
+    minWidth: 60,
+    height: 36,
+    marginLeft: 4,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  actionButtonTextClassic2: { color: '#FFD700', fontWeight: 'bold', fontSize: 12, letterSpacing: 0.1, fontFamily: 'system-ui, sans-serif' },
+  actionButtonTextClassic2: { 
+    color: Colors.secondary, 
+    fontWeight: 'bold', 
+    fontSize: 13, 
+    letterSpacing: 0.2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
   detailsModal: {
-    position: 'absolute',
-    top: 80,
-    left: 20,
-    right: 20,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 20,
-    elevation: 10,
-    zIndex: 1000,
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 0,
+    elevation: 20,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    zIndex: 10000,
     maxHeight: '85%',
-    overflow: 'scroll',
+    width: '90%',
+    overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 20,
     paddingHorizontal: 24,
     paddingTop: 24,
-  },
-  closeButton: {
-    padding: 10,
-    borderRadius: 8,
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light,
   },
   detailsTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#014D40',
+    color: Colors.primary,
+  },
+  modalCloseButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.background.light,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   orderInfoSection: {
     marginBottom: 20,
@@ -1076,16 +1338,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#388e3c',
-    borderRadius: 8,
-    paddingVertical: 10,
-    marginTop: 10,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginTop: 16,
     gap: 8,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    minHeight: 48,
   },
   readyButtonText: {
-    color: '#fff',
+    color: Colors.text.inverse,
     fontWeight: 'bold',
     fontSize: 16,
+    letterSpacing: 0.2,
   },
   setQuotationSection: {
     marginBottom: 15,
@@ -1093,7 +1363,8 @@ const styles = StyleSheet.create({
   quotationActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 16,
+    alignItems: 'stretch',
+    gap: 12,
     marginTop: 20,
     marginBottom: 10,
     paddingHorizontal: 0,
@@ -1102,47 +1373,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#388e3c',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    flex: 1.4,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    flex: 1,
     gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    minWidth: 160,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    minHeight: 48,
   },
   sendQuotationText: {
-    color: '#fff',
+    color: Colors.text.inverse,
     fontWeight: 'bold',
-    fontSize: 14,
-    flexShrink: 0,
-    textAlign: 'center',
-  },
-  cancelButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#666',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    flex: 0.6,
-    gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    minWidth: 90,
-  },
-  cancelButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 16,
     flexShrink: 0,
     textAlign: 'center',
   },
@@ -1150,69 +1397,95 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   inputLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
+    fontSize: 15,
+    color: Colors.text.secondary,
+    marginBottom: 8,
+    fontWeight: '600',
   },
   textInput: {
-    backgroundColor: '#fff',
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    backgroundColor: Colors.background.card,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: Colors.border.light,
     fontSize: 15,
-    color: '#014D40',
-    minHeight: 44,
+    color: Colors.text.primary,
+    minHeight: 48,
   },
   scheduleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 6,
+    backgroundColor: Colors.background.card,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#ccc',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderColor: Colors.border.light,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 48,
   },
   scheduleInput: {
     flex: 1,
     marginRight: 8,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    fontSize: 15,
+    color: Colors.text.primary,
   },
   calendarButton: {
-    padding: 5,
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: Colors.primary,
   },
   helperText: {
     fontSize: 12,
-    color: '#888',
-    marginTop: 4,
+    color: Colors.text.muted,
+    marginTop: 6,
   },
   notesInput: {
     height: 100,
     textAlignVertical: 'top',
+  },
+  errorContainer: {
+    backgroundColor: '#ffebee',
+    borderColor: '#f44336',
+    borderWidth: 1,
+    borderRadius: 6,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#f44336',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 
   dropdownButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#fff',
+    backgroundColor: Colors.background.card,
     borderWidth: 1.5,
-    borderColor: '#b0bec5',
-    borderRadius: 7,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    borderColor: Colors.border.medium,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     minWidth: 120,
-    minHeight: 36,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 1,
+    minHeight: 40,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 10,
+    zIndex: 99999,
   },
   dropdownButtonText: {
     fontSize: 15,
-    color: '#014D40',
+    color: Colors.primary,
+    fontWeight: '500',
   },
   dropdownMenu: {
     position: 'absolute',
@@ -1239,25 +1512,28 @@ const styles = StyleSheet.create({
   },
   dropdownItemText: {
     fontSize: 15,
-    color: '#014D40',
+    color: Colors.primary,
+    fontWeight: '500',
   },
   dropdownMenuAbsolute: {
     position: 'absolute',
     left: 0,
-    backgroundColor: '#fff',
-    borderRadius: 6,
+    backgroundColor: Colors.background.card,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#ccc',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    zIndex: 1001,
+    borderColor: Colors.border.light,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 25,
+    zIndex: 99999,
     minWidth: 120,
-    marginTop: 2,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
+    marginTop: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    maxHeight: 400,
+    overflow: 'visible',
     width: '100%',
   },
   tableSpacing: {
@@ -1271,12 +1547,25 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderWidth: 1,
     borderColor: '#e0e0e0',
+    zIndex: 1, // Lower z-index to ensure dropdowns appear above
   },
   tableScroll: {
     width: '100%',
+    flexGrow: 1,
   },
   tableScrollContent: {
-    minWidth: 540, // Total width: 80 + 100 + 140 + 120 + 100 = 540
+    minWidth: 540, // Total width: 60 + 80 + 120 + 100 + 80 + 100 = 540
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: Colors.text.secondary,
+    textAlign: 'center',
   },
   headerCell: {
     alignItems: 'center',
@@ -1290,29 +1579,15 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     marginTop: 8, // Space between filters and search bar
+    zIndex: 1, // Lower z-index to ensure dropdowns appear above
   },
   // Modal styles
-  detailsModal: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    right: 20,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 0,
-    elevation: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    zIndex: 1000,
-    maxHeight: '85%',
-  },
   modalScrollView: {
     flex: 1,
   },
   modalScrollContent: {
     padding: 24,
+    paddingBottom: 32,
   },
 
 });
