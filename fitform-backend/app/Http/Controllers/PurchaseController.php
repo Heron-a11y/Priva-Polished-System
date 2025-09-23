@@ -134,6 +134,7 @@ class PurchaseController extends Controller
     {
         $purchase = Purchase::findOrFail($id);
         $purchase->status = 'in_progress';
+        $purchase->quotation_responded_at = now();
         $purchase->save();
         // Notify all admins
         $admins = \App\Models\User::where('role', 'admin')->get();
@@ -152,6 +153,7 @@ class PurchaseController extends Controller
     {
         $purchase = Purchase::findOrFail($id);
         $purchase->status = 'cancelled';
+        $purchase->quotation_responded_at = now();
         $purchase->save();
         // Notify all admins
         $admins = \App\Models\User::where('role', 'admin')->get();
@@ -164,6 +166,94 @@ class PurchaseController extends Controller
             ]);
         }
         return response()->json(['success' => true]);
+    }
+
+    public function customerCounterOffer(Request $request, $id)
+    {
+        $purchase = Purchase::findOrFail($id);
+        
+        // Only allow counter offers if quotation has been sent or counter offer was rejected
+        // Prevent counter offers if transaction is already complete
+        if ($purchase->status !== 'quotation_sent' && $purchase->status !== 'rejected') {
+            return response()->json(['error' => 'Counter offer can only be made after quotation is sent.'], 400);
+        }
+        
+        // Prevent counter offers if transaction is already complete
+        if ($purchase->status === 'in_progress' || $purchase->status === 'ready_for_pickup') {
+            return response()->json(['error' => 'Counter offer cannot be made as the transaction is already complete.'], 400);
+        }
+
+        $data = $request->validate([
+            'counter_offer_amount' => 'required|numeric|min:0',
+            'counter_offer_notes' => 'nullable|string|max:1000',
+        ]);
+
+        $purchase->counter_offer_amount = $data['counter_offer_amount'];
+        $purchase->counter_offer_notes = $data['counter_offer_notes'] ?? null;
+        $purchase->counter_offer_sent_at = now();
+        $purchase->counter_offer_status = 'pending';
+        $purchase->status = 'counter_offer_pending';
+        $purchase->save();
+
+        // Notify all admins
+        $admins = \App\Models\User::where('role', 'admin')->get();
+        foreach ($admins as $admin) {
+            Notification::create([
+                'user_id' => $admin->id,
+                'sender_role' => 'customer',
+                'message' => 'Customer made a counter offer of ₱' . number_format($data['counter_offer_amount'], 2) . ' for purchase order #' . $purchase->id,
+                'read' => false,
+            ]);
+        }
+
+        return response()->json(['success' => true, 'message' => 'Counter offer submitted successfully']);
+    }
+
+    public function adminAcceptCounterOffer($id)
+    {
+        $purchase = Purchase::findOrFail($id);
+        
+        if ($purchase->counter_offer_status !== 'pending' || $purchase->status !== 'counter_offer_pending') {
+            return response()->json(['error' => 'No pending counter offer found.'], 400);
+        }
+
+        $purchase->quotation_price = $purchase->counter_offer_amount;
+        $purchase->counter_offer_status = 'accepted';
+        $purchase->status = 'in_progress';
+        $purchase->save();
+
+        // Notify customer
+        Notification::create([
+            'user_id' => $purchase->user_id,
+            'sender_role' => 'admin',
+            'message' => 'Your counter offer of ₱' . number_format($purchase->counter_offer_amount, 2) . ' for purchase order #' . $purchase->id . ' has been accepted!',
+            'read' => false,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Counter offer accepted']);
+    }
+
+    public function adminRejectCounterOffer($id)
+    {
+        $purchase = Purchase::findOrFail($id);
+        
+        if ($purchase->counter_offer_status !== 'pending' || $purchase->status !== 'counter_offer_pending') {
+            return response()->json(['error' => 'No pending counter offer found.'], 400);
+        }
+
+        $purchase->counter_offer_status = 'rejected';
+        $purchase->status = 'rejected';
+        $purchase->save();
+
+        // Notify customer
+        Notification::create([
+            'user_id' => $purchase->user_id,
+            'sender_role' => 'admin',
+            'message' => 'Your counter offer for purchase order #' . $purchase->id . ' has been rejected. The original quotation remains valid.',
+            'read' => false,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Counter offer rejected']);
     }
 
     public function markReadyForPickup($id)
@@ -181,6 +271,31 @@ class PurchaseController extends Controller
             'read' => false,
         ]);
         return response()->json(['success' => true, 'status' => 'ready_for_pickup']);
+    }
+
+    /**
+     * Mark purchase as picked up
+     */
+    public function markAsPickedUp($id)
+    {
+        $purchase = Purchase::findOrFail($id);
+        
+        if ($purchase->status !== 'ready_for_pickup') {
+            return response()->json(['error' => 'Purchase must be ready for pickup before marking as picked up.'], 400);
+        }
+
+        $purchase->status = 'picked_up';
+        $purchase->save();
+
+        // Notify customer
+        Notification::create([
+            'user_id' => $purchase->user_id,
+            'sender_role' => 'admin',
+            'message' => 'Your purchase order #' . $purchase->id . ' has been marked as picked up. Thank you for your purchase!',
+            'read' => false,
+        ]);
+
+        return response()->json(['success' => true, 'status' => 'picked_up']);
     }
 
     public function store(Request $request)

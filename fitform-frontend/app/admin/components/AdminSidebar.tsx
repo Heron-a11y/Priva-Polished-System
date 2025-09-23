@@ -9,11 +9,12 @@ const isMobile = SCREEN_WIDTH < 600;
 
 const adminMenuItems = [
   { name: 'Dashboard', icon: 'speedometer', path: '/admin/dashboard' },
+  { name: 'AR Measurements', icon: 'scan', path: '/admin/ar-measurements' },
   // { name: 'Manage Pickups/Returns', icon: 'swap-horizontal', path: '/admin/pickup-return' },
   { name: 'Manage Appointments', icon: 'calendar', path: '/admin/appointments' },
   { name: 'Manage Orders', icon: 'file-tray-full', path: '/admin/orders' },
+  { name: 'Measurement History', icon: 'analytics', path: '/admin/measurement-history' },
   { name: 'Sizing Standards', icon: 'resize', path: '/admin/sizing' },
-  { name: 'Settings', icon: 'settings', path: '/admin/settings' },
 ];
 
 interface AdminSidebarProps {

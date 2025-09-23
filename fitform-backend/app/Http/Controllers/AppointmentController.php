@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Appointment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Carbon\Carbon;
 
 class AppointmentController extends Controller
 {
@@ -35,8 +36,8 @@ class AppointmentController extends Controller
         ]);
 
         // Check if appointment date is in the past
-        $appointmentDate = \Carbon\Carbon::parse($validated['appointment_date']);
-        $today = \Carbon\Carbon::today();
+        $appointmentDate = Carbon::parse($validated['appointment_date']);
+        $today = Carbon::today();
         
         if ($appointmentDate->lt($today)) {
             return response()->json([
@@ -46,9 +47,9 @@ class AppointmentController extends Controller
             ], 422);
         }
 
-        // Check if appointment time is within business hours (10 AM to 5 PM)
+        // Check if appointment time is within business hours (10 AM to 5 PM, last slot at 4 PM)
         $appointmentHour = $appointmentDate->hour;
-        if ($appointmentHour < 10 || $appointmentHour >= 17) {
+        if ($appointmentHour < 10 || $appointmentHour >= 17) { // 10 AM to 5 PM (17:00), last slot at 4 PM (16:00)
             return response()->json([
                 'success' => false,
                 'message' => 'Appointments can only be scheduled between 10:00 AM and 5:00 PM. Please select a time within business hours.',
@@ -65,16 +66,45 @@ class AppointmentController extends Controller
             'timezone' => $appointmentDate->timezone->getName()
         ]);
 
-        // Check if there's already an appointment on this date
-        $existingAppointment = Appointment::whereDate('appointment_date', $validated['appointment_date'])
+        // Check if the user already has an appointment on this date (1 appointment per customer per day)
+        $existingUserAppointment = Appointment::where('user_id', $request->user()->id)
+            ->whereDate('appointment_date', $validated['appointment_date'])
             ->where('status', '!=', 'cancelled')
             ->first();
 
-        if ($existingAppointment) {
+        if ($existingUserAppointment) {
             return response()->json([
                 'success' => false,
-                'message' => 'This date is already booked. Please choose another date.',
-                'error' => 'date_already_booked'
+                'message' => 'You already have an appointment on this date. Only 1 appointment per customer per day is allowed.',
+                'error' => 'user_already_has_appointment'
+            ], 422);
+        }
+
+        // Check if the specific time slot is already taken by any user
+        $appointmentDateTime = Carbon::parse($validated['appointment_date']);
+        $existingTimeSlot = Appointment::whereDate('appointment_date', $validated['appointment_date'])
+            ->whereTime('appointment_date', $appointmentDateTime->format('H:i:s'))
+            ->where('status', '!=', 'cancelled')
+            ->first();
+
+        if ($existingTimeSlot) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This time slot is already taken. Please select another time.',
+                'error' => 'time_slot_taken'
+            ], 422);
+        }
+
+        // Check if the daily limit of 5 appointments has been reached
+        $dailyAppointmentCount = Appointment::whereDate('appointment_date', $validated['appointment_date'])
+            ->where('status', '!=', 'cancelled')
+            ->count();
+
+        if ($dailyAppointmentCount >= 5) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Daily appointment limit reached. Maximum 5 appointments per day allowed. Please select another date.',
+                'error' => 'daily_limit_reached'
             ], 422);
         }
 
@@ -97,8 +127,8 @@ class AppointmentController extends Controller
         ]);
 
         // Check if rescheduled date is in the past
-        $appointmentDate = \Carbon\Carbon::parse($validated['appointment_date']);
-        $today = \Carbon\Carbon::today();
+        $appointmentDate = Carbon::parse($validated['appointment_date']);
+        $today = Carbon::today();
         
         if ($appointmentDate->lt($today)) {
             return response()->json([
@@ -108,9 +138,9 @@ class AppointmentController extends Controller
             ], 422);
         }
 
-        // Check if rescheduled appointment time is within business hours (10 AM to 5 PM)
+        // Check if rescheduled appointment time is within business hours (10 AM to 5 PM, last slot at 4 PM)
         $appointmentHour = $appointmentDate->hour;
-        if ($appointmentHour < 10 || $appointmentHour >= 17) {
+        if ($appointmentHour < 10 || $appointmentHour >= 17) { // 10 AM to 5 PM (17:00), last slot at 4 PM (16:00)
             return response()->json([
                 'success' => false,
                 'message' => 'Appointments can only be rescheduled between 10:00 AM and 5:00 PM. Please select a time within business hours.',
@@ -156,10 +186,14 @@ class AppointmentController extends Controller
         return response()->json($appointments);
     }
 
-    // Get all booked dates (for frontend calendar)
+    // Get dates where the current user already has an appointment
     public function getBookedDates(Request $request)
     {
-        $bookedDates = Appointment::where('status', '!=', 'cancelled')
+        $user = $request->user();
+        
+        // Get dates where the current user already has an appointment
+        $userBookedDates = Appointment::where('user_id', $user->id)
+            ->where('status', '!=', 'cancelled')
             ->selectRaw('DATE(appointment_date) as date')
             ->distinct()
             ->pluck('date')
@@ -167,7 +201,7 @@ class AppointmentController extends Controller
 
         return response()->json([
             'success' => true,
-            'booked_dates' => $bookedDates
+            'booked_dates' => $userBookedDates
         ]);
     }
 
@@ -180,7 +214,7 @@ class AppointmentController extends Controller
         }
         $appointment = Appointment::findOrFail($id);
         $validated = $request->validate([
-            'status' => 'required|in:confirmed,cancelled',
+            'status' => 'required|in:pending,confirmed,cancelled',
         ]);
         $appointment->status = $validated['status'];
         $appointment->save();
@@ -208,5 +242,55 @@ class AppointmentController extends Controller
         ];
 
         return response()->json($stats);
+    }
+
+    // Get daily appointment capacity and waiting time estimation
+    public function getDailyCapacity(Request $request)
+    {
+        $date = $request->query('date', now()->format('Y-m-d'));
+        $user = $request->user();
+        
+        // Check if user already has an appointment on this date
+        $userHasAppointment = Appointment::where('user_id', $user->id)
+            ->whereDate('appointment_date', $date)
+            ->where('status', '!=', 'cancelled')
+            ->exists();
+        
+        // Count total appointments for the specified date
+        $appointmentsCount = Appointment::whereDate('appointment_date', $date)
+            ->where('status', '!=', 'cancelled')
+            ->count();
+        
+        // Calculate waiting time estimation based on appointment times
+        $appointments = Appointment::whereDate('appointment_date', $date)
+            ->where('status', '!=', 'cancelled')
+            ->orderBy('appointment_date')
+            ->get();
+        
+        $estimatedWaitTime = 0;
+        if ($appointments->count() > 0) {
+            // Find the latest appointment time
+            $latestAppointment = $appointments->last();
+            $latestTime = Carbon::parse($latestAppointment->appointment_date);
+            $estimatedWaitTime = $latestTime->hour - 10; // Hours after 10 AM
+        }
+        
+        // Get all taken times for this date
+        $takenTimes = $appointments->map(function ($appointment) {
+            $appointmentTime = Carbon::parse($appointment->appointment_date);
+            return $appointmentTime->format('H:i');
+        })->toArray();
+        
+        return response()->json([
+            'success' => true,
+            'date' => $date,
+            'current_appointments' => $appointmentsCount,
+            'user_has_appointment' => $userHasAppointment,
+            'estimated_wait_time_minutes' => $estimatedWaitTime * 60,
+            'estimated_wait_time_hours' => $estimatedWaitTime,
+            'is_available' => !$userHasAppointment,
+            'appointments_today' => $appointmentsCount,
+            'taken_times' => $takenTimes
+        ]);
     }
 } 

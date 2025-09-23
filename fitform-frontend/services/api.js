@@ -1,14 +1,39 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import networkConfig from './network-config';
 
-// Base API configuration
-// IMPORTANT: This will be automatically updated by update-api-ip.js script
-// For external network access, this should be your computer's public IP or a domain
-const API_BASE_URL = 'https://cc8ba98880ab.ngrok-free.app/api'; // Public IP for external access
+// Base API configuration - will be dynamically set based on network mode
+let API_BASE_URL = 'http://localhost:8000/api'; // Default fallback                
 
 class ApiService {
     constructor() {
         this.baseURL = API_BASE_URL;
         this.token = null;
+        this.initializeNetwork();
+    }
+
+    // Initialize network configuration
+    async initializeNetwork() {
+        try {
+            const mode = await networkConfig.getNetworkMode();
+            console.log('🌐 Current network mode:', mode);
+            this.updateBaseURL();
+            
+            // If not in ngrok mode, try to auto-detect
+            if (mode !== 'ngrok') {
+                console.log('🔄 Auto-detecting best network...');
+                const detectedMode = await networkConfig.autoDetectNetwork();
+                console.log('🔍 Detected network mode:', detectedMode);
+                this.updateBaseURL();
+            }
+        } catch (error) {
+            console.log('⚠️ Failed to initialize network config:', error);
+        }
+    }
+
+    // Update base URL based on current network mode
+    updateBaseURL() {
+        this.baseURL = networkConfig.getBackendUrl();
+        console.log('🌐 API Base URL updated to:', this.baseURL);
     }  
 
     // Set auth token
@@ -29,6 +54,30 @@ class ApiService {
     async clearToken() {
         this.token = null;
         await AsyncStorage.removeItem('auth_token');
+    }
+
+    // Network management methods
+    async setNetworkMode(mode) {
+        await networkConfig.setNetworkMode(mode);
+        this.updateBaseURL();
+    }
+
+    async getNetworkMode() {
+        return await networkConfig.getNetworkMode();
+    }
+
+    async getAvailableNetworks() {
+        return networkConfig.getAvailableModes();
+    }
+
+    async testConnection() {
+        return await networkConfig.testConnection();
+    }
+
+    async autoDetectNetwork() {
+        const mode = await networkConfig.autoDetectNetwork();
+        this.updateBaseURL();
+        return mode;
     }
 
     // Get headers for API requests
@@ -138,6 +187,11 @@ class ApiService {
         return this.request('/booked-dates');
     }
 
+    async getDailyCapacity(date) {
+        const params = date ? `?date=${date}` : '';
+        return this.request(`/appointments/daily-capacity${params}`);
+    }
+
     async createAppointment(appointmentData) {
         return this.request('/appointments', {
             method: 'POST',
@@ -230,6 +284,22 @@ class ApiService {
         });
     }
 
+    // Counter offer methods
+    async submitCounterOffer(purchaseId, counterOfferData) {
+        return this.request(`/purchases/${purchaseId}/counter-offer`, {
+            method: 'POST',
+            body: JSON.stringify(counterOfferData),
+        });
+    }
+
+    // Rental counter offer methods
+    async submitRentalCounterOffer(rentalId, counterOfferData) {
+        return this.request(`/rentals/${rentalId}/counter-offer`, {
+            method: 'POST',
+            body: JSON.stringify(counterOfferData),
+        });
+    }
+
     // Rental Methods
     async getRentals() {
         return this.request('/rentals');
@@ -277,15 +347,32 @@ class ApiService {
         return this.request(`/rentals/${rentalId}/accept-agreement`, { method: 'POST' });
     }
 
+    // New rental flow methods
+    async markRentalAsPickedUp(rentalId) {
+        return this.request(`/rentals/${rentalId}/mark-picked-up`, { method: 'POST' });
+    }
+
+    async markRentalAsReturned(rentalId) {
+        return this.request(`/rentals/${rentalId}/mark-returned`, { method: 'POST' });
+    }
+
+    // New purchase flow methods
+    async markPurchaseAsPickedUp(purchaseId) {
+        return this.request(`/purchases/${purchaseId}/mark-picked-up`, { method: 'POST' });
+    }
+
     // Check if user is authenticated
     async isAuthenticated() {
         try {
             const token = await this.getToken();
+            console.log('API Service - Token exists:', !!token);
             if (!token) return false;
 
-            await this.getCurrentUser();
+            const userResponse = await this.getCurrentUser();
+            console.log('API Service - getCurrentUser response:', userResponse);
             return true;
         } catch (error) {
+            console.log('API Service - Authentication failed:', error);
             await this.clearToken();
             return false;
         }
@@ -315,6 +402,45 @@ class ApiService {
             method: 'POST',
             body: JSON.stringify(measurements),
         });
+    }
+
+    // Measurement History Methods
+    async getMeasurementHistory(params = {}) {
+        const queryParams = new URLSearchParams(params).toString();
+        const url = queryParams ? `/measurement-history?${queryParams}` : '/measurement-history';
+        return this.request(url);
+    }
+
+    async saveMeasurementHistory(data) {
+        return this.request('/measurement-history', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async getMeasurementHistoryById(id) {
+        return this.request(`/measurement-history/${id}`);
+    }
+
+    async updateMeasurementHistory(id, data) {
+        return this.request(`/measurement-history/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async deleteMeasurementHistory(id) {
+        return this.request(`/measurement-history/${id}`, {
+            method: 'DELETE',
+        });
+    }
+
+    async getMeasurementHistoryStats() {
+        return this.request('/measurement-history/stats');
+    }
+
+    async getLatestMeasurement() {
+        return this.request('/measurement-history/latest');
     }
 
     // Admin Sizing Methods
@@ -366,8 +492,117 @@ class ApiService {
         });
     }
 
+    // Admin Measurement History Methods
+    async getAdminMeasurementHistory(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        const url = queryString ? `/admin/measurement-history?${queryString}` : '/admin/measurement-history';
+        return this.request(url);
+    }
+
+    async getAdminMeasurementHistoryStats() {
+        return this.request('/admin/measurement-history/stats');
+    }
+
+    async deleteAdminMeasurementHistory(id) {
+        return this.request(`/admin/measurement-history/${id}`, {
+            method: 'DELETE',
+        });
+    }
+
+    async updateAdminMeasurementHistory(id, data) {
+        return this.request(`/admin/measurement-history/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async getAdminMeasurementHistoryById(id) {
+        return this.request(`/admin/measurement-history/${id}`);
+    }
+
+    async createAdminMeasurementHistory(data) {
+        return this.request('/admin/measurement-history', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async markAdminMeasurementAsViewed(id) {
+        return this.request(`/admin/measurement-history/${id}/mark-viewed`, {
+            method: 'POST',
+        });
+    }
+
+    async markAdminMeasurementAsProcessed(id) {
+        return this.request(`/admin/measurement-history/${id}/mark-processed`, {
+            method: 'POST',
+        });
+    }
+
+    async archiveAdminMeasurement(id) {
+        return this.request(`/admin/measurement-history/${id}/archive`, {
+            method: 'POST',
+        });
+    }
+
+    async restoreAdminMeasurement(id) {
+        return this.request(`/admin/measurement-history/${id}/restore`, {
+            method: 'POST',
+        });
+    }
+
+    async syncAdminMeasurementHistory() {
+        return this.request('/admin/measurement-history/sync', {
+            method: 'POST',
+        });
+    }
+
 }
 
 // Create and export a singleton instance
 const apiService = new ApiService();
 export default apiService; 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

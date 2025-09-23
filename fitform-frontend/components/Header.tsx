@@ -92,11 +92,11 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
   const handleNotifClose = () => setNotifVisible(false);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.container}>
       <StatusBar
         backgroundColor="#004D40"
         barStyle="light-content"
-        translucent={false}
+        translucent={true}
         animated={true}
       />
       <View style={styles.header}>
@@ -202,12 +202,12 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
           </View>
         </Pressable>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     backgroundColor: '#004D40',
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
   },

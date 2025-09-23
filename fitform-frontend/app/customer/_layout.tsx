@@ -15,16 +15,22 @@ export default function CustomerLayout() {
   const router = useRouter();
 
   useEffect(() => {
+    console.log('Customer Layout - Auth State:', { isLoading, isAuthenticated, user: user?.role });
+    
     if (!isLoading && !isAuthenticated) {
+      console.log('Customer Layout - Redirecting to login: not authenticated');
       // Redirect to login if not authenticated
       router.replace('/login');
     } else if (!isLoading && isAuthenticated && user?.role !== 'customer') {
+      console.log('Customer Layout - Redirecting: wrong role', user?.role);
       // Redirect to appropriate dashboard if not a customer
       if (user?.role === 'admin') {
         router.replace('/admin/dashboard');
       } else {
         router.replace('/login');
       }
+    } else if (!isLoading && isAuthenticated && user?.role === 'customer') {
+      console.log('Customer Layout - Access granted for customer');
     }
   }, [isLoading, isAuthenticated, user, router]);
 

@@ -97,12 +97,12 @@ const ManageAppointmentsScreen = () => {
     fetchData();
   };
 
-  const handleStatus = async (id: number, status: 'confirmed' | 'cancelled') => {
+  const handleStatus = async (id: number, status: 'pending' | 'confirmed' | 'cancelled') => {
     setActionLoading((prev) => ({ ...prev, [id]: true }));
     try {
       await apiService.updateAppointmentStatus(id, status);
       fetchData();
-      Alert.alert('Success', `Appointment ${status === 'confirmed' ? 'confirmed' : 'cancelled'}.`);
+      Alert.alert('Success', `Appointment ${status === 'confirmed' ? 'confirmed' : status === 'cancelled' ? 'cancelled' : 'set to pending'}.`);
     } catch (e) {
       Alert.alert('Error', 'Failed to update appointment.');
     } finally {
@@ -116,14 +116,35 @@ const ManageAppointmentsScreen = () => {
 
   const getStatusLabel = (status: string) => {
     const option = STATUS_OPTIONS.find(opt => opt.value === status);
-    return option ? option.label : status;
+    return option ? option.label : status.charAt(0).toUpperCase() + status.slice(1);
+  };
+
+  // Custom function to format appointment time without timezone conversion
+  const formatAppointmentTime = (appointmentDate: string) => {
+    try {
+      // Extract the time part from the appointment_date string
+      const timePart = appointmentDate.split('T')[1];
+      
+      if (timePart) {
+        const [hours, minutes] = timePart.split(':');
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+        const formattedTime = `${displayHour}:${minutes} ${ampm}`;
+        return formattedTime;
+      }
+      return '12:00 AM'; // fallback
+    } catch (error) {
+      console.error('Error formatting appointment time:', error);
+      return '12:00 AM'; // fallback
+    }
   };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return {
       date: date.toLocaleDateString(),
-      time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: formatAppointmentTime(dateString),
       fullDate: date.toLocaleDateString('en-US', { 
         weekday: 'short', 
         year: 'numeric', 
@@ -497,7 +518,7 @@ const ManageAppointmentsScreen = () => {
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Time:</Text>
                     <Text style={styles.detailValue}>
-                      {new Date(selectedAppointment.appointment_date).toLocaleTimeString()}
+                      {formatAppointmentTime(selectedAppointment.appointment_date)}
                     </Text>
                   </View>
                   <View style={styles.detailRow}>
@@ -506,15 +527,28 @@ const ManageAppointmentsScreen = () => {
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Status:</Text>
-                    <View style={styles.statusContainer}>
-                      <View style={[
-                        styles.statusDot,
-                        { backgroundColor: STATUS_COLORS[selectedAppointment.status as keyof typeof STATUS_COLORS] }
-                      ]} />
-                      <Text style={styles.detailValue}>
-                        {selectedAppointment.status.charAt(0).toUpperCase() + selectedAppointment.status.slice(1)}
-                      </Text>
-                    </View>
+                    <Text style={styles.detailValue}>
+                      {selectedAppointment.status.charAt(0).toUpperCase() + selectedAppointment.status.slice(1)}
+                    </Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Estimated Wait Time:</Text>
+                    <Text style={[styles.detailValue, { color: '#014D40', fontWeight: '600' }]}>
+                      {(() => {
+                        // Calculate wait time for this appointment
+                        const appointmentDateStr = selectedAppointment.appointment_date;
+                        const timeMatch = appointmentDateStr.match(/T(\d{2}):(\d{2}):(\d{2})/);
+                        
+                        if (timeMatch) {
+                          const hours = parseInt(timeMatch[1], 10);
+                          const waitTimeHours = hours - 10; // Hours after 10 AM
+                          const validWaitTime = Math.max(0, Math.min(waitTimeHours, 6));
+                          
+                          return validWaitTime === 0 ? 'No wait time (First appointment)' : `${validWaitTime} hours`;
+                        }
+                        return 'Unable to calculate';
+                      })()}
+                    </Text>
                   </View>
                   {selectedAppointment.notes && (
                     <View style={styles.detailRow}>
@@ -524,8 +558,8 @@ const ManageAppointmentsScreen = () => {
                   )}
                 </ScrollView>
 
-                {selectedAppointment.status === 'pending' && (
-                  <View style={styles.modalActions}>
+                <View style={styles.modalActions}>
+                  {selectedAppointment.status === 'pending' && (
                     <TouchableOpacity
                       style={[styles.modalActionButton, styles.confirmButton]}
                       onPress={() => {
@@ -536,6 +570,9 @@ const ManageAppointmentsScreen = () => {
                       <Ionicons name="checkmark" size={20} color="#fff" />
                       <Text style={styles.modalActionButtonText}>Confirm</Text>
                     </TouchableOpacity>
+                  )}
+                  
+                  {selectedAppointment.status !== 'cancelled' && (
                     <TouchableOpacity
                       style={[styles.modalActionButton, styles.cancelButton]}
                       onPress={() => {
@@ -546,8 +583,8 @@ const ManageAppointmentsScreen = () => {
                       <Ionicons name="close" size={20} color="#fff" />
                       <Text style={styles.modalActionButtonText}>Cancel</Text>
                     </TouchableOpacity>
-                  </View>
-                )}
+                  )}
+                </View>
               </>
             )}
           </View>
@@ -857,7 +894,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   confirmButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#014D40',
   },
   cancelButton: {
     backgroundColor: '#F44336',
@@ -1001,31 +1038,24 @@ const styles = StyleSheet.create({
   detailRow: {
     flexDirection: 'row',
     marginBottom: 16,
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   detailLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: '#014D40',
-    width: 100,
-    marginTop: 2,
+    flex: 1,
   },
   detailValue: {
     fontSize: 16,
-    color: '#333',
+    color: '#014D40',
+    fontWeight: '500',
     flex: 1,
-    lineHeight: 24,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
+    textAlign: 'right',
   },
   modalActions: {
     flexDirection: 'row',
@@ -1048,11 +1078,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    backgroundColor: '#014D40',
   },
   modalActionButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  confirmButton: {
+    backgroundColor: '#014D40',
+  },
+  cancelButton: {
+    backgroundColor: '#F44336',
   },
 });
 

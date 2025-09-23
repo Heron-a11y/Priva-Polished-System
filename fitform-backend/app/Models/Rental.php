@@ -9,7 +9,7 @@ class Rental extends Model
     protected $fillable = [
         'user_id', 'item_name', 'rental_date', 'return_date', 'status',
         'clothing_type', 'measurements', 'notes', 'customer_name', 'customer_email',
-        'quotation_price', 'quotation_schedule', 'quotation_notes',
+        'quotation_amount', 'quotation_schedule', 'quotation_notes', 'counter_offer_amount', 'counter_offer_notes', 'counter_offer_sent_at', 'counter_offer_status',
         'cancellation_fee', 'daily_delay_fee', 'damage_fee_min', 'damage_fee_max',
         'total_penalties', 'penalty_notes', 'penalty_status', 'penalty_calculated_at',
         'penalty_paid_at', 'agreement_accepted', 'agreement_accepted_at'
@@ -23,6 +23,7 @@ class Rental extends Model
         'penalty_paid_at' => 'datetime',
         'agreement_accepted_at' => 'datetime',
         'agreement_accepted' => 'boolean',
+        'counter_offer_sent_at' => 'datetime',
     ];
 
     public function user()

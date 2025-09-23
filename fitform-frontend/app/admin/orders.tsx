@@ -16,6 +16,9 @@ interface Order {
   quotation_notes?: string;
   quotation_schedule?: string;
   penalty_status?: 'paid' | 'pending'; // Added for penalty status
+  counter_offer_amount?: number;
+  counter_offer_notes?: string;
+  counter_offer_status?: 'none' | 'pending' | 'accepted' | 'rejected';
 }
 
 const OrdersScreen = () => {
@@ -96,6 +99,9 @@ const OrdersScreen = () => {
           quotation_notes: r.quotation_notes,
           quotation_schedule: r.quotation_schedule,
           penalty_status: r.penalty_status,
+          counter_offer_amount: r.counter_offer_amount,
+          counter_offer_notes: r.counter_offer_notes,
+          counter_offer_status: r.counter_offer_status,
         }));
         const purchasesRes = await apiService.request('/purchases');
         const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
@@ -108,6 +114,9 @@ const OrdersScreen = () => {
           quotation_price: p.quotation_price,
           quotation_notes: p.quotation_notes,
           quotation_schedule: p.quotation_schedule,
+          counter_offer_amount: p.counter_offer_amount,
+          counter_offer_notes: p.counter_offer_notes,
+          counter_offer_status: p.counter_offer_status,
         }));
         setOrders([...rentals, ...purchases]);
       } catch (err) {
@@ -163,6 +172,9 @@ const OrdersScreen = () => {
         quotation_notes: r.quotation_notes,
         quotation_schedule: r.quotation_schedule,
         penalty_status: r.penalty_status,
+        counter_offer_amount: r.counter_offer_amount,
+        counter_offer_notes: r.counter_offer_notes,
+        counter_offer_status: r.counter_offer_status,
       }));
       const purchasesRes = await apiService.request('/purchases');
       const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
@@ -175,6 +187,9 @@ const OrdersScreen = () => {
         quotation_price: p.quotation_price,
         quotation_notes: p.quotation_notes,
         quotation_schedule: p.quotation_schedule,
+        counter_offer_amount: p.counter_offer_amount,
+        counter_offer_notes: p.counter_offer_notes,
+        counter_offer_status: p.counter_offer_status,
       }));
       setOrders([...rentals, ...purchases]);
     } catch (err) {
@@ -187,7 +202,16 @@ const OrdersScreen = () => {
   // Filtering logic
   const filteredOrders = orders.filter(order => {
     const matchesType = typeFilter === 'All' || order.type === typeFilter;
-    const matchesStatus = statusFilter === 'All' || order.status === statusFilter;
+    let matchesStatus = false;
+    
+    if (statusFilter === 'All') {
+      matchesStatus = true;
+    } else if (statusFilter === 'counter_offer_pending') {
+      matchesStatus = order.status === 'counter_offer_pending';
+    } else {
+      matchesStatus = order.status === statusFilter;
+    }
+    
     const matchesSearch =
       search.trim() === '' ||
       order.customer.toLowerCase().includes(search.trim().toLowerCase());
@@ -348,61 +372,111 @@ const OrdersScreen = () => {
           
           {/* Status Dropdown Menu */}
           {showStatusDropdown && (
-            <View style={[styles.dropdownMenuAbsolute, { top: 45, zIndex: 99999, left: 0 }]}>
-              <TouchableOpacity
-                style={styles.dropdownItem}
-                onPress={() => {
-                  setStatusFilter('All');
-                  setShowStatusDropdown(false);
-                }}
-              >
-                <Text style={styles.dropdownItemText}>All</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.dropdownItem}
-                onPress={() => {
-                  setStatusFilter('pending');
-                  setShowStatusDropdown(false);
-                }}
-              >
-                <Text style={styles.dropdownItemText}>Pending</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.dropdownItem}
-                onPress={() => {
-                  setStatusFilter('in_progress');
-                  setShowStatusDropdown(false);
-                }}
-              >
-                <Text style={styles.dropdownItemText}>In Progress</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.dropdownItem}
-                onPress={() => {
-                  setStatusFilter('quotation_sent');
-                  setShowStatusDropdown(false);
-                }}
-              >
-                <Text style={styles.dropdownItemText}>Quotation Sent</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.dropdownItem}
-                onPress={() => {
-                  setStatusFilter('ready_for_pickup');
-                  setShowStatusDropdown(false);
-                }}
-              >
-                <Text style={styles.dropdownItemText}>Ready for Pickup</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.dropdownItem, { borderBottomWidth: 0 }]}
-                onPress={() => {
-                  setStatusFilter('cancelled');
-                  setShowStatusDropdown(false);
-                }}
-              >
-                <Text style={styles.dropdownItemText}>Cancelled</Text>
-              </TouchableOpacity>
+            <View 
+              style={[styles.dropdownMenuAbsolute, { top: 45, zIndex: 99999, left: 0 }]}
+              onStartShouldSetResponder={() => true}
+              onMoveShouldSetResponder={() => true}
+            >
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setStatusFilter('All');
+                    setShowStatusDropdown(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>All</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setStatusFilter('pending');
+                    setShowStatusDropdown(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>Pending</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setStatusFilter('quotation_sent');
+                    setShowStatusDropdown(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>Quotation Sent</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setStatusFilter('counter_offer_pending');
+                    setShowStatusDropdown(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>Counter Offer Pending</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setStatusFilter('in_progress');
+                    setShowStatusDropdown(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>In Progress</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setStatusFilter('ready_for_pickup');
+                    setShowStatusDropdown(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>Ready for Pickup</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setStatusFilter('picked_up');
+                    setShowStatusDropdown(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>Picked Up</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setStatusFilter('returned');
+                    setShowStatusDropdown(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>Returned</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setStatusFilter('declined');
+                    setShowStatusDropdown(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>Declined</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.dropdownItem, { borderBottomWidth: 0 }]}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setStatusFilter('cancelled');
+                    setShowStatusDropdown(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>Cancelled</Text>
+                </TouchableOpacity>
             </View>
           )}
         </View>
@@ -547,7 +621,7 @@ const OrdersScreen = () => {
               shadowRadius: 20, 
               maxHeight: '95%', 
               width: '90%', 
-              minHeight: (selectedOrder?.status === 'ready_for_pickup' || selectedOrder?.status === 'quotation_sent' || selectedOrder?.status === 'cancelled') ? 400 : 600 
+              minHeight: (selectedOrder?.status === 'quotation_sent' || selectedOrder?.status === 'cancelled') ? 400 : 600 
             }}>
               {/* Header */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: '#e0e0e0', paddingBottom: 16 }}>
@@ -562,49 +636,227 @@ const OrdersScreen = () => {
 
               {/* Order Details Content */}
               <ScrollView 
-                style={{ flex: 1, minHeight: (selectedOrder?.status === 'ready_for_pickup' || selectedOrder?.status === 'quotation_sent' || selectedOrder?.status === 'cancelled') ? 300 : 500 }}
+                style={{ flex: 1, minHeight: (selectedOrder?.status === 'quotation_sent' || selectedOrder?.status === 'cancelled') ? 300 : 500 }}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }}
               >
                 {/* Order Information */}
-                <View style={{ backgroundColor: '#e8f5e8', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#c8e6c9' }}>
+                <View style={{ 
+                  backgroundColor: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#ffebee' : '#e8f5e8', 
+                  padding: 20, 
+                  borderRadius: 12, 
+                  marginBottom: 20, 
+                  borderWidth: 1, 
+                  borderColor: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#ffcdd2' : '#c8e6c9' 
+                }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                    <Ionicons name="information-circle" size={24} color="#014D40" style={{ marginRight: 8 }} />
-                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#014D40' }}>Order Information</Text>
+                    <Ionicons 
+                      name="information-circle" 
+                      size={24} 
+                      color={(selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#d32f2f' : '#014D40'} 
+                      style={{ marginRight: 8 }} 
+                    />
+                    <Text style={{ 
+                      fontSize: 20, 
+                      fontWeight: 'bold', 
+                      color: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#d32f2f' : '#014D40' 
+                    }}>Order Information</Text>
                   </View>
                   
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
                     <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Order ID:</Text>
-                    <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600' }}>{selectedOrder.id}</Text>
+                    <Text style={{ 
+                      fontSize: 16, 
+                      color: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#d32f2f' : '#014D40', 
+                      fontWeight: '600' 
+                    }}>{selectedOrder.id}</Text>
                   </View>
                   
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
                     <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Order Type:</Text>
-                    <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600' }}>{selectedOrder.type}</Text>
+                    <Text style={{ 
+                      fontSize: 16, 
+                      color: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#d32f2f' : '#014D40', 
+                      fontWeight: '600' 
+                    }}>{selectedOrder.type}</Text>
                   </View>
                   
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
                     <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Customer Name:</Text>
-                    <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600' }}>{selectedOrder.customer}</Text>
+                    <Text style={{ 
+                      fontSize: 16, 
+                      color: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#d32f2f' : '#014D40', 
+                      fontWeight: '600' 
+                    }}>{selectedOrder.customer}</Text>
                   </View>
                   
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
                     <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Status:</Text>
-                    <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600' }}>{selectedOrder.status}</Text>
+                    <Text style={{ 
+                      fontSize: 16, 
+                      color: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#d32f2f' : '#014D40', 
+                      fontWeight: '600' 
+                    }}>{selectedOrder.status}</Text>
                   </View>
                   
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 0, paddingBottom: 8 }}>
                     <Text style={{ fontSize: 16, color: '#666', fontWeight: '600', flex: 1, marginRight: 10 }}>Details:</Text>
-                    <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600', flex: 2, textAlign: 'right' }}>{selectedOrder.details}</Text>
+                    <Text style={{ 
+                      fontSize: 16, 
+                      color: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#d32f2f' : '#014D40', 
+                      fontWeight: '600', 
+                      flex: 2, 
+                      textAlign: 'right' 
+                    }}>{selectedOrder.details}</Text>
                   </View>
                 </View>
 
-                {/* Quotation Section */}
-                {selectedOrder.status === 'in_progress' && (
+                {/* Counter Offer Section */}
+                {selectedOrder.status === 'counter_offer_pending' && (
+                  <View style={{ backgroundColor: '#fff3e0', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#ffb74d' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                      <Ionicons name="swap-horizontal" size={24} color="#014D40" style={{ marginRight: 8 }} />
+                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#014D40' }}>Counter Offer Received</Text>
+                    </View>
+                    
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
+                      <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Counter Offer{'\n'}Amount:</Text>
+                      <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600' }}>₱{selectedOrder.counter_offer_amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+                    </View>
+                    
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
+                      <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Counter Offer{'\n'}Notes:</Text>
+                      <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600' }}>{selectedOrder.counter_offer_notes || '—'}</Text>
+                    </View>
+                    
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0, paddingBottom: 8 }}>
+                      <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Original Quotation:</Text>
+                      <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600' }}>₱{(selectedOrder.quotation_amount || selectedOrder.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+                    </View>
+
+                    {/* Counter Offer Action Buttons */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingHorizontal: 0 }}>
+                      <TouchableOpacity
+                        style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 16, paddingHorizontal: 16, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 48 }}
+                        onPress={async () => {
+                          try {
+                            const endpoint = selectedOrder.type === 'Purchase' 
+                              ? `/purchases/${selectedOrder.id}/accept-counter-offer`
+                              : `/rentals/${selectedOrder.id}/accept-counter-offer`;
+                            
+                            await apiService.request(endpoint, { method: 'POST' });
+                            Alert.alert('Success', 'Counter offer accepted!');
+                            handleCloseDetails();
+                            
+                            // Refresh orders
+                            setLoading(true);
+                            const rentalsRes = await apiService.request('/rentals');
+                            const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
+                            const rentals = (rentalsArr || []).map((r: any) => ({
+                              id: r.id,
+                              type: 'Rental',
+                              customer: r.customer_name || r.customer_email || 'N/A',
+                              status: r.status || 'N/A',
+                              details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
+                              quotation_amount: r.quotation_amount,
+                              quotation_notes: r.quotation_notes,
+                              quotation_schedule: r.quotation_schedule,
+                              penalty_status: r.penalty_status,
+                              counter_offer_amount: r.counter_offer_amount,
+                              counter_offer_notes: r.counter_offer_notes,
+                              counter_offer_status: r.counter_offer_status,
+                            }));
+                            const purchasesRes = await apiService.request('/purchases');
+                            const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
+                            const purchases = (purchasesArr || []).map((p: any) => ({
+                              id: p.id,
+                              type: 'Purchase',
+                              customer: p.customer_name || p.customer_email || 'N/A',
+                              status: p.status || 'N/A',
+                              details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
+                              quotation_price: p.quotation_price,
+                              quotation_notes: p.quotation_notes,
+                              quotation_schedule: p.quotation_schedule,
+                              counter_offer_amount: p.counter_offer_amount,
+                              counter_offer_notes: p.counter_offer_notes,
+                              counter_offer_status: p.counter_offer_status,
+                            }));
+                            setOrders([...rentals, ...purchases]);
+                            setLoading(false);
+                          } catch (error) {
+                            Alert.alert('Error', 'Failed to accept counter offer.');
+                          }
+                        }}
+                      >
+                        <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15, flexShrink: 0 }}>Accept</Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#f44336', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 16, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 48 }}
+                        onPress={async () => {
+                          try {
+                            const endpoint = selectedOrder.type === 'Purchase' 
+                              ? `/purchases/${selectedOrder.id}/reject-counter-offer`
+                              : `/rentals/${selectedOrder.id}/reject-counter-offer`;
+                            
+                            await apiService.request(endpoint, { method: 'POST' });
+                            Alert.alert('Success', 'Counter offer rejected.');
+                            handleCloseDetails();
+                            
+                            // Refresh orders
+                            setLoading(true);
+                            const rentalsRes = await apiService.request('/rentals');
+                            const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
+                            const rentals = (rentalsArr || []).map((r: any) => ({
+                              id: r.id,
+                              type: 'Rental',
+                              customer: r.customer_name || r.customer_email || 'N/A',
+                              status: r.status || 'N/A',
+                              details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
+                              quotation_amount: r.quotation_amount,
+                              quotation_notes: r.quotation_notes,
+                              quotation_schedule: r.quotation_schedule,
+                              penalty_status: r.penalty_status,
+                              counter_offer_amount: r.counter_offer_amount,
+                              counter_offer_notes: r.counter_offer_notes,
+                              counter_offer_status: r.counter_offer_status,
+                            }));
+                            const purchasesRes = await apiService.request('/purchases');
+                            const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
+                            const purchases = (purchasesArr || []).map((p: any) => ({
+                              id: p.id,
+                              type: 'Purchase',
+                              customer: p.customer_name || p.customer_email || 'N/A',
+                              status: p.status || 'N/A',
+                              details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
+                              quotation_price: p.quotation_price,
+                              quotation_notes: p.quotation_notes,
+                              quotation_schedule: p.quotation_schedule,
+                              counter_offer_amount: p.counter_offer_amount,
+                              counter_offer_notes: p.counter_offer_notes,
+                              counter_offer_status: p.counter_offer_status,
+                            }));
+                            setOrders([...rentals, ...purchases]);
+                            setLoading(false);
+                          } catch (error) {
+                            Alert.alert('Error', 'Failed to reject counter offer.');
+                          }
+                        }}
+                      >
+                        <Ionicons name="close-circle" size={18} color="#fff" />
+                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15, flexShrink: 0 }}>Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {/* Purchase In Progress Section */}
+                {selectedOrder.status === 'in_progress' && selectedOrder.type === 'Purchase' && (
                   <View style={{ backgroundColor: '#f9fbe7', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#cddc39' }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
                       <Ionicons name="checkmark-circle" size={24} color="#014D40" style={{ marginRight: 8 }} />
-                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#014D40' }}>Quotation Accepted</Text>
+                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#014D40' }}>Quotation Accepted - In Progress</Text>
                     </View>
                     
                     <View style={{ marginBottom: 12 }}>
@@ -638,12 +890,10 @@ const OrdersScreen = () => {
                       style={{ backgroundColor: '#014D40', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16 }}
                       onPress={async () => {
                         try {
-                          const endpoint = selectedOrder.type === 'Purchase' 
-                            ? `/purchases/${selectedOrder.id}/ready-for-pickup`
-                            : `/rentals/${selectedOrder.id}/ready-for-pickup`;
+                          const endpoint = `/purchases/${selectedOrder.id}/ready-for-pickup`;
                           
                           await apiService.request(endpoint, { method: 'POST' });
-                          Alert.alert('Success', 'Order marked as ready for pickup!');
+                          Alert.alert('Success', 'Purchase marked as ready for pickup!');
                           handleCloseDetails();
                           
                           // Refresh orders
@@ -660,6 +910,9 @@ const OrdersScreen = () => {
                             quotation_notes: r.quotation_notes,
                             quotation_schedule: r.quotation_schedule,
                             penalty_status: r.penalty_status,
+                            counter_offer_amount: r.counter_offer_amount,
+                            counter_offer_notes: r.counter_offer_notes,
+                            counter_offer_status: r.counter_offer_status,
                           }));
                           const purchasesRes = await apiService.request('/purchases');
                           const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
@@ -672,11 +925,14 @@ const OrdersScreen = () => {
                             quotation_price: p.quotation_price,
                             quotation_notes: p.quotation_notes,
                             quotation_schedule: p.quotation_schedule,
+                            counter_offer_amount: p.counter_offer_amount,
+                            counter_offer_notes: p.counter_offer_notes,
+                            counter_offer_status: p.counter_offer_status,
                           }));
                           setOrders([...rentals, ...purchases]);
                           setLoading(false);
                         } catch (error) {
-                          Alert.alert('Error', 'Failed to mark order as ready for pickup.');
+                          Alert.alert('Error', 'Failed to mark purchase as ready for pickup.');
                         }
                       }}
                     >
@@ -685,6 +941,302 @@ const OrdersScreen = () => {
                     </TouchableOpacity>
                   </View>
                 )}
+
+                {/* Purchase Ready for Pickup Section */}
+                {selectedOrder.status === 'ready_for_pickup' && selectedOrder.type === 'Purchase' && (
+                  <View style={{ backgroundColor: '#e8f5e8', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#4caf50' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                      <Ionicons name="checkmark-circle" size={24} color="#014D40" style={{ marginRight: 8 }} />
+                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#014D40' }}>Ready for Pickup</Text>
+                    </View>
+                    
+                    <View style={{ marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                        <Ionicons name="cash-outline" size={20} color="#388e3c" />
+                        <Text style={{ fontSize: 16, color: '#666', marginLeft: 8, fontWeight: '600' }}>Amount:</Text>
+                      </View>
+                      <Text style={{ fontSize: 18, color: '#388e3c', fontWeight: 'bold', marginLeft: 28 }}>
+                        ₱{(selectedOrder.quotation_amount || selectedOrder.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </Text>
+                    </View>
+                    
+                    <View style={{ marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                        <Ionicons name="chatbubble-ellipses-outline" size={20} color="#388e3c" />
+                        <Text style={{ fontSize: 16, color: '#666', marginLeft: 8, fontWeight: '600' }}>Notes:</Text>
+                      </View>
+                      <Text style={{ fontSize: 16, color: '#388e3c', fontWeight: 'bold', marginLeft: 28 }}>{selectedOrder.quotation_notes || '—'}</Text>
+                    </View>
+
+                    {/* Mark as Picked Up button for Purchase */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#014D40', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16 }}
+                      onPress={async () => {
+                        try {
+                          await apiService.markPurchaseAsPickedUp(selectedOrder.id);
+                          Alert.alert('Success', 'Purchase marked as picked up!');
+                          handleCloseDetails();
+                          
+                          // Refresh orders
+                          setLoading(true);
+                          const rentalsRes = await apiService.request('/rentals');
+                          const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
+                          const rentals = (rentalsArr || []).map((r: any) => ({
+                            id: r.id,
+                            type: 'Rental',
+                            customer: r.customer_name || r.customer_email || 'N/A',
+                            status: r.status || 'N/A',
+                            details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
+                            quotation_amount: r.quotation_amount,
+                            quotation_notes: r.quotation_notes,
+                            quotation_schedule: r.quotation_schedule,
+                            penalty_status: r.penalty_status,
+                            counter_offer_amount: r.counter_offer_amount,
+                            counter_offer_notes: r.counter_offer_notes,
+                            counter_offer_status: r.counter_offer_status,
+                          }));
+                          const purchasesRes = await apiService.request('/purchases');
+                          const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
+                          const purchases = (purchasesArr || []).map((p: any) => ({
+                            id: p.id,
+                            type: 'Purchase',
+                            customer: p.customer_name || p.customer_email || 'N/A',
+                            status: p.status || 'N/A',
+                            details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
+                            quotation_price: p.quotation_price,
+                            quotation_notes: p.quotation_notes,
+                            quotation_schedule: p.quotation_schedule,
+                            counter_offer_amount: p.counter_offer_amount,
+                            counter_offer_notes: p.counter_offer_notes,
+                            counter_offer_status: p.counter_offer_status,
+                          }));
+                          setOrders([...rentals, ...purchases]);
+                          setLoading(false);
+                        } catch (error) {
+                          Alert.alert('Error', 'Failed to mark purchase as picked up.');
+                        }
+                      }}
+                    >
+                      <Ionicons name="checkmark-circle" size={20} color="#FFD700" />
+                      <Text style={{ color: '#FFD700', fontWeight: 'bold', fontSize: 16 }}>Mark as Picked Up</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Purchase Picked Up Section */}
+                {selectedOrder.status === 'picked_up' && selectedOrder.type === 'Purchase' && (
+                  <View style={{ backgroundColor: '#e8f5e8', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#4caf50' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                      <Ionicons name="checkmark-done-circle" size={24} color="#014D40" style={{ marginRight: 8 }} />
+                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#014D40' }}>Picked Up - Transaction Complete</Text>
+                    </View>
+                    
+                    <View style={{ marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                        <Ionicons name="cash-outline" size={20} color="#388e3c" />
+                        <Text style={{ fontSize: 16, color: '#666', marginLeft: 8, fontWeight: '600' }}>Final Amount:</Text>
+                      </View>
+                      <Text style={{ fontSize: 18, color: '#388e3c', fontWeight: 'bold', marginLeft: 28 }}>
+                        ₱{(selectedOrder.quotation_amount || selectedOrder.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </Text>
+                    </View>
+                    
+                    <View style={{ backgroundColor: '#c8e6c9', padding: 12, borderRadius: 8, marginTop: 16 }}>
+                      <Text style={{ color: '#2e7d32', fontSize: 16, fontWeight: 'bold', textAlign: 'center' }}>
+                        ✅ Purchase transaction completed successfully!
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Rental Ready for Pickup Section */}
+                {selectedOrder.status === 'ready_for_pickup' && selectedOrder.type === 'Rental' && (
+                  <View style={{ backgroundColor: '#e8f5e8', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#4caf50' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                      <Ionicons name="checkmark-circle" size={24} color="#014D40" style={{ marginRight: 8 }} />
+                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#014D40' }}>Ready for Pickup</Text>
+                    </View>
+                    
+                    <View style={{ marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                        <Ionicons name="cash-outline" size={20} color="#388e3c" />
+                        <Text style={{ fontSize: 16, color: '#666', marginLeft: 8, fontWeight: '600' }}>Amount:</Text>
+                      </View>
+                      <Text style={{ fontSize: 18, color: '#388e3c', fontWeight: 'bold', marginLeft: 28 }}>
+                        ₱{(selectedOrder.quotation_amount || selectedOrder.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </Text>
+                    </View>
+                    
+                    <View style={{ marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                        <Ionicons name="chatbubble-ellipses-outline" size={20} color="#388e3c" />
+                        <Text style={{ fontSize: 16, color: '#666', marginLeft: 8, fontWeight: '600' }}>Notes:</Text>
+                      </View>
+                      <Text style={{ fontSize: 16, color: '#388e3c', fontWeight: 'bold', marginLeft: 28 }}>{selectedOrder.quotation_notes || '—'}</Text>
+                    </View>
+
+                    {/* Mark as Picked Up button */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#014D40', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16 }}
+                      onPress={async () => {
+                        try {
+                          const endpoint = selectedOrder.type === 'Purchase' 
+                            ? `/purchases/${selectedOrder.id}/mark-picked-up`
+                            : `/rentals/${selectedOrder.id}/mark-picked-up`;
+                          
+                          await apiService.request(endpoint, { method: 'POST' });
+                          Alert.alert('Success', 'Order marked as picked up!');
+                          handleCloseDetails();
+                          
+                          // Refresh orders
+                          setLoading(true);
+                          const rentalsRes = await apiService.request('/rentals');
+                          const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
+                          const rentals = (rentalsArr || []).map((r: any) => ({
+                            id: r.id,
+                            type: 'Rental',
+                            customer: r.customer_name || r.customer_email || 'N/A',
+                            status: r.status || 'N/A',
+                            details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
+                            quotation_amount: r.quotation_amount,
+                            quotation_notes: r.quotation_notes,
+                            quotation_schedule: r.quotation_schedule,
+                            penalty_status: r.penalty_status,
+                            counter_offer_amount: r.counter_offer_amount,
+                            counter_offer_notes: r.counter_offer_notes,
+                            counter_offer_status: r.counter_offer_status,
+                          }));
+                          const purchasesRes = await apiService.request('/purchases');
+                          const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
+                          const purchases = (purchasesArr || []).map((p: any) => ({
+                            id: p.id,
+                            type: 'Purchase',
+                            customer: p.customer_name || p.customer_email || 'N/A',
+                            status: p.status || 'N/A',
+                            details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
+                            quotation_price: p.quotation_price,
+                            quotation_notes: p.quotation_notes,
+                            quotation_schedule: p.quotation_schedule,
+                            counter_offer_amount: p.counter_offer_amount,
+                            counter_offer_notes: p.counter_offer_notes,
+                            counter_offer_status: p.counter_offer_status,
+                          }));
+                          setOrders([...rentals, ...purchases]);
+                          setLoading(false);
+                        } catch (error) {
+                          Alert.alert('Error', 'Failed to mark order as picked up.');
+                        }
+                      }}
+                    >
+                      <Ionicons name="checkmark-circle" size={20} color="#FFD700" />
+                      <Text style={{ color: '#FFD700', fontWeight: 'bold', fontSize: 16 }}>Mark as Picked Up</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Rental Picked Up Section */}
+                {selectedOrder.status === 'picked_up' && selectedOrder.type === 'Rental' && (
+                  <View style={{ backgroundColor: '#e3f2fd', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#2196f3' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                      <Ionicons name="bag-check" size={24} color="#014D40" style={{ marginRight: 8 }} />
+                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#014D40' }}>Picked Up</Text>
+                    </View>
+                    
+                    <View style={{ marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                        <Ionicons name="cash-outline" size={20} color="#388e3c" />
+                        <Text style={{ fontSize: 16, color: '#666', marginLeft: 8, fontWeight: '600' }}>Amount:</Text>
+                      </View>
+                      <Text style={{ fontSize: 18, color: '#388e3c', fontWeight: 'bold', marginLeft: 28 }}>
+                        ₱{(selectedOrder.quotation_amount || selectedOrder.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </Text>
+                    </View>
+
+                    {/* Mark as Returned button */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#014D40', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16 }}
+                      onPress={async () => {
+                        try {
+                          const endpoint = selectedOrder.type === 'Purchase' 
+                            ? `/purchases/${selectedOrder.id}/mark-returned`
+                            : `/rentals/${selectedOrder.id}/mark-returned`;
+                          
+                          await apiService.request(endpoint, { method: 'POST' });
+                          Alert.alert('Success', 'Order marked as returned!');
+                          handleCloseDetails();
+                          
+                          // Refresh orders
+                          setLoading(true);
+                          const rentalsRes = await apiService.request('/rentals');
+                          const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
+                          const rentals = (rentalsArr || []).map((r: any) => ({
+                            id: r.id,
+                            type: 'Rental',
+                            customer: r.customer_name || r.customer_email || 'N/A',
+                            status: r.status || 'N/A',
+                            details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
+                            quotation_amount: r.quotation_amount,
+                            quotation_notes: r.quotation_notes,
+                            quotation_schedule: r.quotation_schedule,
+                            penalty_status: r.penalty_status,
+                            counter_offer_amount: r.counter_offer_amount,
+                            counter_offer_notes: r.counter_offer_notes,
+                            counter_offer_status: r.counter_offer_status,
+                          }));
+                          const purchasesRes = await apiService.request('/purchases');
+                          const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
+                          const purchases = (purchasesArr || []).map((p: any) => ({
+                            id: p.id,
+                            type: 'Purchase',
+                            customer: p.customer_name || p.customer_email || 'N/A',
+                            status: p.status || 'N/A',
+                            details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
+                            quotation_price: p.quotation_price,
+                            quotation_notes: p.quotation_notes,
+                            quotation_schedule: p.quotation_schedule,
+                            counter_offer_amount: p.counter_offer_amount,
+                            counter_offer_notes: p.counter_offer_notes,
+                            counter_offer_status: p.counter_offer_status,
+                          }));
+                          setOrders([...rentals, ...purchases]);
+                          setLoading(false);
+                        } catch (error) {
+                          Alert.alert('Error', 'Failed to mark order as returned.');
+                        }
+                      }}
+                    >
+                      <Ionicons name="return-up-back" size={20} color="#FFD700" />
+                      <Text style={{ color: '#FFD700', fontWeight: 'bold', fontSize: 16 }}>Mark as Returned</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Rental Returned Section */}
+                {selectedOrder.status === 'returned' && selectedOrder.type === 'Rental' && (
+                  <View style={{ backgroundColor: '#e8f5e8', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#4caf50' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                      <Ionicons name="checkmark-done-circle" size={24} color="#014D40" style={{ marginRight: 8 }} />
+                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#014D40' }}>Returned - Transaction Complete</Text>
+                    </View>
+                    
+                    <View style={{ marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                        <Ionicons name="cash-outline" size={20} color="#388e3c" />
+                        <Text style={{ fontSize: 16, color: '#666', marginLeft: 8, fontWeight: '600' }}>Final Amount:</Text>
+                      </View>
+                      <Text style={{ fontSize: 18, color: '#388e3c', fontWeight: 'bold', marginLeft: 28 }}>
+                        ₱{(selectedOrder.quotation_amount || selectedOrder.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </Text>
+                    </View>
+                    
+                    <View style={{ backgroundColor: '#c8e6c9', padding: 12, borderRadius: 8, marginTop: 16 }}>
+                      <Text style={{ color: '#2e7d32', fontSize: 16, fontWeight: 'bold', textAlign: 'center' }}>
+                        ✅ Rental transaction completed successfully!
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
 
                 {/* Set Quotation Section */}
                 {(selectedOrder.status as string) === 'pending' && (
@@ -1532,7 +2084,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    maxHeight: 400,
     overflow: 'visible',
     width: '100%',
   },
@@ -1548,10 +2099,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
     zIndex: 1, // Lower z-index to ensure dropdowns appear above
+    maxHeight: 450, // Limit table height for better scrolling
   },
   tableScroll: {
     width: '100%',
     flexGrow: 1,
+    maxHeight: 430, // Slightly less than wrapper to account for padding
   },
   tableScrollContent: {
     minWidth: 540, // Total width: 60 + 80 + 120 + 100 + 80 + 100 = 540
@@ -1578,7 +2131,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   searchContainer: {
-    marginTop: 8, // Space between filters and search bar
+    marginTop: 2, // Space between filters and search bar
     zIndex: 1, // Lower z-index to ensure dropdowns appear above
   },
   // Modal styles

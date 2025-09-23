@@ -40,11 +40,13 @@ const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
 
   const menuItems = [
     { name: 'Dashboard', icon: 'home', path: '/customer/dashboard' },
+    { name: 'AR Measurements', icon: 'scan', path: '/customer/ar-measurements' },
     { name: 'Appointments', icon: 'calendar', path: '/customer/appointments' },
     { name: 'Orders', icon: 'list', path: '/customer/orders' },
     { name: 'Sizing', icon: 'body', path: '/customer/sizing' },
     { name: 'Preferences', icon: 'settings', path: '/customer/preferences' },
   ];
+
 
   if (!isSidebarOpen && isMobile) {
     return null;
@@ -118,10 +120,10 @@ const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
             </TouchableOpacity>
             {historyOpen && (
               <View style={styles.dropdownContainer}>
-                <Link href={"/measurement-history" as any} asChild>
+                <Link href={"/customer/measurement-history" as any} asChild>
                   <TouchableOpacity
                     style={
-                      pathname === '/measurement-history'
+                      pathname === '/customer/measurement-history'
                         ? { ...styles.dropdownItem, ...styles.activeDropdownItem }
                         : styles.dropdownItem
                     }
@@ -130,12 +132,12 @@ const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
                     <Ionicons
                       name="analytics"
                       size={18}
-                      color={pathname === '/measurement-history' ? '#FFD700' : '#fff'}
+                      color={pathname === '/customer/measurement-history' ? '#FFD700' : '#fff'}
                       style={styles.dropdownIcon}
                     />
                     <Text
                       style={
-                        pathname === '/measurement-history'
+                        pathname === '/customer/measurement-history'
                           ? { ...styles.dropdownText, ...styles.activeDropdownText }
                           : styles.dropdownText
                       }

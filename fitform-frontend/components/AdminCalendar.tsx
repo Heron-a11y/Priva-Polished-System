@@ -13,6 +13,18 @@ import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import apiService from '../services/api';
 
+const STATUS_COLORS = {
+  confirmed: '#4CAF50',
+  pending: '#FFA000',
+  cancelled: '#F44336',
+};
+
+const STATUS_ICONS = {
+  confirmed: 'checkmark-circle',
+  pending: 'time',
+  cancelled: 'close-circle',
+};
+
 interface Appointment {
   id: number;
   appointment_date: string;
@@ -98,38 +110,45 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
     return filteredAppointments;
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return '#4CAF50';
-      case 'pending':
-        return '#FF9800';
-      case 'cancelled':
-        return '#F44336';
-      default:
-        return '#9E9E9E';
+  // Custom function to format appointment time without timezone conversion
+  const formatAppointmentTime = (appointmentDate: string) => {
+    try {
+      // Extract the time part from the appointment_date string
+      const timePart = appointmentDate.split('T')[1];
+      
+      if (timePart) {
+        const [hours, minutes] = timePart.split(':');
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+        const formattedTime = `${displayHour}:${minutes} ${ampm}`;
+        return formattedTime;
+      }
+      return '12:00 AM'; // fallback
+    } catch (error) {
+      console.error('Error formatting appointment time:', error);
+      return '12:00 AM'; // fallback
     }
+  };
+
+  const getStatusIcon = (status: string) => {
+    return STATUS_ICONS[status as keyof typeof STATUS_ICONS] || 'help-circle';
+  };
+
+  const getStatusColor = (status: string) => {
+    return STATUS_COLORS[status as keyof typeof STATUS_COLORS] || '#9E9E9E';
   };
 
   const getStatusText = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return 'Confirmed';
-      case 'pending':
-        return 'Pending';
-      case 'cancelled':
-        return 'Cancelled';
-      default:
-        return 'Unknown';
-    }
+    return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
-  const handleAppointmentStatusUpdate = async (appointmentId: number, newStatus: 'confirmed' | 'cancelled') => {
+  const handleAppointmentStatusUpdate = async (appointmentId: number, newStatus: 'pending' | 'confirmed' | 'cancelled') => {
     try {
       await apiService.updateAppointmentStatus(appointmentId, newStatus);
       await fetchAppointments(); // Refresh the appointments
       setShowAppointmentModal(false);
-      Alert.alert('Success', `Appointment ${newStatus}`);
+      Alert.alert('Success', `Appointment ${newStatus === 'confirmed' ? 'confirmed' : newStatus === 'cancelled' ? 'cancelled' : 'set to pending'}.`);
     } catch (error) {
       console.error('Error updating appointment status:', error);
       Alert.alert('Error', 'Failed to update appointment status');
@@ -274,19 +293,27 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
             {selectedAppointment ? (
               <>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Appointment Details</Text>
-                  <TouchableOpacity onPress={() => {
-                    setShowAppointmentModal(false);
-                    setSelectedAppointment(null);
-                  }}>
-                    <Ionicons name="close" size={24} color="#666" />
+                  <View style={styles.modalTitleContainer}>
+                    <Ionicons name="document-text-outline" size={24} color="#014D40" />
+                    <Text style={styles.modalTitle}>Appointment Details</Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.closeButton}
+                    onPress={() => {
+                      setShowAppointmentModal(false);
+                      setSelectedAppointment(null);
+                    }}
+                  >
+                    <Ionicons name="close" size={20} color="#666" />
                   </TouchableOpacity>
                 </View>
 
                 <ScrollView style={styles.modalBody}>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Customer:</Text>
-                    <Text style={styles.detailValue}>{selectedAppointment.customer_name || 'Unknown Customer'}</Text>
+                    <Text style={styles.detailValue}>
+                      {selectedAppointment.customer_name || 'Unknown Customer'}
+                    </Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Date:</Text>
@@ -301,7 +328,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
                     <Text style={styles.detailLabel}>Time:</Text>
                     <Text style={styles.detailValue}>
                       {selectedAppointment.appointment_date ? 
-                        new Date(selectedAppointment.appointment_date).toLocaleTimeString() : 
+                        formatAppointmentTime(selectedAppointment.appointment_date) : 
                         'Time not available'
                       }
                     </Text>
@@ -312,15 +339,28 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Status:</Text>
-                    <View style={styles.statusContainer}>
-                      <View style={[
-                        styles.statusDot,
-                        { backgroundColor: getStatusColor(selectedAppointment.status || 'unknown') }
-                      ]} />
-                      <Text style={styles.detailValue}>
-                        {getStatusText(selectedAppointment.status || 'unknown')}
-                      </Text>
-                    </View>
+                    <Text style={styles.detailValue}>
+                      {getStatusText(selectedAppointment.status || 'unknown')}
+                    </Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Estimated Wait Time:</Text>
+                    <Text style={[styles.detailValue, { color: '#014D40', fontWeight: '600' }]}>
+                      {(() => {
+                        // Calculate wait time for this appointment
+                        const appointmentDateStr = selectedAppointment.appointment_date;
+                        const timeMatch = appointmentDateStr.match(/T(\d{2}):(\d{2}):(\d{2})/);
+                        
+                        if (timeMatch) {
+                          const hours = parseInt(timeMatch[1], 10);
+                          const waitTimeHours = hours - 10; // Hours after 10 AM
+                          const validWaitTime = Math.max(0, Math.min(waitTimeHours, 6));
+                          
+                          return validWaitTime === 0 ? 'No wait time (First appointment)' : `${validWaitTime} hours`;
+                        }
+                        return 'Unable to calculate';
+                      })()}
+                    </Text>
                   </View>
                   {selectedAppointment.notes && (
                     <View style={styles.detailRow}>
@@ -466,10 +506,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
   },
+  modalTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#014D40',
+  },
+  closeButton: {
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   modalBody: {
     padding: 24,
@@ -477,31 +529,24 @@ const styles = StyleSheet.create({
   detailRow: {
     flexDirection: 'row',
     marginBottom: 16,
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   detailLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: '#014D40',
-    width: 100,
-    marginTop: 2,
+    flex: 1,
   },
   detailValue: {
     fontSize: 16,
-    color: '#333',
+    color: '#014D40',
+    fontWeight: '500',
     flex: 1,
-    lineHeight: 24,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
+    textAlign: 'right',
   },
   modalActions: {
     flexDirection: 'row',
@@ -541,18 +586,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 20,
-  },
-  closeButton: {
-    backgroundColor: '#014D40',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignSelf: 'center',
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
 

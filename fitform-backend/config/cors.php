@@ -46,7 +46,6 @@ return [
         'exp://172.16.*.*:19000',
         
         // Allow all origins for development (remove in production)
-        // This is important for tunnel mode to work from external networks
         '*',
     ],
 
@@ -61,8 +60,11 @@ return [
         
         // Expo Go tunnel patterns
         'https://.*\.exp\.direct',
+        
+        // Ngrok tunnel patterns
         'https://.*\.ngrok-free\.app',
         'https://.*\.ngrok\.io',
+        'https://.*\.ngrok\.app',
     ],
 
     'allowed_headers' => ['*'],

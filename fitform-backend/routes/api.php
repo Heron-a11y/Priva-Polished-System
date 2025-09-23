@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\SizingController;
+use App\Http\Controllers\MeasurementHistoryController;
 use App\Http\Middleware\CorsMiddleware;
 
 /*
@@ -18,8 +19,32 @@ use App\Http\Middleware\CorsMiddleware;
 |
 */
 
+// Test endpoint for debugging
+Route::get('/test', function () {
+    return response()->json([
+        'status' => 'success',
+        'message' => 'Backend is working!',
+        'timestamp' => now(),
+        'url' => request()->url(),
+        'method' => request()->method()
+    ]);
+});
+
+Route::get('/health', function () {
+    return response()->json([
+        'status' => 'healthy',
+        'timestamp' => now(),
+        'version' => '1.0.0'
+    ]);
+});
+
 // Apply CORS middleware to all API routes
 Route::middleware([CorsMiddleware::class])->group(function () {
+    
+    // Test route
+    Route::get('/', function () {
+        return response()->json(['message' => 'FitForm API is working!', 'status' => 'success']);
+    });
     
     // Public routes
     Route::post('/register', [AuthController::class, 'register']);
@@ -35,6 +60,7 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         Route::put('/appointments/{id}', [AppointmentController::class, 'update']);
         Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
         Route::get('/booked-dates', [AppointmentController::class, 'getBookedDates']);
+        Route::get('/appointments/daily-capacity', [AppointmentController::class, 'getDailyCapacity']);
         // Admin appointments
         Route::get('/admin/appointments', [AppointmentController::class, 'indexAdmin']);
         Route::post('/admin/appointments/{id}/status', [AppointmentController::class, 'adminUpdateStatus']);
@@ -68,10 +94,16 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         Route::post('/purchases/{id}/set-quotation', [\App\Http\Controllers\PurchaseController::class, 'setQuotation']);
         Route::post('/purchases/{id}/accept-quotation', [\App\Http\Controllers\PurchaseController::class, 'customerAcceptQuotation']);
         Route::post('/purchases/{id}/reject-quotation', [\App\Http\Controllers\PurchaseController::class, 'customerRejectQuotation']);
+        Route::post('/purchases/{id}/counter-offer', [\App\Http\Controllers\PurchaseController::class, 'customerCounterOffer']);
+        Route::post('/purchases/{id}/accept-counter-offer', [\App\Http\Controllers\PurchaseController::class, 'adminAcceptCounterOffer']);
+        Route::post('/purchases/{id}/reject-counter-offer', [\App\Http\Controllers\PurchaseController::class, 'adminRejectCounterOffer']);
         // Quotation actions for rentals
         Route::post('/rentals/{id}/set-quotation', [\App\Http\Controllers\RentalController::class, 'setQuotation']);
         Route::post('/rentals/{id}/accept-quotation', [\App\Http\Controllers\RentalController::class, 'customerAcceptQuotation']);
         Route::post('/rentals/{id}/reject-quotation', [\App\Http\Controllers\RentalController::class, 'customerRejectQuotation']);
+        Route::post('/rentals/{id}/counter-offer', [\App\Http\Controllers\RentalController::class, 'customerCounterOffer']);
+        Route::post('/rentals/{id}/accept-counter-offer', [\App\Http\Controllers\RentalController::class, 'adminAcceptCounterOffer']);
+        Route::post('/rentals/{id}/reject-counter-offer', [\App\Http\Controllers\RentalController::class, 'adminRejectCounterOffer']);
         // Penalty management for rentals
         Route::get('/rentals/{id}/penalties', [\App\Http\Controllers\RentalController::class, 'getPenaltyBreakdown']);
         Route::post('/rentals/{id}/calculate-penalties', [\App\Http\Controllers\RentalController::class, 'calculatePenalties']);
@@ -85,8 +117,14 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         Route::post('/rentals/{id}/decline-order', [\App\Http\Controllers\RentalController::class, 'adminDecline']);
         // Mark purchase as ready for pickup
         Route::post('/purchases/{id}/ready-for-pickup', [\App\Http\Controllers\PurchaseController::class, 'markReadyForPickup']);
+        // Mark purchase as picked up
+        Route::post('/purchases/{id}/mark-picked-up', [\App\Http\Controllers\PurchaseController::class, 'markAsPickedUp']);
         // Mark rental as ready for pickup
         Route::post('/rentals/{id}/ready-for-pickup', [\App\Http\Controllers\RentalController::class, 'markReadyForPickup']);
+        // Mark rental as picked up
+        Route::post('/rentals/{id}/mark-picked-up', [\App\Http\Controllers\RentalController::class, 'markAsPickedUp']);
+        // Mark rental as returned
+        Route::post('/rentals/{id}/mark-returned', [\App\Http\Controllers\RentalController::class, 'markAsReturned']);
         
         // Sizing System Routes
         // Customer sizing routes
@@ -104,5 +142,27 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         Route::delete('/admin/sizing/standards/{id}', [SizingController::class, 'deleteSizingStandard']);
         Route::post('/admin/sizing/standards/{id}/deactivate', [SizingController::class, 'deactivateSizingStandard']);
         Route::post('/admin/sizing/standards/{id}/reactivate', [SizingController::class, 'reactivateSizingStandard']);
+        
+        // Measurement History Routes
+        Route::get('/measurement-history', [MeasurementHistoryController::class, 'index']);
+        Route::post('/measurement-history', [MeasurementHistoryController::class, 'store']);
+        Route::get('/measurement-history/stats', [MeasurementHistoryController::class, 'getStats']);
+        Route::get('/measurement-history/latest', [MeasurementHistoryController::class, 'getLatest']);
+        Route::get('/measurement-history/{id}', [MeasurementHistoryController::class, 'show']);
+        Route::put('/measurement-history/{id}', [MeasurementHistoryController::class, 'update']);
+        Route::delete('/measurement-history/{id}', [MeasurementHistoryController::class, 'destroy']);
+        
+        // Admin Measurement History Routes (New Table)
+        Route::get('/admin/measurement-history', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'index']);
+        Route::get('/admin/measurement-history/stats', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'stats']);
+        Route::get('/admin/measurement-history/{id}', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'show']);
+        Route::post('/admin/measurement-history', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'store']);
+        Route::put('/admin/measurement-history/{id}', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'update']);
+        Route::delete('/admin/measurement-history/{id}', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'destroy']);
+        Route::post('/admin/measurement-history/{id}/mark-viewed', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'markAsViewed']);
+        Route::post('/admin/measurement-history/{id}/mark-processed', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'markAsProcessed']);
+        Route::post('/admin/measurement-history/{id}/archive', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'archive']);
+        Route::post('/admin/measurement-history/{id}/restore', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'restore']);
+        Route::post('/admin/measurement-history/sync', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'syncFromMeasurementHistory']);
     });
 }); 

@@ -1,7 +1,7 @@
 version: "2"
-authtoken: ""
+authtoken: 3293JIflSZZU9nd3m5EKLKegJVM_2QpzV7JxyZ3xNoa7QpDYX
 tunnels:
-  fitform-backend:
-    addr: 8000
+  fitform-api:
     proto: http
-    subdomain: fitform-backend
+    addr: 8000
+    inspect: true

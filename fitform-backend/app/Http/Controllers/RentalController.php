@@ -177,7 +177,7 @@ class RentalController extends Controller
     {
         $rental = Rental::findOrFail($id);
         $rental->quotation_status = 'rejected';
-        $rental->status = 'cancelled';
+        $rental->status = 'declined'; // Changed from 'cancelled' to 'declined' as per requirements
         $rental->quotation_responded_at = now();
         $rental->save();
         // Notify all admins
@@ -334,5 +334,152 @@ class RentalController extends Controller
         });
 
         return response()->json(['data' => $rentals]);
+    }
+
+    /**
+     * Customer counter offer for rental quotation
+     */
+    public function customerCounterOffer(Request $request, $id)
+    {
+        $rental = Rental::findOrFail($id);
+        
+        // Only allow counter offers if quotation has been sent or counter offer was rejected
+        // Prevent counter offers if transaction is already complete
+        if ($rental->status !== 'quotation_sent' && $rental->status !== 'rejected') {
+            return response()->json(['error' => 'Counter offer can only be made after quotation is sent.'], 400);
+        }
+        
+        // Prevent counter offers if transaction is already complete
+        if ($rental->status === 'in_progress' || $rental->status === 'ready_for_pickup') {
+            return response()->json(['error' => 'Counter offer cannot be made as the transaction is already complete.'], 400);
+        }
+
+        $data = $request->validate([
+            'counter_offer_amount' => 'required|numeric|min:0',
+            'counter_offer_notes' => 'nullable|string|max:1000',
+        ]);
+
+        $rental->counter_offer_amount = $data['counter_offer_amount'];
+        $rental->counter_offer_notes = $data['counter_offer_notes'] ?? null;
+        $rental->counter_offer_sent_at = now();
+        $rental->counter_offer_status = 'pending';
+        $rental->status = 'counter_offer_pending';
+        $rental->save();
+
+        // Notify all admins
+        $admins = \App\Models\User::where('role', 'admin')->get();
+        foreach ($admins as $admin) {
+            Notification::create([
+                'user_id' => $admin->id,
+                'sender_role' => 'customer',
+                'message' => 'Customer made a counter offer of ₱' . number_format($data['counter_offer_amount'], 2) . ' for rental order #' . $rental->id,
+                'read' => false,
+            ]);
+        }
+
+        return response()->json(['success' => true, 'message' => 'Counter offer submitted successfully']);
+    }
+
+    /**
+     * Admin accept counter offer for rental
+     */
+    public function adminAcceptCounterOffer($id)
+    {
+        $rental = Rental::findOrFail($id);
+        
+        if ($rental->counter_offer_status !== 'pending' || $rental->status !== 'counter_offer_pending') {
+            return response()->json(['error' => 'No pending counter offer found.'], 400);
+        }
+
+        $rental->quotation_amount = $rental->counter_offer_amount;
+        $rental->counter_offer_status = 'accepted';
+        $rental->status = 'ready_for_pickup';
+        $rental->save();
+
+        // Notify customer
+        Notification::create([
+            'user_id' => $rental->user_id,
+            'sender_role' => 'admin',
+            'message' => 'Your counter offer of ₱' . number_format($rental->counter_offer_amount, 2) . ' for rental order #' . $rental->id . ' has been accepted!',
+            'read' => false,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Counter offer accepted']);
+    }
+
+    /**
+     * Admin reject counter offer for rental
+     */
+    public function adminRejectCounterOffer($id)
+    {
+        $rental = Rental::findOrFail($id);
+        
+        if ($rental->counter_offer_status !== 'pending' || $rental->status !== 'counter_offer_pending') {
+            return response()->json(['error' => 'No pending counter offer found.'], 400);
+        }
+
+        $rental->counter_offer_status = 'rejected';
+        $rental->status = 'declined'; // Changed from 'rejected' to 'declined' as per requirements
+        $rental->save();
+
+        // Notify customer
+        Notification::create([
+            'user_id' => $rental->user_id,
+            'sender_role' => 'admin',
+            'message' => 'Your counter offer for rental order #' . $rental->id . ' has been rejected. The transaction is now declined.',
+            'read' => false,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Counter offer rejected']);
+    }
+
+    /**
+     * Mark rental as picked up
+     */
+    public function markAsPickedUp($id)
+    {
+        $rental = Rental::findOrFail($id);
+        
+        if ($rental->status !== 'ready_for_pickup') {
+            return response()->json(['error' => 'Rental must be ready for pickup before marking as picked up.'], 400);
+        }
+
+        $rental->status = 'picked_up';
+        $rental->save();
+
+        // Notify customer
+        Notification::create([
+            'user_id' => $rental->user_id,
+            'sender_role' => 'admin',
+            'message' => 'Your rental order #' . $rental->id . ' has been marked as picked up.',
+            'read' => false,
+        ]);
+
+        return response()->json(['success' => true, 'status' => 'picked_up']);
+    }
+
+    /**
+     * Mark rental as returned
+     */
+    public function markAsReturned($id)
+    {
+        $rental = Rental::findOrFail($id);
+        
+        if ($rental->status !== 'picked_up') {
+            return response()->json(['error' => 'Rental must be picked up before marking as returned.'], 400);
+        }
+
+        $rental->status = 'returned';
+        $rental->save();
+
+        // Notify customer
+        Notification::create([
+            'user_id' => $rental->user_id,
+            'sender_role' => 'admin',
+            'message' => 'Your rental order #' . $rental->id . ' has been marked as returned. Thank you!',
+            'read' => false,
+        ]);
+
+        return response()->json(['success' => true, 'status' => 'returned']);
     }
 } 

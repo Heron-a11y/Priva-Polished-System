@@ -1,32 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import AppointmentsScreen from '../Customer/screens/AppointmentsScreen';
 
-const AppointmentsScreen = () => {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Appointments</Text>
-      <Text style={styles.subtitle}>This is the main appointments screen</Text>
-    </View>
-  );
+const Appointments = () => {
+  return <AppointmentsScreen />;
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#014D40',
-    marginBottom: 16,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-  },
-});
-
-export default AppointmentsScreen;
+export default Appointments;

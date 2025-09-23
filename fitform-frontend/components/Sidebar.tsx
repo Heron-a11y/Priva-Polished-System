@@ -19,6 +19,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
 
   const menuItems = [
     { name: 'Dashboard', icon: 'home', path: '/' },
+    { name: 'AR Measurements', icon: 'scan', path: '/ar-measurements' },
     { name: 'Appointments', icon: 'calendar', path: '/appointments' },
     { name: 'Rentals & Purchase', icon: 'shirt', path: '/rentals' },
     // Preferences will be rendered after History

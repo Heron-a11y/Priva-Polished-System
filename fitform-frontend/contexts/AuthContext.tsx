@@ -38,15 +38,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const checkAuth = async () => {
     try {
+      console.log('AuthContext - Checking authentication...');
       const isAuth = await apiService.isAuthenticated();
+      console.log('AuthContext - isAuthenticated result:', isAuth);
+      
       if (isAuth) {
         const response = await apiService.getCurrentUser();
+        console.log('AuthContext - getCurrentUser response:', response);
         if (response.success) {
           setUser(response.data.user);
+          console.log('AuthContext - User set:', response.data.user);
         }
+      } else {
+        console.log('AuthContext - User not authenticated');
       }
     } catch (error) {
-      console.error('Auth check error:', error);
+      console.error('AuthContext - Auth check error:', error);
     } finally {
       setIsLoading(false);
     }

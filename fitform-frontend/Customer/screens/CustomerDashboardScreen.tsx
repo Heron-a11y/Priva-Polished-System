@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -7,7 +7,8 @@ import {
   TouchableOpacity, 
   Dimensions,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
+  Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -46,6 +47,11 @@ export default function CustomerDashboardScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Animation refs for AR button
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
   const [stats, setStats] = useState<DashboardStats>({
     totalAppointments: 0,
     upcomingAppointments: 0,
@@ -57,7 +63,61 @@ export default function CustomerDashboardScreen() {
 
   useEffect(() => {
     loadDashboardData();
+    
+    // Start floating animation
+    const startFloatingAnimation = () => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(floatAnim, {
+            toValue: -10,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(floatAnim, {
+            toValue: 0,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    };
+
+    // Start pulse animation
+    const startPulseAnimation = () => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    };
+
+    startFloatingAnimation();
+    startPulseAnimation();
   }, []);
+
+  // Touch handlers for AR button
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1.2,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -197,7 +257,7 @@ export default function CustomerDashboardScreen() {
       subtitle: 'Check past orders',
       icon: 'time-outline',
       color: Colors.info,
-      route: '/measurement-history',
+      route: '/customer/rental-purchase-history',
     },
   ];
 
@@ -211,13 +271,14 @@ export default function CustomerDashboardScreen() {
   }
 
   return (
-    <ScrollView 
-      style={styles.container} 
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
+    <View style={styles.container}>
+      <ScrollView 
+        style={styles.scrollContainer} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -411,7 +472,9 @@ export default function CustomerDashboardScreen() {
 
       {/* Bottom Spacing */}
       <View style={styles.bottomSpacing} />
-    </ScrollView>
+      </ScrollView>
+
+    </View>
   );
 }
 
@@ -419,6 +482,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  scrollContainer: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -703,5 +769,24 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 20,
+  },
+  floatingARButton: {
+    position: 'absolute',
+    bottom: 30,
+    left: '50%',
+    marginLeft: -40,
+    width: 80,
+    height: 80,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  arButtonTouchable: {
+    width: 80,
+    height: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
   },
 }); 
