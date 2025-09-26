@@ -5,35 +5,35 @@ const NETWORK_CONFIG = {
     // Local development
     local: {
         backendUrl: 'http://localhost:8000/api',
-        expoUrl: 'exp://localhost:19000',
+        expoUrl: 'exp://localhost:8081',
         description: 'Local development (localhost only)'
     },
     
     // Ngrok tunnel
     ngrok: {
-        backendUrl: 'https://903a215540f0.ngrok-free.app/api',
-        expoUrl: 'exp://903a215540f0.ngrok-free.app:443',
+        backendUrl: 'https://c51a906a7960.ngrok-free.app/api',
+        expoUrl: 'exp://c51a906a7960.ngrok-free.app:443',
         description: 'Ngrok tunnel (accessible from any network)'
     },
     
     // Auto-detect ngrok (fallback)
     ngrokAuto: {
-        backendUrl: 'https://903a215540f0.ngrok-free.app/api',
-        expoUrl: 'exp://903a215540f0.ngrok-free.app:443',
+        backendUrl: 'https://c51a906a7960.ngrok-free.app/api',
+        expoUrl: 'exp://c51a906a7960.ngrok-free.app:443',
         description: 'Auto-detect ngrok tunnel'
     },
     
     // LAN network
     lan: {
-        backendUrl: 'http://192.168.1.55:8000/api', // Update with your local IP
-        expoUrl: 'exp://192.168.1.55:19000',
+        backendUrl: 'http://192.168.1.55:8000/api', // Your local IP address
+        expoUrl: 'exp://192.168.1.55:8081',
         description: 'LAN network (local network only)'
     }
 };
 
 class NetworkConfig {
     constructor() {
-        this.currentMode = 'local'; // Default mode
+        this.currentMode = 'lan'; // Default to LAN mode for network access
     }
 
     // Get current network configuration

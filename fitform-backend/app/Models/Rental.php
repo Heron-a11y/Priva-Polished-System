@@ -2,10 +2,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Carbon\Carbon;
 
 class Rental extends Model
 {
+    use SoftDeletes;
     protected $fillable = [
         'user_id', 'item_name', 'rental_date', 'return_date', 'status',
         'clothing_type', 'measurements', 'notes', 'customer_name', 'customer_email',

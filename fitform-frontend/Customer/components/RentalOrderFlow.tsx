@@ -118,7 +118,18 @@ export default function RentalOrderFlow() {
       const order = orders.find(o => o.id === selectedOrderForReview.id);
       if (order) {
         setSelectedOrder(order);
-        setShowQuotationModal(true);
+        
+        // Only show quotation modal if order is in a state that requires customer action
+        // Don't show quotation modal for completed/finalized orders (declined, in_progress, ready_for_pickup, picked_up, returned)
+        const shouldShowQuotation = order.status === 'quotation_sent' || 
+                                   order.status === 'counter_offer_pending';
+        
+        if (shouldShowQuotation) {
+          setShowQuotationModal(true);
+        } else {
+          // For completed/finalized orders, just show order details
+          setShowOrderDetails(true);
+        }
       }
     }
   }, [selectedOrderForReview, orders]);
@@ -242,26 +253,30 @@ export default function RentalOrderFlow() {
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'pending': return Colors.warning;
-      case 'quotation_sent': return Colors.primary;
-      case 'counter_offer_pending': return '#FF9800';
-      case 'ready_for_pickup': return Colors.success;
-      case 'picked_up': return Colors.info;
-      case 'returned': return Colors.success;
-      case 'declined': return Colors.error;
-      case 'cancelled': return Colors.error;
-      default: return Colors.neutral[500];
+      case 'pending': return '#f59e0b';
+      case 'quotation_sent': return '#3b82f6';
+      case 'counter_offer_pending': return '#ff9800';
+      case 'in_progress': return '#014D40';
+      case 'ready_for_pickup': return '#10b981';
+      case 'picked_up': return '#059669';
+      case 'returned': return '#0d9488';
+      case 'declined': return '#dc2626';
+      default: return '#6b7280';
     }
   };
 
   const getStatusText = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'ready_for_pickup':
-        return 'READY FOR PICK UP';
-      case 'counter_offer_pending':
-        return 'COUNTER OFFER PENDING';
+      case 'pending':
+        return 'PENDING';
       case 'quotation_sent':
         return 'QUOTATION SENT';
+      case 'counter_offer_pending':
+        return 'COUNTER OFFER PENDING';
+      case 'in_progress':
+        return 'IN PROGRESS';
+      case 'ready_for_pickup':
+        return 'READY FOR PICKUP';
       case 'picked_up':
         return 'PICKED UP';
       case 'returned':
@@ -988,97 +1003,91 @@ export default function RentalOrderFlow() {
       {/* User Agreement Modal */}
       <Modal
         visible={showAgreementModal}
-        animationType="fade"
-        transparent={true}
+        animationType="slide"
+        presentationStyle="pageSheet"
         onRequestClose={() => setShowAgreementModal(false)}
       >
-        <View style={styles.agreementModalOverlay}>
-          <View style={styles.agreementModalContent}>
-            <View style={styles.agreementModalHeader}>
-              <Text style={styles.agreementModalTitle}>Rental Agreement & Penalties</Text>
-              <TouchableOpacity
-                onPress={() => setShowAgreementModal(false)}
-                style={styles.agreementCloseButton}
-              >
-                <Text style={styles.agreementCloseButtonText}>×</Text>
-              </TouchableOpacity>
-            </View>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Rental Agreement & Penalties</Text>
+            <TouchableOpacity
+              onPress={() => setShowAgreementModal(false)}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color={Colors.text.primary} />
+            </TouchableOpacity>
+          </View>
 
-            <View style={styles.agreementFormContainer}>
-              <ScrollView 
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.agreementScrollContent}
-                style={styles.agreementScrollView}
-              >
-                <View style={styles.agreementHeaderSection}>
-                  <View style={styles.agreementIconContainer}>
-                    <Ionicons name="shield-checkmark" size={40} color={Colors.primary} />
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.orderDetailCard}>
+              <View style={styles.orderDetailHeader}>
+                <View style={styles.agreementIconContainer}>
+                  <Ionicons name="shield-checkmark" size={40} color={Colors.primary} />
+                </View>
+                <Text style={styles.orderDetailTitle}>Rental Agreement & Terms</Text>
+                <Text style={styles.agreementSubtitle}>
+                  Please read and understand the following terms before proceeding
+                </Text>
+              </View>
+              
+              <View style={styles.agreementTermsContainer}>
+                <View style={styles.agreementTermCard}>
+                  <View style={styles.agreementTermHeader}>
+                    <Ionicons name="information-circle" size={20} color={Colors.primary} />
+                    <Text style={styles.agreementTermTitle}>Cancellation Policy</Text>
                   </View>
-                  <Text style={styles.enhancedAgreementTitle}>Rental Agreement & Terms</Text>
-                  <Text style={styles.enhancedAgreementSubtitle}>
-                    Please read and understand the following terms before proceeding
+                  <Text style={styles.agreementTermDescription}>
+                    A cancellation fee of ₱500 will be applied to cancelled orders.
                   </Text>
                 </View>
                 
-                <View style={styles.enhancedTermsContainer}>
-                  <View style={styles.enhancedTermCard}>
-                    <View style={styles.enhancedTermHeader}>
-                      <Ionicons name="information-circle" size={20} color={Colors.primary} />
-                      <Text style={styles.enhancedTermTitle}>Cancellation Policy</Text>
-                    </View>
-                    <Text style={styles.enhancedTermDescription}>
-                      A cancellation fee of ₱500 will be applied to cancelled orders.
-                    </Text>
+                <View style={styles.agreementTermCard}>
+                  <View style={styles.agreementTermHeader}>
+                    <Ionicons name="time" size={20} color={Colors.warning} />
+                    <Text style={styles.agreementTermTitle}>Return Policy</Text>
                   </View>
-                  
-                  <View style={styles.enhancedTermCard}>
-                    <View style={styles.enhancedTermHeader}>
-                      <Ionicons name="time" size={20} color={Colors.warning} />
-                      <Text style={styles.enhancedTermTitle}>Return Policy</Text>
-                    </View>
-                    <Text style={styles.enhancedTermDescription}>
-                      Late returns incur a penalty of ₱100 per day beyond the 5-day rental period.
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.enhancedTermCard}>
-                    <View style={styles.enhancedTermHeader}>
-                      <Ionicons name="warning" size={20} color={Colors.error} />
-                      <Text style={styles.enhancedTermTitle}>Damage Assessment</Text>
-                    </View>
-                    <Text style={styles.enhancedTermDescription}>
-                      Damage fees range from ₱200 (minor) to full rental cost (severe damage).
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.enhancedTermCard}>
-                    <View style={styles.enhancedTermHeader}>
-                      <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
-                      <Text style={styles.enhancedTermTitle}>Care Requirements</Text>
-                    </View>
-                    <Text style={styles.enhancedTermDescription}>
-                      Handle garments with care and return in original condition to avoid penalties.
-                    </Text>
-                  </View>
-                </View>
-                
-                <View style={styles.enhancedAgreementFooter}>
-                  <Ionicons name="alert-circle" size={18} color={Colors.warning} />
-                  <Text style={styles.enhancedAgreementFooterText}>
-                    All penalties must be settled before future rentals can be processed.
+                  <Text style={styles.agreementTermDescription}>
+                    Late returns incur a penalty of ₱100 per day beyond the 5-day rental period.
                   </Text>
                 </View>
-              </ScrollView>
+                
+                <View style={styles.agreementTermCard}>
+                  <View style={styles.agreementTermHeader}>
+                    <Ionicons name="warning" size={20} color={Colors.error} />
+                    <Text style={styles.agreementTermTitle}>Damage Assessment</Text>
+                  </View>
+                  <Text style={styles.agreementTermDescription}>
+                    Damage fees range from ₱200 (minor) to full rental cost (severe damage).
+                  </Text>
+                </View>
+                
+                <View style={styles.agreementTermCard}>
+                  <View style={styles.agreementTermHeader}>
+                    <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+                    <Text style={styles.agreementTermTitle}>Care Requirements</Text>
+                  </View>
+                  <Text style={styles.agreementTermDescription}>
+                    Handle garments with care and return in original condition to avoid penalties.
+                  </Text>
+                </View>
+              </View>
+              
+              <View style={styles.agreementFooter}>
+                <Ionicons name="alert-circle" size={18} color={Colors.warning} />
+                <Text style={styles.agreementFooterText}>
+                  All penalties must be settled before future rentals can be processed.
+                </Text>
+              </View>
             </View>
+          </ScrollView>
 
-            <View style={styles.agreementModalFooter}>
-              <TouchableOpacity
-                style={styles.agreementModalButton}
-                onPress={() => setShowAgreementModal(false)}
-              >
-                <Text style={styles.agreementModalButtonText}>Got It</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={() => setShowAgreementModal(false)}
+            >
+              <Text style={styles.saveButtonText}>Got It</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1956,85 +1965,143 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     fontWeight: 'bold',
   },
-  agreementModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
+  // Agreement modal styles matching order details modal
+  agreementIconContainer: {
     alignItems: 'center',
+    marginBottom: 16,
   },
-  agreementModalContent: {
-    backgroundColor: Colors.background.card,
-    borderRadius: 20,
-    width: width * 0.9,
-    maxHeight: '92%',
-    minHeight: 550,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
+  agreementSubtitle: {
+    fontSize: 16,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 22,
+  },
+  agreementTermsContainer: {
+    marginTop: 20,
+    gap: 16,
+  },
+  agreementTermCard: {
+    backgroundColor: Colors.background.light,
+    borderRadius: 12,
+    padding: 16,
     borderWidth: 1,
     borderColor: Colors.border.light,
   },
-  agreementModalHeader: {
+  agreementTermHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  agreementTermTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  agreementTermDescription: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    lineHeight: 20,
+  },
+  agreementFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    marginTop: 20,
+    gap: 8,
+  },
+  agreementFooterText: {
+    fontSize: 14,
+    color: '#92400E',
+    fontWeight: '500',
+    flex: 1,
+  },
+  
+  // Modal container styles matching order details modal
+  modalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background.light,
+  },
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border.light,
-  },
-  agreementModalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.text.primary,
-  },
-  agreementCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
     backgroundColor: Colors.background.light,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: Colors.primary,
+  },
+  closeButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.background.card,
     borderWidth: 1,
-    borderColor: Colors.border.medium,
+    borderColor: Colors.border.light,
   },
-  agreementFormContainer: {
+  modalContent: {
     flex: 1,
     padding: 20,
-    paddingTop: 30,
-    paddingBottom: 0,
-    minHeight: 450,
   },
-  agreementScrollContent: {
-    paddingBottom: 40,
-  },
-  agreementScrollView: {
-    flex: 1,
-  },
-
-  agreementModalFooter: {
+  orderDetailCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
     padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  orderDetailHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  orderDetailTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.primary,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalFooter: {
+    paddingHorizontal: 24,
+    paddingVertical: 20,
     borderTopWidth: 1,
     borderTopColor: Colors.border.light,
-    backgroundColor: Colors.background.card,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    backgroundColor: Colors.background.light,
   },
-  agreementModalButton: {
+  saveButton: {
     backgroundColor: Colors.primary,
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    borderRadius: 15,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  agreementModalButtonText: {
+  saveButtonText: {
     color: Colors.text.inverse,
     fontSize: 16,
     fontWeight: '600',

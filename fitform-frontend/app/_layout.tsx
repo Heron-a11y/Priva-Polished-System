@@ -78,11 +78,11 @@ function AppContent() {
 
 export default function Layout() {
   return (
-    <NotificationProvider>
-      <AuthProvider>
+    <AuthProvider>
+      <NotificationProvider>
         <AppContent />
-      </AuthProvider>
-    </NotificationProvider>
+      </NotificationProvider>
+    </AuthProvider>
   );
 }
 

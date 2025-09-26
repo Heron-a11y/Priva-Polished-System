@@ -1,4 +1,4 @@
-﻿{
+{
   "expo": {
     "name": "FitForm",
     "slug": "fitform",
@@ -42,7 +42,8 @@
         {
           "cameraPermission": "Allow FitForm to access your camera for AR body measurements and sizing features."
         }
-      ]
+      ],
+      "expo-router"
     ],
     "sdkVersion": "54.0.0",
     "scheme": "fitform",

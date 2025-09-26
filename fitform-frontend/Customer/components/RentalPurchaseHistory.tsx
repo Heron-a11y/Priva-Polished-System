@@ -14,6 +14,7 @@ import {
   Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../../constants/Colors';
 import apiService from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -135,16 +136,16 @@ const Dropdown: React.FC<DropdownProps> = ({ label, value, options, onSelect, pl
 
       {isOpen && (
         <>
-          <View style={[
-            styles.dropdownMenu,
-            isMobile && { 
-              position: 'absolute',
-              top: '100%',
-              left: 0,
-              right: 0,
-              zIndex: 9999999,
-            }
-          ]}>
+            <View style={[
+              styles.dropdownMenu,
+              isMobile && { 
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                zIndex: 99999999,
+              }
+            ]}>
             <ScrollView 
               style={styles.dropdownScrollView}
               showsVerticalScrollIndicator={true}
@@ -216,7 +217,6 @@ export default function RentalPurchaseHistory() {
     { value: 'in_progress', label: 'In Progress' },
     { value: 'ready_for_pickup', label: 'Ready for Pickup' },
     { value: 'completed', label: 'Completed' },
-    { value: 'cancelled', label: 'Cancelled' },
     { value: 'declined', label: 'Declined' }
   ];
 
@@ -244,13 +244,15 @@ export default function RentalPurchaseHistory() {
     }
     
     try {
-      // Fetch both rentals and purchases using history endpoints
-      const rentalsRes = await apiService.getRentalHistory();
-      const purchasesRes = await apiService.getPurchaseHistory();
+      // Fetch unified rental and purchase history
+      const historyRes = await apiService.getRentalPurchaseHistory();
 
       // Backend returns {data: [...]}, so we need to extract the data property
-      const rentals = Array.isArray(rentalsRes?.data) ? rentalsRes.data : [];
-      const purchases = Array.isArray(purchasesRes?.data) ? purchasesRes.data : [];
+      const allHistory = Array.isArray(historyRes?.data) ? historyRes.data : [];
+
+      // Separate rentals and purchases for filtering
+      const rentals = allHistory.filter(item => item.order_type === 'rental');
+      const purchases = allHistory.filter(item => item.order_type === 'purchase');
 
       setOriginalRentals(rentals);
       setOriginalPurchases(purchases);
@@ -338,13 +340,14 @@ export default function RentalPurchaseHistory() {
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'pending': return '#f59e0b';
-      case 'confirmed': return '#3b82f6';
+      case 'quotation_sent': return '#3b82f6';
+      case 'counter_offer_pending': return '#ff9800';
       case 'in_progress': return '#014D40';
       case 'ready_for_pickup': return '#10b981';
-      case 'completed': return '#10b981';
-      case 'cancelled': return '#ef4444';
-      case 'declined': return '#ef4444';
-      default: return '#737373';
+      case 'picked_up': return '#059669';
+      case 'returned': return '#0d9488';
+      case 'declined': return '#dc2626';
+      default: return '#6b7280';
     }
   };
 
@@ -367,6 +370,41 @@ export default function RentalPurchaseHistory() {
     const numAmount = typeof amount === 'string' ? Number(amount) : amount;
     if (isNaN(numAmount)) return 'N/A';
     return `₱${numAmount.toLocaleString()}`;
+  };
+
+  const handleDeleteItem = (item: HistoryItem) => {
+    Alert.alert(
+      'Delete Order',
+      `Are you sure you want to delete this ${item.type} order? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('Attempting to delete order:', item);
+              console.log('Order type:', item.type, 'Order ID:', item.id);
+              
+              console.log('Calling deleteRentalPurchaseHistory API...');
+              await apiService.deleteRentalPurchaseHistory(item.id);
+              
+              console.log('Delete successful, refreshing history...');
+              // Refresh the history after deletion
+              await fetchHistory();
+              Alert.alert('Success', 'Order deleted successfully');
+            } catch (error) {
+              console.error('Error deleting order:', error);
+              console.error('Error details:', error.message);
+              Alert.alert('Error', `Failed to delete order: ${error.message}`);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const renderHistoryItem = ({ item }: { item: HistoryItem }) => (
@@ -424,7 +462,18 @@ export default function RentalPurchaseHistory() {
         </View>
         <View style={styles.amountContainer}>
           <Text style={styles.amountLabel}>Amount:</Text>
-          <Text style={styles.amount}>{formatCurrency(item.amount)}</Text>
+          <View style={styles.amountRow}>
+            <Text style={styles.amount}>{formatCurrency(item.amount)}</Text>
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleDeleteItem(item);
+              }}
+            >
+              <Ionicons name="trash" size={18} color="#ef4444" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -450,66 +499,62 @@ export default function RentalPurchaseHistory() {
       <Modal
         visible={showDetails}
         animationType="slide"
-        transparent={true}
+        presentationStyle="pageSheet"
         onRequestClose={() => setShowDetails(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View style={styles.titleWithIcon}>
-                <Ionicons name="document-text-outline" size={24} color="#014D40" />
-                <Text style={styles.modalTitle}>Order Details</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setShowDetails(false)}
-                style={styles.closeButton}
-              >
-                <Ionicons name="close" size={24} color="#404040" />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Order Details</Text>
+            <TouchableOpacity
+              onPress={() => setShowDetails(false)}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color={Colors.text.primary} />
+            </TouchableOpacity>
+          </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={true}>
-              <View style={styles.detailSection}>
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.orderDetailCard}>
+              <Text style={styles.orderDetailTitle}>{selectedItem.item_name}</Text>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedItem.status) + '20' }]}>
+                <Text style={[styles.statusText, { color: getStatusColor(selectedItem.status) }]}>
+                  {getStatusText(selectedItem.status)}
+                </Text>
+              </View>
+              
+              <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Type:</Text>
                 <Text style={styles.detailValue}>
                   {selectedItem.type === 'rental' ? 'Rental' : 'Purchase'}
                 </Text>
               </View>
 
-              <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Item Name:</Text>
-                <Text style={styles.detailValue}>{selectedItem.item_name}</Text>
-              </View>
-
-              <View style={styles.detailSection}>
+              <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Clothing Type:</Text>
                 <Text style={styles.detailValue}>{selectedItem.clothing_type}</Text>
               </View>
 
-              <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Status:</Text>
-                <Text style={styles.detailValue}>{getStatusText(selectedItem.status)}</Text>
-              </View>
-
-              <View style={styles.detailSection}>
+              <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Date:</Text>
                 <Text style={styles.detailValue}>{formatDate(selectedItem.date)}</Text>
               </View>
 
-              <View style={styles.detailSection}>
+              <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Amount:</Text>
                 <Text style={styles.detailValue}>{formatCurrency(selectedItem.amount)}</Text>
               </View>
 
               {selectedItem.notes && (
-                <View style={styles.detailSection}>
+                <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Notes:</Text>
-                  <Text style={styles.detailValue}>{selectedItem.notes}</Text>
+                  <Text style={[styles.detailValue, styles.notesValue]}>
+                    {selectedItem.notes}
+                  </Text>
                 </View>
               )}
 
               {selectedItem.penalty_status && selectedItem.penalty_status !== 'none' && (
-                <View style={styles.detailSection}>
+                <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Penalty Status:</Text>
                   <Text style={styles.detailValue}>
                     {selectedItem.penalty_status.toUpperCase()} - Total: {formatCurrency(selectedItem.total_penalties || 0)}
@@ -543,8 +588,8 @@ export default function RentalPurchaseHistory() {
                   </View>
                 </View>
               )}
-            </ScrollView>
-          </View>
+            </View>
+          </ScrollView>
         </View>
       </Modal>
     );
@@ -804,7 +849,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
     position: 'relative',
-    zIndex: 999999,
+    zIndex: 9999999,
     marginBottom: 0,
   },
   searchContainer: {
@@ -829,12 +874,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: isSmallMobile ? 8 : isMediumMobile ? 10 : isLargeMobile ? 12 : 16,
     position: 'relative',
-    zIndex: 9999999,
+    zIndex: 99999999,
   },
   dropdownContainer: {
     flex: 1,
     position: 'relative',
-    zIndex: 9999999,
+    zIndex: 99999999,
   },
   dropdownLabel: {
     fontSize: isSmallMobile ? 12 : isMediumMobile ? 13 : isLargeMobile ? 14 : 14,
@@ -882,7 +927,7 @@ const styles = StyleSheet.create({
     shadowOpacity: isSmallMobile ? 0.2 : isMediumMobile ? 0.25 : isLargeMobile ? 0.3 : 0.4,
     shadowRadius: isSmallMobile ? 8 : isMediumMobile ? 10 : isLargeMobile ? 12 : 20,
     elevation: isSmallMobile ? 15 : isMediumMobile ? 18 : isLargeMobile ? 20 : 30,
-    zIndex: 9999999,
+    zIndex: 99999999,
     marginTop: 4,
     maxHeight: isSmallMobile ? 320 : isMediumMobile ? 340 : isLargeMobile ? 360 : 400,
     width: '100%',
@@ -929,11 +974,13 @@ const styles = StyleSheet.create({
     right: -1000,
     bottom: -1000,
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    zIndex: 9999998,
+    zIndex: 99999998,
   },
   historyContainer: {
     backgroundColor: '#F9FAFB',
     minHeight: 200,
+    position: 'relative',
+    zIndex: 1,
   },
   historyListContainer: {
     padding: isSmallMobile ? 12 : isMediumMobile ? 14 : isLargeMobile ? 16 : 24,
@@ -1035,6 +1082,15 @@ const styles = StyleSheet.create({
   statusContainer: {
     alignItems: 'flex-end',
   },
+  deleteButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   statusBadge: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -1071,6 +1127,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
+  },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   amountLabel: {
     fontSize: 14,
@@ -1119,90 +1180,95 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     fontWeight: '500',
   },
-  modalOverlay: {
+  modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    width: '100%',
-    maxWidth: 500,
-    maxHeight: '95%',
-    minHeight: 600,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
+    backgroundColor: Colors.background.light,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
   },
-  titleWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#111827',
-    marginLeft: 8,
+    color: Colors.primary,
   },
   closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.background.card,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  orderDetailCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 3,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border.light,
   },
-  modalBody: {
-    padding: 24,
-    paddingBottom: 40,
-    flex: 1,
-    minHeight: 500,
+  orderDetailTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.primary,
+    marginBottom: 12,
   },
-  detailSection: {
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingVertical: 12,
+    marginBottom: 12,
+    paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    flexWrap: 'wrap',
+    borderBottomColor: Colors.border.light,
   },
   detailLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    flex: 1,
-    marginRight: 8,
-  },
-  detailValue: {
-    fontSize: 16,
-    color: '#059669',
+    fontSize: 14,
+    color: Colors.text.secondary,
     fontWeight: '500',
     flex: 1,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: Colors.text.primary,
+    fontWeight: '600',
+    flex: 1,
     textAlign: 'right',
-    flexWrap: 'wrap',
+  },
+  notesValue: {
+    textAlign: 'left',
+    fontStyle: 'italic',
   },
   penaltyStatus: {
     fontSize: 16,

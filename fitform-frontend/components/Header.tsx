@@ -85,8 +85,6 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
   const handleNotifPress = async () => {
     setNotifVisible(true);
     await fetchNotifications();
-    await apiService.request('/notifications/mark-read', { method: 'POST' });
-    await fetchNotifications();
   };
 
   const handleNotifClose = () => setNotifVisible(false);
@@ -141,7 +139,31 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
       >
         <Pressable style={styles.modalOverlay} onPress={handleNotifClose}>
           <View style={styles.notifDropdown}>
-            <Text style={styles.notifTitle}>Notifications</Text>
+            <View style={styles.notifTitleContainer}>
+              <Text style={styles.notifTitle}>Notifications</Text>
+              <View style={styles.notifTitleRight}>
+                {unreadCount > 0 && (
+                  <View style={styles.notifBadge}>
+                    <Text style={styles.notifBadgeText}>{unreadCount}</Text>
+                  </View>
+                )}
+                {unreadCount > 0 && (
+                  <TouchableOpacity
+                    onPress={async () => {
+                      try {
+                        await apiService.request('/notifications/mark-read', { method: 'POST' });
+                        await fetchNotifications();
+                      } catch (error) {
+                        console.error('Error marking all notifications as read:', error);
+                      }
+                    }}
+                    style={styles.markAllButton}
+                  >
+                    <Text style={styles.markAllText}>Mark All Read</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
             {loadingNotif ? (
               <Text style={styles.notifEmpty}>Loading notifications...</Text>
             ) : notifications.length === 0 ? (
@@ -152,15 +174,51 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
                 keyExtractor={item => item.id.toString()}
                 renderItem={({ item }) => (
                   <TouchableOpacity
-                    onPress={() => {
+                    onPress={async () => {
+                      // Mark notification as read
+                      if (!item.read) {
+                        try {
+                          await apiService.request('/notifications/mark-read', {
+                            method: 'POST',
+                            body: JSON.stringify({ notification_id: item.id })
+                          });
+                          // Update local state
+                          setNotifications(prev => 
+                            prev.map(notif => 
+                              notif.id === item.id ? { ...notif, read: true } : notif
+                            )
+                          );
+                        } catch (error) {
+                          console.error('Error marking notification as read:', error);
+                        }
+                      }
+
+                      // Extract order information from notification message
                       const idMatch = item.message.match(/order #(\d+)/i);
                       const id = idMatch ? parseInt(idMatch[1], 10) : null;
                       let type: 'Purchase' | 'Rental' = 'Purchase';
                       if (/rental/i.test(item.message)) type = 'Rental';
                       if (/purchase/i.test(item.message)) type = 'Purchase';
+                      
                       if (id) {
+                        // Trigger order review for the specific order
                         triggerOrderReview({ id, type });
+                        
+                        // Navigate based on user role
+                        if (user?.role === 'customer') {
+                          router.push('/customer/orders');
+                        } else if (user?.role === 'admin') {
+                          router.push('/admin/orders');
+                        }
+                      } else {
+                        // If no order ID found, navigate based on role
+                        if (user?.role === 'customer') {
+                          router.push('/customer/orders');
+                        } else if (user?.role === 'admin') {
+                          router.push('/admin/orders');
+                        }
                       }
+                      
                       setNotifVisible(false);
                     }}
                     style={styles.notifItem}
@@ -293,22 +351,59 @@ const styles = StyleSheet.create({
     marginTop: 60,
     marginRight: 16,
     backgroundColor: '#fff',
-    borderRadius: 8,
+    borderRadius: 12,
     paddingVertical: 8,
-    width: 260,
-    maxHeight: 320,
+    width: 300,
+    maxHeight: 400,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 15,
+  },
+  notifTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  notifTitleRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   notifTitle: {
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 18,
     color: '#014D40',
-    marginBottom: 8,
-    marginLeft: 16,
+  },
+  notifBadge: {
+    backgroundColor: '#FFD700',
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  notifBadgeText: {
+    color: '#014D40',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  markAllButton: {
+    backgroundColor: '#014D40',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  markAllText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
   },
   notifEmpty: {
     color: '#888',
@@ -317,20 +412,22 @@ const styles = StyleSheet.create({
   },
   notifItem: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
+    alignItems: 'flex-start',
+    paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#f0f0f0',
+    backgroundColor: 'transparent',
   },
   notifText: {
     color: '#014D40',
     fontSize: 14,
     flex: 1,
+    lineHeight: 20,
   },
   notifTextUnread: {
     fontWeight: 'bold',
-    color: '#FFD700',
+    color: '#014D40',
   },
 });
 

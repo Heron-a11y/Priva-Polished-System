@@ -284,6 +284,17 @@ class ApiService {
         });
     }
 
+    // Unified History
+    async getRentalPurchaseHistory() {
+        return this.request('/rental-purchase-history');
+    }
+
+    async deleteRentalPurchaseHistory(id) {
+        return this.request(`/rental-purchase-history/${id}`, {
+            method: 'DELETE',
+        });
+    }
+
     // Counter offer methods
     async submitCounterOffer(purchaseId, counterOfferData) {
         return this.request(`/purchases/${purchaseId}/counter-offer`, {
@@ -332,6 +343,8 @@ class ApiService {
             method: 'DELETE',
         });
     }
+
+    // Note: Rental and Purchase history are now unified under getRentalPurchaseHistory()
 
     // Penalty management
     async getPenaltyBreakdown(rentalId) {

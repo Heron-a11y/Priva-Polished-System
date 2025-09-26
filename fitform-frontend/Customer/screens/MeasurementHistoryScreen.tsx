@@ -565,81 +565,91 @@ const MeasurementHistoryScreen = () => {
       <Modal
         visible={detailsModalVisible}
         animationType="slide"
-        transparent={true}
+        presentationStyle="pageSheet"
         onRequestClose={() => setDetailsModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.detailsModalContent}>
-            <View style={styles.detailsModalHeader}>
-              <View style={styles.titleWithIcon}>
-                <Ionicons name="document-text-outline" size={24} color={Colors.primary} />
-                <Text style={styles.detailsModalTitle}>Measurement Details</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setDetailsModalVisible(false)}
-                style={styles.closeButton}
-              >
-                <Ionicons name="close" size={24} color="#404040" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView 
-              style={styles.detailsModalBody} 
-              showsVerticalScrollIndicator={true}
-              contentContainerStyle={styles.scrollContent}
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Measurement Details</Text>
+            <TouchableOpacity
+              onPress={() => setDetailsModalVisible(false)}
+              style={styles.closeButton}
             >
-              {selectedMeasurement && (
-                <>
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Type:</Text>
+              <Ionicons name="close" size={24} color={Colors.text.primary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            {selectedMeasurement && (
+              <View style={styles.orderDetailCard}>
+                <Text style={styles.orderDetailTitle}>
+                  {selectedMeasurement.measurement_type === 'ar' ? 'AR Measurement' : 'Manual Measurement'}
+                </Text>
+                <View style={[styles.statusBadge, { backgroundColor: selectedMeasurement.measurement_type === 'ar' ? '#3b82f6' + '20' : '#10b981' + '20' }]}>
+                  <Text style={[styles.statusText, { color: selectedMeasurement.measurement_type === 'ar' ? '#3b82f6' : '#10b981' }]}>
+                    {selectedMeasurement.measurement_type.toUpperCase()}
+                  </Text>
+                </View>
+                
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Date:</Text>
+                  <Text style={styles.detailValue}>{formatDate(selectedMeasurement.created_at)}</Text>
+                </View>
+
+                {selectedMeasurement.confidence_score && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Confidence:</Text>
                     <Text style={styles.detailValue}>
-                      {selectedMeasurement.measurement_type === 'ar' ? 'AR Measurement' : 'Manual Measurement'}
+                      {Math.round(selectedMeasurement.confidence_score)}%
                     </Text>
                   </View>
+                )}
 
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Date:</Text>
-                    <Text style={styles.detailValue}>{formatDate(selectedMeasurement.created_at)}</Text>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Unit System:</Text>
+                  <Text style={styles.detailValue}>
+                    {selectedMeasurement.unit_system.toUpperCase()}
+                  </Text>
+                </View>
+
+                {selectedMeasurement.notes && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Notes:</Text>
+                    <Text style={[styles.detailValue, styles.notesValue]}>
+                      {selectedMeasurement.notes}
+                    </Text>
                   </View>
+                )}
 
-                  {selectedMeasurement.confidence_score && (
-                    <View style={styles.detailSection}>
-                      <Text style={styles.detailLabel}>Confidence:</Text>
-                      <Text style={styles.detailValue}>{Math.round(selectedMeasurement.confidence_score)}%</Text>
-                    </View>
-                  )}
-
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Unit System:</Text>
-                    <Text style={styles.detailValue}>{selectedMeasurement.unit_system.toUpperCase()}</Text>
-                  </View>
-
-                  {selectedMeasurement.notes && (
-                    <View style={styles.detailSection}>
-                      <Text style={styles.detailLabel}>Notes:</Text>
-                      <Text style={styles.detailValue}>{selectedMeasurement.notes}</Text>
-                    </View>
-                  )}
-
-                  <View style={styles.measurementsSection}>
-                    <Text style={styles.measurementsTitle}>Measurements:</Text>
-                    <View style={styles.measurementsList}>
-                      {Object.entries(selectedMeasurement.measurements).map(([key, value]) => (
-                        <View key={key} style={styles.measurementRow}>
-                          <Text style={styles.measurementLabel}>
-                            {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:
-                          </Text>
-                          <Text style={styles.measurementValue}>
-                            {formatMeasurementValue(value, selectedMeasurement.unit_system)}
-                          </Text>
+                <View style={styles.measurementsSection}>
+                  <Text style={styles.measurementsTitle}>Measurements:</Text>
+                  <View style={styles.measurementsGrid}>
+                    {Object.entries(selectedMeasurement.measurements)
+                      .filter(([key, value]) => value !== null && value !== undefined && value !== '')
+                      .length > 0 ? (
+                        Object.entries(selectedMeasurement.measurements)
+                          .filter(([key, value]) => value !== null && value !== undefined && value !== '')
+                          .map(([key, value]) => (
+                            <View key={key} style={styles.measurementItem}>
+                              <Text style={styles.measurementLabel}>
+                                {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:
+                              </Text>
+                              <Text style={styles.measurementValue}>
+                                {formatMeasurementValue(value, selectedMeasurement.unit_system)}
+                              </Text>
+                            </View>
+                          ))
+                      ) : (
+                        <View style={styles.measurementItem}>
+                          <Text style={styles.measurementLabel}>No measurements available</Text>
+                          <Text style={styles.measurementValue}>-</Text>
                         </View>
-                      ))}
-                    </View>
+                      )}
                   </View>
-                </>
-              )}
-            </ScrollView>
-          </View>
+                </View>
+              </View>
+            )}
+          </ScrollView>
         </View>
       </Modal>
     </View>
@@ -1071,123 +1081,132 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     fontWeight: '500',
   },
-  detailsModalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    width: '90%',
-    maxWidth: 400,
-    maxHeight: '90%',
-    minHeight: 500,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-    margin: 20,
+  modalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background.light,
   },
-  detailsModalHeader: {
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
   },
-  titleWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  detailsModalTitle: {
-    fontSize: 20,
+  modalTitle: {
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#111827',
-    marginLeft: 8,
+    color: Colors.primary,
   },
   closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.background.card,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  orderDetailCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 3,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border.light,
   },
-  detailsModalBody: {
-    flex: 1,
-    maxHeight: 400,
+  orderDetailTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.primary,
+    marginBottom: 12,
   },
-  scrollContent: {
-    padding: 24,
-    paddingBottom: 40,
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginBottom: 16,
   },
-  detailSection: {
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingVertical: 12,
+    marginBottom: 12,
+    paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    flexWrap: 'wrap',
+    borderBottomColor: Colors.border.light,
   },
   detailLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    flex: 1,
-    marginRight: 8,
-  },
-  detailValue: {
-    fontSize: 16,
-    color: '#059669',
+    fontSize: 14,
+    color: Colors.text.secondary,
     fontWeight: '500',
     flex: 1,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: Colors.text.primary,
+    fontWeight: '600',
+    flex: 1,
     textAlign: 'right',
-    flexWrap: 'wrap',
+  },
+  notesValue: {
+    textAlign: 'left',
+    fontStyle: 'italic',
   },
   measurementsSection: {
     marginTop: 16,
     paddingTop: 16,
     paddingBottom: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: Colors.border.light,
   },
   measurementsTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
+    color: Colors.text.primary,
     marginBottom: 12,
   },
-  measurementsList: {
+  measurementsGrid: {
     flexDirection: 'column',
   },
-  measurementRow: {
+  measurementItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: Colors.border.light,
     flexWrap: 'wrap',
   },
   measurementLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
+    fontSize: 14,
+    color: Colors.text.secondary,
+    fontWeight: '500',
     flex: 1,
     marginRight: 8,
   },
   measurementValue: {
-    fontSize: 16,
-    color: '#059669',
-    fontWeight: '500',
+    fontSize: 14,
+    color: Colors.text.primary,
+    fontWeight: '600',
     flex: 1,
     textAlign: 'right',
     flexWrap: 'wrap',

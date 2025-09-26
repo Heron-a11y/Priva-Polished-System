@@ -45,10 +45,74 @@ const OrdersScreen = () => {
   const [penaltyNotes, setPenaltyNotes] = useState('');
   const [penaltyLoading, setPenaltyLoading] = useState(false);
   const [showPenaltyModal, setShowPenaltyModal] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const SCREEN_WIDTH = Dimensions.get('window').width;
   const isMobile = SCREEN_WIDTH < 600;
   const isIOS = Platform.OS === 'ios';
+  
+  // Helper functions for status display
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'pending': return '#f59e0b';
+      case 'quotation_sent': return '#3b82f6';
+      case 'counter_offer_pending': return '#ff9800';
+      case 'in_progress': return '#014D40';
+      case 'ready_for_pickup': return '#10b981';
+      case 'picked_up': return '#059669';
+      case 'returned': return '#0d9488';
+      case 'declined': return '#dc2626';
+      default: return '#6b7280';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return 'PENDING';
+      case 'quotation_sent':
+        return 'QUOTATION SENT';
+      case 'counter_offer_pending':
+        return 'COUNTER OFFER PENDING';
+      case 'in_progress':
+        return 'IN PROGRESS';
+      case 'ready_for_pickup':
+        return 'READY FOR PICKUP';
+      case 'picked_up':
+        return 'PICKED UP';
+      case 'returned':
+        return 'RETURNED';
+      case 'declined':
+        return 'DECLINED';
+      default:
+        return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+  };
+
+  const getStatusFilterDisplayText = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'all':
+        return 'All';
+      case 'pending':
+        return 'Pending';
+      case 'quotation_sent':
+        return 'Quotation Sent';
+      case 'counter_offer_pending':
+        return 'Counter Offer\nPending';
+      case 'in_progress':
+        return 'In Progress';
+      case 'ready_for_pickup':
+        return 'Ready for Pickup';
+      case 'picked_up':
+        return 'Picked Up';
+      case 'returned':
+        return 'Returned';
+      case 'declined':
+        return 'Declined';
+      default:
+        return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+  };
   
   // FlatList render function for mobile table
   const renderFlatListItem = ({ item }: { item: Order }) => {
@@ -57,7 +121,13 @@ const OrdersScreen = () => {
         <View style={[styles.dataCell, { width: 60 }]}><Text style={styles.orderCellClassic2}>{item.id}</Text></View>
         <View style={[styles.dataCell, { width: 80 }]}><Text style={styles.orderCellClassic2}>{item.type}</Text></View>
         <View style={[styles.dataCell, { width: 120 }]}><Text style={styles.orderCellClassic2}>{item.customer}</Text></View>
-        <View style={[styles.dataCell, { width: 100 }]}><Text style={styles.orderCellClassic2}>{item.status}</Text></View>
+        <View style={[styles.dataCell, { width: 100, justifyContent: 'center', alignItems: 'center' }]}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
+            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+              {getStatusText(item.status)}
+            </Text>
+          </View>
+        </View>
         <View style={[styles.dataCell, { width: 80 }]}>
           <TouchableOpacity style={styles.actionButtonClassic2} onPress={() => handleViewDetails(item)}>
             <Text style={styles.actionButtonTextClassic2}>View</Text>
@@ -84,8 +154,8 @@ const OrdersScreen = () => {
   };
 
   useEffect(() => {
-    const fetchOrders = async () => {
-      setLoading(true);
+    const fetchOrders = async (showLoading = true) => {
+      if (showLoading) setLoading(true);
       try {
         const rentalsRes = await apiService.request('/rentals');
         const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
@@ -119,13 +189,26 @@ const OrdersScreen = () => {
           counter_offer_status: p.counter_offer_status,
         }));
         setOrders([...rentals, ...purchases]);
+        setLastUpdated(new Date());
       } catch (err) {
+        if (showLoading) {
         Alert.alert('Error', 'Failed to fetch orders.');
+        }
       } finally {
-        setLoading(false);
+        if (showLoading) setLoading(false);
       }
     };
-    fetchOrders();
+
+    // Initial fetch
+    fetchOrders(true);
+
+    // Set up real-time polling every 5 seconds
+    const interval = setInterval(() => {
+      fetchOrders(false); // Don't show loading spinner for background updates
+    }, 5000);
+
+    // Cleanup interval on component unmount
+    return () => clearInterval(interval);
   }, []);
 
   const handleViewDetails = (order: Order) => {
@@ -148,7 +231,7 @@ const OrdersScreen = () => {
   };
 
   // Action handlers
-  const handleOrderAction = async (action: 'approve' | 'decline' | 'cancel') => {
+  const handleOrderAction = async (action: 'approve' | 'decline') => {
     if (!selectedOrder) return;
     const endpoint =
       selectedOrder.type === 'Rental'
@@ -156,46 +239,10 @@ const OrdersScreen = () => {
         : `/purchases/${selectedOrder.id}/${action}`;
     try {
       await apiService.request(endpoint, { method: 'POST' });
-      Alert.alert('Success', `Order ${action}d!`);
       handleCloseDetails();
-      // Refresh orders
-      setLoading(true);
-      const rentalsRes = await apiService.request('/rentals');
-      const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
-      const rentals = (rentalsArr || []).map((r: any) => ({
-        id: r.id,
-        type: 'Rental',
-        customer: r.customer_name || r.customer_email || 'N/A',
-        status: r.status || 'N/A',
-        details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
-        quotation_amount: r.quotation_amount,
-        quotation_notes: r.quotation_notes,
-        quotation_schedule: r.quotation_schedule,
-        penalty_status: r.penalty_status,
-        counter_offer_amount: r.counter_offer_amount,
-        counter_offer_notes: r.counter_offer_notes,
-        counter_offer_status: r.counter_offer_status,
-      }));
-      const purchasesRes = await apiService.request('/purchases');
-      const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
-      const purchases = (purchasesArr || []).map((p: any) => ({
-        id: p.id,
-        type: 'Purchase',
-        customer: p.customer_name || p.customer_email || 'N/A',
-        status: p.status || 'N/A',
-        details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
-        quotation_price: p.quotation_price,
-        quotation_notes: p.quotation_notes,
-        quotation_schedule: p.quotation_schedule,
-        counter_offer_amount: p.counter_offer_amount,
-        counter_offer_notes: p.counter_offer_notes,
-        counter_offer_status: p.counter_offer_status,
-      }));
-      setOrders([...rentals, ...purchases]);
+      // Orders will be automatically refreshed by the real-time polling
     } catch (err) {
       Alert.alert('Error', `Failed to ${action} order.`);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -247,7 +294,6 @@ const OrdersScreen = () => {
             quotation_schedule: quotationScheduleDate ? quotationScheduleDate.toISOString().split('T')[0] : quotationSchedule,
           };
       await apiService.request(endpoint, { method: 'POST', body: JSON.stringify(payload) });
-      Alert.alert('Success', 'Quotation sent!');
       
       // Update the specific order's status locally without reloading the entire table
       if (selectedOrder) {
@@ -281,6 +327,10 @@ const OrdersScreen = () => {
         <View style={styles.titleContainer}>
           <Ionicons name="file-tray-full" size={28} color={Colors.primary} />
           <Text style={styles.title}>Manage Orders</Text>
+          <View style={styles.realtimeIndicator}>
+            <View style={styles.realtimeDot} />
+            <Text style={styles.realtimeText}>Live</Text>
+          </View>
         </View>
       </View>
       {/* Filters */}
@@ -316,7 +366,7 @@ const OrdersScreen = () => {
           
           {/* Type Dropdown Menu */}
           {showTypeDropdown && (
-            <View style={[styles.dropdownMenuAbsolute, { top: 45, zIndex: 99999, left: 0 }]}>
+            <View style={[styles.dropdownMenuAbsolute, { top: 45, zIndex: 999999, left: 0 }]}>
               <TouchableOpacity
                 style={styles.dropdownItem}
                 onPress={() => {
@@ -361,7 +411,7 @@ const OrdersScreen = () => {
               }}
             >
             <Text style={styles.dropdownButtonText}>
-              {statusFilter}
+              {getStatusFilterDisplayText(statusFilter)}
             </Text>
             <Ionicons 
               name={showStatusDropdown ? "chevron-up" : "chevron-down"} 
@@ -372,15 +422,10 @@ const OrdersScreen = () => {
           
           {/* Status Dropdown Menu */}
           {showStatusDropdown && (
-            <View 
-              style={[styles.dropdownMenuAbsolute, { top: 45, zIndex: 99999, left: 0 }]}
-              onStartShouldSetResponder={() => true}
-              onMoveShouldSetResponder={() => true}
-            >
+            <View style={[styles.dropdownMenuAbsolute, { top: 45, zIndex: 999999, left: 0 }]}>
                 <TouchableOpacity
                   style={styles.dropdownItem}
-                  onPress={(e) => {
-                    e.stopPropagation();
+                onPress={() => {
                     setStatusFilter('All');
                     setShowStatusDropdown(false);
                   }}
@@ -389,8 +434,7 @@ const OrdersScreen = () => {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.dropdownItem}
-                  onPress={(e) => {
-                    e.stopPropagation();
+                onPress={() => {
                     setStatusFilter('pending');
                     setShowStatusDropdown(false);
                   }}
@@ -399,8 +443,7 @@ const OrdersScreen = () => {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.dropdownItem}
-                  onPress={(e) => {
-                    e.stopPropagation();
+                onPress={() => {
                     setStatusFilter('quotation_sent');
                     setShowStatusDropdown(false);
                   }}
@@ -409,18 +452,16 @@ const OrdersScreen = () => {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.dropdownItem}
-                  onPress={(e) => {
-                    e.stopPropagation();
+                onPress={() => {
                     setStatusFilter('counter_offer_pending');
                     setShowStatusDropdown(false);
                   }}
                 >
-                  <Text style={styles.dropdownItemText}>Counter Offer Pending</Text>
+                <Text style={styles.dropdownItemText}>Counter Offer{'\n'}Pending</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.dropdownItem}
-                  onPress={(e) => {
-                    e.stopPropagation();
+                onPress={() => {
                     setStatusFilter('in_progress');
                     setShowStatusDropdown(false);
                   }}
@@ -429,8 +470,7 @@ const OrdersScreen = () => {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.dropdownItem}
-                  onPress={(e) => {
-                    e.stopPropagation();
+                onPress={() => {
                     setStatusFilter('ready_for_pickup');
                     setShowStatusDropdown(false);
                   }}
@@ -439,8 +479,7 @@ const OrdersScreen = () => {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.dropdownItem}
-                  onPress={(e) => {
-                    e.stopPropagation();
+                onPress={() => {
                     setStatusFilter('picked_up');
                     setShowStatusDropdown(false);
                   }}
@@ -449,8 +488,7 @@ const OrdersScreen = () => {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.dropdownItem}
-                  onPress={(e) => {
-                    e.stopPropagation();
+                onPress={() => {
                     setStatusFilter('returned');
                     setShowStatusDropdown(false);
                   }}
@@ -459,23 +497,12 @@ const OrdersScreen = () => {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.dropdownItem}
-                  onPress={(e) => {
-                    e.stopPropagation();
+                onPress={() => {
                     setStatusFilter('declined');
                     setShowStatusDropdown(false);
                   }}
                 >
                   <Text style={styles.dropdownItemText}>Declined</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.dropdownItem, { borderBottomWidth: 0 }]}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    setStatusFilter('cancelled');
-                    setShowStatusDropdown(false);
-                  }}
-                >
-                  <Text style={styles.dropdownItemText}>Cancelled</Text>
                 </TouchableOpacity>
             </View>
           )}
@@ -566,7 +593,13 @@ const OrdersScreen = () => {
                     <View style={[styles.dataCell, { width: 80 }]}><Text style={styles.orderCellClassic2}>{item.id}</Text></View>
                     <View style={[styles.dataCell, { width: 100 }]}><Text style={styles.orderCellClassic2}>{item.type}</Text></View>
                     <View style={[styles.dataCell, { width: 140 }]}><Text style={styles.orderCellClassic2}>{item.customer}</Text></View>
-                    <View style={[styles.dataCell, { width: 120 }]}><Text style={styles.orderCellClassic2}>{item.status}</Text></View>
+                    <View style={[styles.dataCell, { width: 120, justifyContent: 'center', alignItems: 'center' }]}>
+                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
+                        <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                          {getStatusText(item.status)}
+                        </Text>
+                      </View>
+                    </View>
                     <View style={[styles.dataCell, { width: 100 }]}>
                       <TouchableOpacity style={styles.actionButtonClassic2} onPress={() => handleViewDetails(item)}>
                         <Text style={styles.actionButtonTextClassic2}>View</Text>
@@ -606,132 +639,103 @@ const OrdersScreen = () => {
         <Modal
           visible={true}
           animationType="slide"
-          transparent={true}
+          presentationStyle="pageSheet"
           onRequestClose={handleCloseDetails}
         >
-          <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' }}>
-            <View style={{ 
-              backgroundColor: '#fff', 
-              borderRadius: 16, 
-              padding: 20, 
-              elevation: 20, 
-              shadowColor: '#000', 
-              shadowOffset: { width: 0, height: 8 }, 
-              shadowOpacity: 0.3, 
-              shadowRadius: 20, 
-              maxHeight: '95%', 
-              width: '90%', 
-              minHeight: (selectedOrder?.status === 'quotation_sent' || selectedOrder?.status === 'cancelled') ? 400 : 600 
-            }}>
-              {/* Header */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: '#e0e0e0', paddingBottom: 16 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <Ionicons name="document-text-outline" size={24} color="#014D40" />
-                  <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#014D40' }}>Order Details</Text>
-                </View>
-                <TouchableOpacity style={{ padding: 8, borderRadius: 8, backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#e0e0e0' }} onPress={handleCloseDetails}>
-                  <Ionicons name="close" size={20} color="#666" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Order Details Content */}
-              <ScrollView 
-                style={{ flex: 1, minHeight: (selectedOrder?.status === 'quotation_sent' || selectedOrder?.status === 'cancelled') ? 300 : 500 }}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }}
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Order Details</Text>
+              <TouchableOpacity
+                onPress={handleCloseDetails}
+                style={styles.closeButton}
               >
-                {/* Order Information */}
-                <View style={{ 
-                  backgroundColor: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#ffebee' : '#e8f5e8', 
-                  padding: 20, 
-                  borderRadius: 12, 
-                  marginBottom: 20, 
-                  borderWidth: 1, 
-                  borderColor: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#ffcdd2' : '#c8e6c9' 
-                }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                    <Ionicons 
-                      name="information-circle" 
-                      size={24} 
-                      color={(selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#d32f2f' : '#014D40'} 
-                      style={{ marginRight: 8 }} 
-                    />
-                    <Text style={{ 
-                      fontSize: 20, 
-                      fontWeight: 'bold', 
-                      color: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#d32f2f' : '#014D40' 
-                    }}>Order Information</Text>
-                  </View>
-                  
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
-                    <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Order ID:</Text>
-                    <Text style={{ 
-                      fontSize: 16, 
-                      color: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#d32f2f' : '#014D40', 
-                      fontWeight: '600' 
-                    }}>{selectedOrder.id}</Text>
-                  </View>
-                  
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
-                    <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Order Type:</Text>
-                    <Text style={{ 
-                      fontSize: 16, 
-                      color: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#d32f2f' : '#014D40', 
-                      fontWeight: '600' 
-                    }}>{selectedOrder.type}</Text>
-                  </View>
-                  
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
-                    <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Customer Name:</Text>
-                    <Text style={{ 
-                      fontSize: 16, 
-                      color: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#d32f2f' : '#014D40', 
-                      fontWeight: '600' 
-                    }}>{selectedOrder.customer}</Text>
-                  </View>
-                  
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
-                    <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Status:</Text>
-                    <Text style={{ 
-                      fontSize: 16, 
-                      color: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#d32f2f' : '#014D40', 
-                      fontWeight: '600' 
-                    }}>{selectedOrder.status}</Text>
-                  </View>
-                  
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 0, paddingBottom: 8 }}>
-                    <Text style={{ fontSize: 16, color: '#666', fontWeight: '600', flex: 1, marginRight: 10 }}>Details:</Text>
-                    <Text style={{ 
-                      fontSize: 16, 
-                      color: (selectedOrder.status === 'declined' || selectedOrder.status === 'cancelled') ? '#d32f2f' : '#014D40', 
-                      fontWeight: '600', 
-                      flex: 2, 
-                      textAlign: 'right' 
-                    }}>{selectedOrder.details}</Text>
+                <Ionicons name="close" size={24} color={Colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+              <View style={styles.orderDetailCard}>
+                <View style={styles.orderDetailHeader}>
+                  <Text style={styles.orderDetailTitle}>{selectedOrder.details}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedOrder.status) + '20' }]}>
+                    <Text style={[styles.statusText, { color: getStatusColor(selectedOrder.status) }]}>
+                      {getStatusText(selectedOrder.status)}
+                    </Text>
                   </View>
                 </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Order ID:</Text>
+                  <Text style={styles.detailValue}>#{selectedOrder.id}</Text>
+                </View>
+                
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Order Type:</Text>
+                  <Text style={styles.detailValue}>{selectedOrder.type}</Text>
+                </View>
+                
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Customer Name:</Text>
+                  <Text style={styles.detailValue}>{selectedOrder.customer}</Text>
+                </View>
+                
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Status:</Text>
+                  <Text style={styles.detailValue}>{getStatusText(selectedOrder.status)}</Text>
+                </View>
+                
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Details:</Text>
+                  <Text style={styles.detailValue}>{selectedOrder.details}</Text>
+                </View>
+
+                {/* Quotation Section - for quotation_sent orders */}
+                {selectedOrder.status === 'quotation_sent' && (
+                  <>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Quotation Amount:</Text>
+                      <Text style={styles.detailValue}>
+                        ₱{((selectedOrder.quotation_amount || selectedOrder.quotation_price) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </Text>
+                    </View>
+                    
+                    {selectedOrder.quotation_schedule && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Schedule:</Text>
+                        <Text style={styles.detailValue}>{selectedOrder.quotation_schedule}</Text>
+                      </View>
+                    )}
+                    
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Notes:</Text>
+                      <Text style={[styles.detailValue, styles.notesValue]}>
+                        {selectedOrder.quotation_notes || '—'}
+                      </Text>
+                    </View>
+                  </>
+                )}
 
                 {/* Counter Offer Section */}
                 {selectedOrder.status === 'counter_offer_pending' && (
-                  <View style={{ backgroundColor: '#fff3e0', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#ffb74d' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                      <Ionicons name="swap-horizontal" size={24} color="#014D40" style={{ marginRight: 8 }} />
-                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#014D40' }}>Counter Offer Received</Text>
+                  <>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Counter Offer Amount:</Text>
+                      <Text style={styles.detailValue}>
+                        ₱{selectedOrder.counter_offer_amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </Text>
                     </View>
                     
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
-                      <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Counter Offer{'\n'}Amount:</Text>
-                      <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600' }}>₱{selectedOrder.counter_offer_amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Counter Offer Notes:</Text>
+                      <Text style={[styles.detailValue, styles.notesValue]}>
+                        {selectedOrder.counter_offer_notes || '—'}
+                      </Text>
                     </View>
                     
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
-                      <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Counter Offer{'\n'}Notes:</Text>
-                      <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600' }}>{selectedOrder.counter_offer_notes || '—'}</Text>
-                    </View>
-                    
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0, paddingBottom: 8 }}>
-                      <Text style={{ fontSize: 16, color: '#666', fontWeight: '600' }}>Original Quotation:</Text>
-                      <Text style={{ fontSize: 16, color: '#014D40', fontWeight: '600' }}>₱{(selectedOrder.quotation_amount || selectedOrder.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Original Quotation:</Text>
+                      <Text style={styles.detailValue}>
+                        ₱{(selectedOrder.quotation_amount || selectedOrder.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </Text>
                     </View>
 
                     {/* Counter Offer Action Buttons */}
@@ -745,7 +749,6 @@ const OrdersScreen = () => {
                               : `/rentals/${selectedOrder.id}/accept-counter-offer`;
                             
                             await apiService.request(endpoint, { method: 'POST' });
-                            Alert.alert('Success', 'Counter offer accepted!');
                             handleCloseDetails();
                             
                             // Refresh orders
@@ -801,7 +804,6 @@ const OrdersScreen = () => {
                               : `/rentals/${selectedOrder.id}/reject-counter-offer`;
                             
                             await apiService.request(endpoint, { method: 'POST' });
-                            Alert.alert('Success', 'Counter offer rejected.');
                             handleCloseDetails();
                             
                             // Refresh orders
@@ -848,7 +850,7 @@ const OrdersScreen = () => {
                         <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15, flexShrink: 0 }}>Reject</Text>
                       </TouchableOpacity>
                     </View>
-                  </View>
+                  </>
                 )}
 
                 {/* Purchase In Progress Section */}
@@ -893,7 +895,6 @@ const OrdersScreen = () => {
                           const endpoint = `/purchases/${selectedOrder.id}/ready-for-pickup`;
                           
                           await apiService.request(endpoint, { method: 'POST' });
-                          Alert.alert('Success', 'Purchase marked as ready for pickup!');
                           handleCloseDetails();
                           
                           // Refresh orders
@@ -974,7 +975,6 @@ const OrdersScreen = () => {
                       onPress={async () => {
                         try {
                           await apiService.markPurchaseAsPickedUp(selectedOrder.id);
-                          Alert.alert('Success', 'Purchase marked as picked up!');
                           handleCloseDetails();
                           
                           // Refresh orders
@@ -1085,7 +1085,6 @@ const OrdersScreen = () => {
                             : `/rentals/${selectedOrder.id}/mark-picked-up`;
                           
                           await apiService.request(endpoint, { method: 'POST' });
-                          Alert.alert('Success', 'Order marked as picked up!');
                           handleCloseDetails();
                           
                           // Refresh orders
@@ -1162,7 +1161,6 @@ const OrdersScreen = () => {
                             : `/rentals/${selectedOrder.id}/mark-returned`;
                           
                           await apiService.request(endpoint, { method: 'POST' });
-                          Alert.alert('Success', 'Order marked as returned!');
                           handleCloseDetails();
                           
                           // Refresh orders
@@ -1330,30 +1328,30 @@ const OrdersScreen = () => {
                     </View>
                   </View>
                 )}
-              </ScrollView>
-
-              {/* Date Picker Modal */}
-              {showDatePicker && (
-                <DateTimePicker
-                  value={quotationScheduleDate || new Date()}
-                  mode="date"
-                  display="default"
-                  onChange={(event, selectedDate) => {
-                    setShowDatePicker(false);
-                    if (selectedDate) {
-                      setQuotationScheduleDate(selectedDate);
-                      setQuotationSchedule(selectedDate.toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric'
-                      }));
-                    }
-                  }}
-                />
-              )}
-            </View>
+              </View>
+            </ScrollView>
           </View>
         </Modal>
+      )}
+
+      {/* Date Picker Modal */}
+      {showDatePicker && (
+        <DateTimePicker
+          value={quotationScheduleDate || new Date()}
+          mode="date"
+          display="default"
+          onChange={(event, selectedDate) => {
+            setShowDatePicker(false);
+            if (selectedDate) {
+              setQuotationScheduleDate(selectedDate);
+              setQuotationSchedule(selectedDate.toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+              }));
+            }
+          }}
+        />
       )}
     </View>
   );
@@ -1364,6 +1362,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
     backgroundColor: Colors.background.light,
+    zIndex: 1,
   },
   header: {
     marginBottom: 20,
@@ -1507,23 +1506,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     letterSpacing: 0.2,
   },
-  closeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#014D40',
-    borderRadius: 12,
-    paddingVertical: 10, // reduced from 16
-    minWidth: 180,
-    maxWidth: 180,
-    alignSelf: 'center',
-    shadowColor: '#014D40',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
-    marginBottom: 0,
-  },
   enhancedCloseButton: {
     backgroundColor: '#014D40',
   },
@@ -1540,11 +1522,11 @@ const styles = StyleSheet.create({
     gap: 20, // Space between Type and Status filters
     position: 'relative',
     overflow: 'visible', // Allow dropdowns to extend beyond container
-    zIndex: 99999,
+    zIndex: 999999,
   },
   filterItem: {
     position: 'relative',
-    zIndex: 99999,
+    zIndex: 999999,
     minHeight: 60, // Ensure consistent height for filter items
     flex: 1, // Make filters take equal width
     maxWidth: '48%', // Ensure they don't get too wide
@@ -1555,7 +1537,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     position: 'relative',
-    zIndex: 9999,
+    zIndex: 999999,
     minHeight: 40,
   },
   filterLabel: {
@@ -1796,17 +1778,6 @@ const styles = StyleSheet.create({
     width: '90%',
     overflow: 'hidden',
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border.light,
-  },
   detailsTitle: {
     fontSize: 22,
     fontWeight: 'bold',
@@ -2032,7 +2003,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 10,
-    zIndex: 99999,
+    zIndex: 999999,
   },
   dropdownButtonText: {
     fontSize: 15,
@@ -2078,8 +2049,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
-    elevation: 25,
-    zIndex: 99999,
+    elevation: 9999,
+    zIndex: 9999999,
     minWidth: 120,
     marginTop: 4,
     paddingVertical: 8,
@@ -2143,6 +2114,128 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
 
+
+  // Real-time indicator styles
+  realtimeIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 'auto',
+    backgroundColor: '#e8f5e8',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#c8e6c9',
+  },
+  realtimeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10b981',
+    marginRight: 4,
+  },
+  realtimeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#014D40',
+  },
+  // Modal styles to match customer side
+  modalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background.light,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: Colors.primary,
+  },
+  closeButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.background.card,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  orderDetailCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  orderDetailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  orderDetailTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.primary,
+    flex: 1,
+    marginRight: 12,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light,
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    fontWeight: '500',
+    flex: 1,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: Colors.text.primary,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
+  },
+  notesValue: {
+    textAlign: 'left',
+    fontStyle: 'italic',
+  },
 });
 
 export default OrdersScreen; 

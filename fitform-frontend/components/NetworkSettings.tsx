@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { ThemedView } from '@/components/ThemedView';
-import { ThemedText } from '@/components/ThemedText';
-import apiService from '@/services/api';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import apiService from '../services/api';
 
 interface NetworkMode {
     mode: string;
@@ -11,11 +9,10 @@ interface NetworkMode {
     description: string;
 }
 
-export default function NetworkSettings() {
-    const [currentMode, setCurrentMode] = useState<string>('local');
+const NetworkSettings: React.FC = () => {
+    const [currentMode, setCurrentMode] = useState<string>('lan');
     const [availableNetworks, setAvailableNetworks] = useState<NetworkMode[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [isTesting, setIsTesting] = useState(false);
 
     useEffect(() => {
         loadNetworkSettings();
@@ -32,22 +29,21 @@ export default function NetworkSettings() {
         }
     };
 
-    const handleNetworkChange = async (mode: string) => {
+    const switchNetworkMode = async (mode: string) => {
         setIsLoading(true);
         try {
             await apiService.setNetworkMode(mode);
             setCurrentMode(mode);
-            Alert.alert('Success', `Network mode changed to: ${mode}`);
+            Alert.alert('Success', `Switched to ${mode} network mode`);
         } catch (error) {
-            Alert.alert('Error', 'Failed to change network mode');
-            console.error('Network change error:', error);
+            Alert.alert('Error', `Failed to switch to ${mode} mode`);
         } finally {
             setIsLoading(false);
         }
     };
 
     const testConnection = async () => {
-        setIsTesting(true);
+        setIsLoading(true);
         try {
             const result = await apiService.testConnection();
             if (result.success) {
@@ -56,198 +52,163 @@ export default function NetworkSettings() {
                 Alert.alert('Connection Test', `❌ Connection failed: ${result.error}`);
             }
         } catch (error) {
-            Alert.alert('Connection Test', '❌ Test failed');
-            console.error('Connection test error:', error);
+            Alert.alert('Connection Test', `❌ Test failed: ${error.message}`);
         } finally {
-            setIsTesting(false);
+            setIsLoading(false);
         }
     };
 
     const autoDetectNetwork = async () => {
         setIsLoading(true);
         try {
-            const detectedMode = await apiService.autoDetectNetwork();
-            setCurrentMode(detectedMode);
-            Alert.alert('Auto Detection', `Detected best network: ${detectedMode}`);
+            const mode = await apiService.autoDetectNetwork();
+            setCurrentMode(mode);
+            Alert.alert('Auto-Detection', `Detected best network: ${mode}`);
         } catch (error) {
-            Alert.alert('Auto Detection', 'Failed to auto-detect network');
-            console.error('Auto detection error:', error);
+            Alert.alert('Auto-Detection', `Failed to detect network: ${error.message}`);
         } finally {
             setIsLoading(false);
         }
     };
 
     return (
-        <ThemedView style={styles.container}>
-            <ThemedText type="title" style={styles.title}>Network Settings</ThemedText>
+        <View style={styles.container}>
+            <Text style={styles.title}>Network Settings</Text>
             
-            <View style={styles.currentModeContainer}>
-                <ThemedText type="subtitle">Current Mode: {currentMode}</ThemedText>
-                <Text style={styles.currentUrl}>
-                    {availableNetworks.find(n => n.mode === currentMode)?.backendUrl}
-                </Text>
+            <View style={styles.currentMode}>
+                <Text style={styles.currentModeLabel}>Current Mode:</Text>
+                <Text style={styles.currentModeValue}>{currentMode.toUpperCase()}</Text>
             </View>
 
-            <View style={styles.buttonContainer}>
-                <TouchableOpacity 
-                    style={[styles.button, styles.testButton]} 
-                    onPress={testConnection}
-                    disabled={isTesting}
-                >
-                    {isTesting ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <Text style={styles.buttonText}>Test Connection</Text>
-                    )}
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                    style={[styles.button, styles.autoButton]} 
-                    onPress={autoDetectNetwork}
-                    disabled={isLoading}
-                >
-                    <Text style={styles.buttonText}>Auto Detect</Text>
-                </TouchableOpacity>
-            </View>
-
-            <View style={styles.networksContainer}>
-                <ThemedText type="subtitle" style={styles.sectionTitle}>Available Networks</ThemedText>
+            <View style={styles.networkList}>
                 {availableNetworks.map((network) => (
                     <TouchableOpacity
                         key={network.mode}
                         style={[
                             styles.networkItem,
-                            currentMode === network.mode && styles.selectedNetwork
+                            currentMode === network.mode && styles.activeNetwork
                         ]}
-                        onPress={() => handleNetworkChange(network.mode)}
+                        onPress={() => switchNetworkMode(network.mode)}
                         disabled={isLoading}
                     >
-                        <View style={styles.networkInfo}>
-                            <Text style={[
-                                styles.networkMode,
-                                currentMode === network.mode && styles.selectedText
-                            ]}>
-                                {network.mode.toUpperCase()}
-                            </Text>
-                            <Text style={[
-                                styles.networkDescription,
-                                currentMode === network.mode && styles.selectedText
-                            ]}>
-                                {network.description}
-                            </Text>
-                            <Text style={[
-                                styles.networkUrl,
-                                currentMode === network.mode && styles.selectedText
-                            ]}>
-                                {network.backendUrl}
-                            </Text>
-                        </View>
-                        {currentMode === network.mode && (
-                            <View style={styles.selectedIndicator}>
-                                <Text style={styles.selectedIndicatorText}>✓</Text>
-                            </View>
-                        )}
+                        <Text style={styles.networkMode}>{network.mode.toUpperCase()}</Text>
+                        <Text style={styles.networkDescription}>{network.description}</Text>
+                        <Text style={styles.networkUrl}>{network.backendUrl}</Text>
                     </TouchableOpacity>
                 ))}
             </View>
-        </ThemedView>
+
+            <View style={styles.actionButtons}>
+                <TouchableOpacity
+                    style={[styles.button, styles.testButton]}
+                    onPress={testConnection}
+                    disabled={isLoading}
+                >
+                    <Text style={styles.buttonText}>Test Connection</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.button, styles.autoButton]}
+                    onPress={autoDetectNetwork}
+                    disabled={isLoading}
+                >
+                    <Text style={styles.buttonText}>Auto-Detect</Text>
+                </TouchableOpacity>
+            </View>
+
+            {isLoading && (
+                <Text style={styles.loadingText}>Loading...</Text>
+            )}
+        </View>
     );
-}
+};
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         padding: 20,
+        backgroundColor: '#f5f5f5',
     },
     title: {
+        fontSize: 24,
+        fontWeight: 'bold',
         marginBottom: 20,
         textAlign: 'center',
     },
-    currentModeContainer: {
-        backgroundColor: '#f0f0f0',
+    currentMode: {
+        backgroundColor: '#e3f2fd',
         padding: 15,
-        borderRadius: 10,
+        borderRadius: 8,
         marginBottom: 20,
-    },
-    currentUrl: {
-        fontSize: 12,
-        color: '#666',
-        marginTop: 5,
-    },
-    buttonContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 20,
-    },
-    button: {
-        flex: 1,
-        padding: 15,
-        borderRadius: 10,
         alignItems: 'center',
-        marginHorizontal: 5,
     },
-    testButton: {
-        backgroundColor: '#007AFF',
+    currentModeLabel: {
+        fontSize: 16,
+        fontWeight: '600',
     },
-    autoButton: {
-        backgroundColor: '#34C759',
-    },
-    buttonText: {
-        color: '#fff',
-        fontWeight: 'bold',
-    },
-    networksContainer: {
-        flex: 1,
-    },
-    sectionTitle: {
-        marginBottom: 15,
-    },
-    networkItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#f8f8f8',
-        padding: 15,
-        borderRadius: 10,
-        marginBottom: 10,
-        borderWidth: 2,
-        borderColor: 'transparent',
-    },
-    selectedNetwork: {
-        backgroundColor: '#e3f2fd',
-        borderColor: '#2196F3',
-    },
-    networkInfo: {
-        flex: 1,
-    },
-    networkMode: {
+    currentModeValue: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#333',
+        color: '#1976d2',
+    },
+    networkList: {
+        marginBottom: 20,
+    },
+    networkItem: {
+        backgroundColor: '#fff',
+        padding: 15,
+        borderRadius: 8,
+        marginBottom: 10,
+        borderWidth: 2,
+        borderColor: '#e0e0e0',
+    },
+    activeNetwork: {
+        borderColor: '#4caf50',
+        backgroundColor: '#f1f8e9',
+    },
+    networkMode: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 5,
     },
     networkDescription: {
         fontSize: 14,
         color: '#666',
-        marginTop: 2,
+        marginBottom: 5,
     },
     networkUrl: {
         fontSize: 12,
         color: '#999',
-        marginTop: 2,
+        fontFamily: 'monospace',
     },
-    selectedText: {
-        color: '#2196F3',
+    actionButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
     },
-    selectedIndicator: {
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        backgroundColor: '#2196F3',
-        alignItems: 'center',
-        justifyContent: 'center',
+    button: {
+        flex: 1,
+        padding: 15,
+        borderRadius: 8,
+        marginHorizontal: 5,
     },
-    selectedIndicatorText: {
+    testButton: {
+        backgroundColor: '#2196f3',
+    },
+    autoButton: {
+        backgroundColor: '#ff9800',
+    },
+    buttonText: {
         color: '#fff',
+        textAlign: 'center',
         fontWeight: 'bold',
-        fontSize: 16,
+    },
+    loadingText: {
+        textAlign: 'center',
+        marginTop: 10,
+        color: '#666',
     },
 });
+
+export default NetworkSettings;

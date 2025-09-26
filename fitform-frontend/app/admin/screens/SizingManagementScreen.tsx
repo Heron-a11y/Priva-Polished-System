@@ -11,11 +11,12 @@ import {
   Dimensions,
   Text,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { ThemedView } from '../../../components/ThemedView';
 import { ThemedText } from '../../../components/ThemedText';
 import { Colors } from '../../../constants/Colors';
 import apiService from '../../../services/api';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
@@ -36,6 +37,7 @@ interface SizingStandard {
 }
 
 export default function SizingManagementScreen() {
+  const router = useRouter();
   const [standards, setStandards] = useState<SizingStandard[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -571,49 +573,97 @@ export default function SizingManagementScreen() {
     }
   };
 
+  const handleDeleteStandard = async (standard: SizingStandard) => {
+    Alert.alert(
+      'Delete Sizing Standard',
+      `Are you sure you want to delete "${standard.name}"? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await apiService.deleteSizingStandard(standard.id);
+              Alert.alert('Success', 'Sizing standard deleted successfully.');
+              loadSizingStandards();
+            } catch (error) {
+              console.error('Error deleting sizing standard:', error);
+              Alert.alert('Error', 'Failed to delete sizing standard.');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const renderStandardCard = (standard: SizingStandard) => (
     <View key={standard.id} style={styles.standardCard}>
-      <View style={styles.standardHeader}>
+      <View style={styles.cardHeader}>
         <View style={styles.standardInfo}>
-          <ThemedText style={styles.standardName}>{standard.name}</ThemedText>
-          <View style={styles.standardMeta}>
-            <View style={[styles.statusBadge, standard.is_active ? styles.activeBadge : styles.inactiveBadge]}>
-              <ThemedText style={styles.statusText}>
-                {standard.is_active ? 'Active' : 'Inactive'}
-              </ThemedText>
-            </View>
-            <View style={styles.categoryBadge}>
-              <ThemedText style={styles.categoryText}>
-                {standard.category} • {standard.gender}
-              </ThemedText>
-            </View>
-          </View>
-        </View>
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.editButton]}
-            onPress={() => openEditModal(standard)}
-          >
-            <ThemedText style={styles.actionButtonText}>Edit</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, standard.is_active ? styles.deactivateButton : styles.activateButton]}
-            onPress={() => toggleActiveStatus(standard)}
-          >
-            <ThemedText style={styles.actionButtonText}>
-              {standard.is_active ? 'Deactivate' : 'Activate'}
-            </ThemedText>
-          </TouchableOpacity>
+          <Ionicons name="resize" size={20} color="#014D40" />
+          <ThemedText style={styles.standardName} numberOfLines={2}>{standard.name}</ThemedText>
         </View>
       </View>
       
-      <View style={styles.standardDetails}>
-        <ThemedText style={styles.detailText}>
-          <ThemedText style={styles.detailLabel}>Updated by:</ThemedText> {standard.updated_by?.name || 'System'}
-        </ThemedText>
-        <ThemedText style={styles.detailText}>
-          <ThemedText style={styles.detailLabel}>Last updated:</ThemedText> {new Date(standard.updated_at).toLocaleDateString()}
-        </ThemedText>
+      <View style={styles.cardContent}>
+        <View style={styles.infoRow}>
+          <Ionicons name="folder-outline" size={18} color="#666" />
+          <ThemedText style={styles.infoText}>{standard.category}</ThemedText>
+        </View>
+        
+        <View style={styles.infoRow}>
+          <Ionicons name="person-outline" size={18} color="#666" />
+          <ThemedText style={styles.infoText}>{standard.gender}</ThemedText>
+        </View>
+        
+        <View style={styles.infoRow}>
+          <Ionicons name="person-circle-outline" size={18} color="#666" />
+          <ThemedText style={styles.infoText}>Updated by: {standard.updated_by?.name || 'System'}</ThemedText>
+        </View>
+        
+        <View style={styles.infoRow}>
+          <Ionicons name="time-outline" size={18} color="#666" />
+          <ThemedText style={styles.infoText}>Last updated: {new Date(standard.updated_at).toLocaleDateString()}</ThemedText>
+        </View>
+      </View>
+      
+      <View style={styles.cardFooter}>
+        <View style={[styles.statusBadge, standard.is_active ? styles.activeBadge : styles.inactiveBadge]}>
+          <Ionicons name={standard.is_active ? "checkmark-circle" : "close-circle"} size={16} color="#fff" />
+          <ThemedText style={styles.statusText}>
+            {standard.is_active ? 'Active' : 'Inactive'}
+          </ThemedText>
+        </View>
+        
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            style={[styles.iconButton, styles.editButton]}
+            onPress={() => openEditModal(standard)}
+          >
+            <Ionicons name="create" size={20} color="#014D40" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.iconButton, standard.is_active ? styles.deactivateButton : styles.activateButton]}
+            onPress={() => toggleActiveStatus(standard)}
+          >
+            <Ionicons name={standard.is_active ? "pause" : "play"} size={20} color="#fff" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.iconButton, styles.deleteButton]}
+            onPress={() => handleDeleteStandard(standard)}
+          >
+            <Ionicons name="trash" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -662,27 +712,60 @@ export default function SizingManagementScreen() {
               </View>
 
               <View style={styles.rowInputs}>
-                <View style={styles.halfInput}>
-                  <ThemedText style={styles.inputLabel}>Category</ThemedText>
-                  <View style={styles.pickerContainer}>
-                    {categories.map((cat) => (
-                      <TouchableOpacity
-                        key={cat}
-                        style={[
-                          styles.pickerOption,
-                          (formData.category === cat || (cat === 'custom' && showCustomCategoryInput)) && styles.pickerOptionActive
-                        ]}
-                        onPress={() => handleCategorySelect(cat)}
-                      >
-                        <ThemedText style={[
-                          styles.pickerOptionText,
-                          (formData.category === cat || (cat === 'custom' && showCustomCategoryInput)) && styles.pickerOptionTextActive
-                        ]}>
-                          {cat === 'custom' ? 'Custom' : cat.charAt(0).toUpperCase() + cat.slice(1)}
-                        </ThemedText>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                 <View style={styles.halfInput}>
+                   <View style={styles.labelWithIcon}>
+                     <ThemedText style={styles.inputLabel}>Category:</ThemedText>
+                     <Ionicons name="chevron-forward" size={16} color={Colors.text.secondary} />
+                   </View>
+                  <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.horizontalPickerContainer}
+                    contentContainerStyle={styles.horizontalPickerContent}
+                  >
+                    {categories.map((cat) => {
+                      const getCategoryIcon = (category: string) => {
+                        switch (category.toLowerCase()) {
+                          case 'shirts': return 'shirt-outline';
+                          case 'pants': return 'body-outline';
+                          case 'dresses': return 'woman-outline';
+                          case 'jackets': return 'coat-outline';
+                          case 'skirts': return 'ellipse-outline';
+                          case 'shoes': return 'footsteps-outline';
+                          case 'hats': return 'ellipse-outline';
+                          case 'suits': return 'business-outline';
+                          case 'activewear': return 'fitness-outline';
+                          case 'custom': return 'add-circle-outline';
+                          default: return 'grid-outline';
+                        }
+                      };
+                      
+                      const isActive = formData.category === cat || (cat === 'custom' && showCustomCategoryInput);
+                      
+                      return (
+                        <TouchableOpacity
+                          key={cat}
+                          style={[
+                            styles.pickerOption,
+                            isActive && styles.pickerOptionActive
+                          ]}
+                          onPress={() => handleCategorySelect(cat)}
+                        >
+                          <Ionicons 
+                            name={getCategoryIcon(cat)} 
+                            size={16} 
+                            color={isActive ? '#fff' : Colors.text.secondary} 
+                          />
+                          <ThemedText style={[
+                            styles.pickerOptionText,
+                            isActive && styles.pickerOptionTextActive
+                          ]}>
+                            {cat === 'custom' ? 'Custom' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                          </ThemedText>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
 
                   {showCustomCategoryInput && (
                     <View style={styles.customCategorySection}>
@@ -717,27 +800,53 @@ export default function SizingManagementScreen() {
                   )}
                 </View>
 
-                <View style={styles.halfInput}>
-                  <ThemedText style={styles.inputLabel}>Gender</ThemedText>
-                  <View style={styles.pickerContainer}>
-                    {genders.map((gen) => (
-                      <TouchableOpacity
-                        key={gen}
-                        style={[
-                          styles.pickerOption,
-                          formData.gender === gen && styles.pickerOptionActive
-                        ]}
-                        onPress={() => setFormData({...formData, gender: gen})}
-                      >
-                        <ThemedText style={[
-                          styles.pickerOptionText,
-                          formData.gender === gen && styles.pickerOptionTextActive
-                        ]}>
-                          {gen.charAt(0).toUpperCase() + gen.slice(1)}
-                        </ThemedText>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                 <View style={styles.halfInput}>
+                   <View style={styles.labelWithIcon}>
+                     <ThemedText style={styles.inputLabel}>Gender:</ThemedText>
+                     <Ionicons name="chevron-forward" size={16} color={Colors.text.secondary} />
+                   </View>
+                  <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.horizontalPickerContainer}
+                    contentContainerStyle={styles.horizontalPickerContent}
+                  >
+                    {genders.map((gen) => {
+                      const getGenderIcon = (gender: string) => {
+                        switch (gender.toLowerCase()) {
+                          case 'male': return 'man-outline';
+                          case 'female': return 'woman-outline';
+                          case 'unisex': return 'people-outline';
+                          default: return 'person-outline';
+                        }
+                      };
+                      
+                      const isActive = formData.gender === gen;
+                      
+                      return (
+                        <TouchableOpacity
+                          key={gen}
+                          style={[
+                            styles.pickerOption,
+                            isActive && styles.pickerOptionActive
+                          ]}
+                          onPress={() => setFormData({...formData, gender: gen})}
+                        >
+                          <Ionicons 
+                            name={getGenderIcon(gen)} 
+                            size={16} 
+                            color={isActive ? '#fff' : Colors.text.secondary} 
+                          />
+                          <ThemedText style={[
+                            styles.pickerOptionText,
+                            isActive && styles.pickerOptionTextActive
+                          ]}>
+                            {gen.charAt(0).toUpperCase() + gen.slice(1)}
+                          </ThemedText>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
                 </View>
               </View>
 
@@ -969,15 +1078,15 @@ export default function SizingManagementScreen() {
           </ScrollView>
 
           {/* Floating Bulb Icon - Above the Cancel and Fill All Fields buttons */}
-          <View style={styles.floatingBulbContainer}>
+          <View style={styles.floatingHelpContainer}>
             <TouchableOpacity 
-              style={styles.floatingBulbIcon}
+              style={styles.floatingHelpIcon}
               onPress={() => {
                 console.log('Opening summary modal...');
                 setShowSummaryModal(true);
               }}
             >
-              <ThemedText style={styles.floatingBulbText}>💡</ThemedText>
+              <Ionicons name="help-circle" size={24} color={Colors.primary} />
             </TouchableOpacity>
           </View>
 
@@ -1014,61 +1123,66 @@ export default function SizingManagementScreen() {
   return (
     <ThemedView style={styles.container}>
       <View style={styles.header}>
-        <ThemedText style={styles.title}>Manage Sizing Standards</ThemedText>
-        <ThemedText style={styles.subtitle}>Manage garment sizing standards for different categories and genders</ThemedText>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color={Colors.primary} />
+        </TouchableOpacity>
+        
+        <View style={styles.titleContainer}>
+          <Ionicons name="resize" size={20} color={Colors.primary} />
+          <ThemedText style={styles.title} numberOfLines={1}>Manage Sizing Standards</ThemedText>
+        </View>
+        
+        <TouchableOpacity style={styles.addIconButton} onPress={openAddModal}>
+          <Ionicons name="add" size={24} color={Colors.primary} />
+        </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
-        <ThemedText style={styles.addButtonText}>+ Add New Standard</ThemedText>
-      </TouchableOpacity>
-
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.secondary} />
-          <ThemedText style={styles.loadingText}>Loading sizing standards...</ThemedText>
-        </View>
-      ) : standards.length > 0 ? (
-        <ScrollView style={styles.standardsList} showsVerticalScrollIndicator={false}>
-          {standards.map(renderStandardCard)}
-        </ScrollView>
-      ) : (
-        <View style={styles.emptyStateContainer}>
-          <ThemedText style={styles.emptyStateIcon}>📏</ThemedText>
-          <ThemedText style={styles.emptyStateText}>No sizing standards found</ThemedText>
-          <ThemedText style={styles.emptyStateSubtext}>Create your first sizing standard to get started</ThemedText>
-        </View>
-      )}
+      <View style={styles.contentContainer}>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.secondary} />
+            <ThemedText style={styles.loadingText}>Loading sizing standards...</ThemedText>
+          </View>
+        ) : standards.length > 0 ? (
+          <ScrollView style={styles.standardsList} showsVerticalScrollIndicator={false}>
+            {standards.map(renderStandardCard)}
+          </ScrollView>
+        ) : (
+          <View style={styles.emptyStateContainer}>
+            <ThemedText style={styles.emptyStateIcon}>📏</ThemedText>
+            <ThemedText style={styles.emptyStateText}>No sizing standards found</ThemedText>
+            <ThemedText style={styles.emptyStateSubtext}>Create your first sizing standard to get started</ThemedText>
+          </View>
+        )}
+      </View>
 
       {renderForm()}
 
       {/* Summary Modal */}
       <Modal
         visible={showSummaryModal}
-        animationType="fade"
-        transparent={true}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        transparent={false}
         onRequestClose={() => setShowSummaryModal(false)}
-        statusBarTranslucent={true}
       >
-        <View style={styles.summaryModalOverlay}>
-          <View style={styles.summaryModalContent}>
+        <View style={styles.modalContainer}>
             <View style={styles.summaryModalHeader}>
-              <Text style={styles.summaryModalTitle}>
-                💡 How Sizing Standards Work
-              </Text>
+              <View style={styles.titleContainer}>
+                <Ionicons name="help-circle" size={22} color={Colors.primary} />
+                <ThemedText style={styles.summaryModalTitle} numberOfLines={1}>
+                  How Sizing Standards Work
+                </ThemedText>
+              </View>
               <TouchableOpacity
                 onPress={() => setShowSummaryModal(false)}
-                style={styles.summaryCloseButton}
+                style={styles.closeButton}
               >
-                <Text style={styles.summaryCloseButtonText}>×</Text>
+                <Ionicons name="close" size={24} color={Colors.text.primary} />
               </TouchableOpacity>
             </View>
             
-            <View style={styles.summaryFormContainer}>
-              <ScrollView 
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.summaryScrollContent}
-                style={styles.summaryScrollView}
-              >
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
                 <View style={styles.summaryHeaderSection}>
                   <View style={styles.summaryIconContainer}>
                     <Text style={styles.summaryIcon}>📏</Text>
@@ -1125,18 +1239,15 @@ export default function SizingManagementScreen() {
                     </Text>
                   </View>
                 </View>
-              </ScrollView>
-            </View>
+          </ScrollView>
 
-            <View style={styles.summaryModalFooter}>
-              <TouchableOpacity
-                style={styles.summaryModalButton}
-                onPress={() => setShowSummaryModal(false)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.summaryModalButtonText}>Got It</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={() => setShowSummaryModal(false)}
+            >
+              <ThemedText style={styles.saveButtonText}>Got It</ThemedText>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1147,148 +1258,155 @@ export default function SizingManagementScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: Colors.background.light,
   },
+  contentContainer: {
+    flex: 1,
+    padding: 20,
+  },
   header: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 30,
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 6,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    textAlign: 'center',
+    fontSize: 17,
+    fontWeight: '700',
     color: Colors.primary,
-    textShadowColor: 'rgba(1, 77, 64, 0.2)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-    lineHeight: 30,
-    paddingHorizontal: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: Colors.text.secondary,
     textAlign: 'center',
+    flexShrink: 0,
+    numberOfLines: 1,
   },
-  addButton: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 25,
+  addIconButton: {
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  addButtonText: {
-    color: Colors.text.inverse,
-    fontSize: 16,
-    fontWeight: '600',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
   standardCard: {
-    backgroundColor: Colors.background.card,
-    padding: 20,
+    backgroundColor: '#fff',
     borderRadius: 16,
-    marginBottom: 18,
+    padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: 3,
     borderWidth: 1,
-    borderColor: Colors.border.light,
+    borderColor: '#e9ecef',
+    marginBottom: 16,
   },
-  standardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 15,
+  cardHeader: {
+    marginBottom: 12,
   },
   standardInfo: {
-    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
   },
   standardName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.text.primary,
-    marginBottom: 8,
-  },
-  standardMeta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#014D40',
+    flex: 1,
+    lineHeight: 22,
   },
   statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
+    gap: 6,
   },
   activeBadge: {
-    backgroundColor: Colors.success,
+    backgroundColor: '#4CAF50',
   },
   inactiveBadge: {
-    backgroundColor: Colors.error,
+    backgroundColor: '#F44336',
   },
   statusText: {
-    color: Colors.text.inverse,
+    color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+    textTransform: 'capitalize',
   },
-  categoryBadge: {
-    backgroundColor: Colors.secondary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  categoryText: {
-    color: Colors.text.inverse,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  actionButtons: {
-    flexDirection: 'row',
+  cardContent: {
     gap: 8,
+    marginBottom: 12,
   },
-  actionButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    minWidth: 80,
+  infoRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   editButton: {
-    backgroundColor: Colors.info,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   activateButton: {
-    backgroundColor: Colors.success,
+    backgroundColor: '#4CAF50',
   },
   deactivateButton: {
-    backgroundColor: Colors.warning,
+    backgroundColor: '#FF9800',
   },
-  actionButtonText: {
-    color: Colors.text.inverse,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  standardDetails: {
-    borderTopWidth: 1,
-    borderTopColor: Colors.border.light,
-    paddingTop: 15,
-  },
-  detailText: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-    marginBottom: 4,
-  },
-  detailLabel: {
-    fontWeight: '600',
-    color: Colors.text.primary,
+  deleteButton: {
+    backgroundColor: '#F44336',
   },
   loadingContainer: {
     alignItems: 'center',
@@ -1388,6 +1506,12 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
     marginBottom: 8,
   },
+  labelWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
   textInput: {
     borderWidth: 2,
     borderColor: Colors.border.medium,
@@ -1409,13 +1533,27 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
+  horizontalPickerContainer: {
+    maxHeight: 50,
+  },
+  horizontalPickerContent: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingRight: 20,
+  },
   pickerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     backgroundColor: Colors.background.light,
     borderWidth: 1,
     borderColor: Colors.border.medium,
+    justifyContent: 'center',
+    minWidth: 80,
+    gap: 6,
+    flexShrink: 0,
   },
   pickerOptionActive: {
     backgroundColor: Colors.primary,
@@ -1955,13 +2093,13 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
     marginHorizontal: 10,
   },
-  floatingBulbContainer: {
+  floatingHelpContainer: {
     position: 'absolute',
     bottom: 110,
     right: 15,
     zIndex: 10,
   },
-  floatingBulbIcon: {
+  floatingHelpIcon: {
     backgroundColor: Colors.background.card,
     padding: 12,
     borderRadius: 25,
@@ -1973,73 +2111,26 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
   },
-  floatingBulbText: {
-    fontSize: 20,
-    textAlign: 'center',
-    color: Colors.text.primary,
-  },
-  summaryModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  summaryModalContent: {
-    backgroundColor: Colors.background.card,
-    borderRadius: 20,
-    width: width * 0.9,
-    maxHeight: '92%',
-    minHeight: 550,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-    borderWidth: 1,
-    borderColor: Colors.border.light,
-  },
   summaryModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   summaryModalTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: Colors.text.primary,
     flex: 1,
-    marginRight: 10,
-  },
-  summaryCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.background.light,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border.medium,
-  },
-  summaryCloseButtonText: {
-    fontSize: 20,
-    color: Colors.text.secondary,
-    fontWeight: 'bold',
-  },
-  summaryFormContainer: {
-    flex: 1,
-    padding: 20,
-    paddingTop: 30,
-    paddingBottom: 0,
-    minHeight: 450,
-  },
-  summaryScrollContent: {
-    paddingBottom: 40,
-  },
-  summaryScrollView: {
-    flex: 1,
+    marginLeft: 6,
+    flexShrink: 0,
   },
   summaryHeaderSection: {
     alignItems: 'center',
@@ -2147,33 +2238,6 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     flex: 1,
     lineHeight: 20,
-  },
-  summaryModalFooter: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border.light,
-    backgroundColor: Colors.background.card,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    minHeight: 80,
-  },
-  summaryModalButton: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  summaryModalButtonText: {
-    color: Colors.text.inverse,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
 

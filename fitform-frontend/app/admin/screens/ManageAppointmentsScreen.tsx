@@ -14,19 +14,20 @@ import {
 } from 'react-native';
 import apiService from '../../../services/api';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../../../constants/Colors';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isTablet = screenWidth > 768;
 
 const STATUS_COLORS = {
   confirmed: '#4CAF50',
-  pending: '#FFA000',
+  pending: '#FF9800',
   cancelled: '#F44336',
 };
 
 const STATUS_ICONS = {
   confirmed: 'checkmark-circle',
-  pending: 'time',
+  pending: 'hourglass',
   cancelled: 'close-circle',
 };
 
@@ -110,9 +111,25 @@ const ManageAppointmentsScreen = () => {
     }
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status: string): any => {
     return STATUS_ICONS[status as keyof typeof STATUS_ICONS] || 'help-circle';
   };
+
+  const getAppointmentStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return '#F59E0B'; // Orange
+      case 'confirmed':
+        return '#10B981'; // Green
+      case 'cancelled':
+        return '#EF4444'; // Red
+      case 'completed':
+        return '#6B7280'; // Gray
+      default:
+        return '#6B7280'; // Gray
+    }
+  };
+
 
   const getStatusLabel = (status: string) => {
     const option = STATUS_OPTIONS.find(opt => opt.value === status);
@@ -217,7 +234,7 @@ const ManageAppointmentsScreen = () => {
           </View>
           <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[appointment.status as keyof typeof STATUS_COLORS] }]}>
             <Ionicons name={getStatusIcon(appointment.status)} size={16} color="#fff" />
-            <Text style={styles.statusText}>{appointment.status}</Text>
+            <Text style={styles.statusText}>{appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}</Text>
           </View>
         </View>
         
@@ -481,28 +498,34 @@ const ManageAppointmentsScreen = () => {
       {/* Appointment Details Modal */}
       <Modal
         visible={showAppointmentModal}
-        transparent={true}
         animationType="slide"
+        presentationStyle="pageSheet"
         onRequestClose={() => setShowAppointmentModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {selectedAppointment && (
-              <>
-                <View style={styles.modalHeader}>
-                  <View style={styles.modalTitleContainer}>
-                    <Ionicons name="document-text-outline" size={24} color="#014D40" />
-                    <Text style={styles.modalTitle}>Appointment Details</Text>
-                  </View>
-                  <TouchableOpacity 
-                    style={styles.closeButton}
-                    onPress={() => setShowAppointmentModal(false)}
-                  >
-                    <Ionicons name="close" size={20} color="#666" />
-                  </TouchableOpacity>
-                </View>
+        {selectedAppointment && (
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Appointment Details</Text>
+              <TouchableOpacity
+                onPress={() => setShowAppointmentModal(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color={Colors.text.primary} />
+              </TouchableOpacity>
+            </View>
 
-                <ScrollView style={styles.modalBody}>
+            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+              <View style={styles.orderDetailCard}>
+                <View style={styles.orderDetailHeader}>
+                  <Text style={styles.orderDetailTitle}>
+                    {selectedAppointment.service_type} Appointment
+                  </Text>
+                  <View style={[styles.statusBadge, { backgroundColor: getAppointmentStatusColor(selectedAppointment.status) + '20' }]}>
+                    <Text style={[styles.statusText, { color: getAppointmentStatusColor(selectedAppointment.status) }]}>
+                      {selectedAppointment.status.charAt(0).toUpperCase() + selectedAppointment.status.slice(1)}
+                    </Text>
+                  </View>
+                </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Customer:</Text>
                     <Text style={styles.detailValue}>
@@ -556,39 +579,57 @@ const ManageAppointmentsScreen = () => {
                       <Text style={styles.detailValue}>{selectedAppointment.notes}</Text>
                     </View>
                   )}
-                </ScrollView>
+              </View>
+            </ScrollView>
 
-                <View style={styles.modalActions}>
-                  {selectedAppointment.status === 'pending' && (
-                    <TouchableOpacity
-                      style={[styles.modalActionButton, styles.confirmButton]}
-                      onPress={() => {
-                        handleStatus(selectedAppointment.id, 'confirmed');
-                        setShowAppointmentModal(false);
-                      }}
-                    >
-                      <Ionicons name="checkmark" size={20} color="#fff" />
-                      <Text style={styles.modalActionButtonText}>Confirm</Text>
-                    </TouchableOpacity>
-                  )}
-                  
-                  {selectedAppointment.status !== 'cancelled' && (
-                    <TouchableOpacity
-                      style={[styles.modalActionButton, styles.cancelButton]}
-                      onPress={() => {
-                        handleStatus(selectedAppointment.id, 'cancelled');
-                        setShowAppointmentModal(false);
-                      }}
-                    >
-                      <Ionicons name="close" size={20} color="#fff" />
-                      <Text style={styles.modalActionButtonText}>Cancel</Text>
-                    </TouchableOpacity>
-                  )}
+            <View style={styles.modalFooter}>
+              {selectedAppointment.status === 'pending' && (
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.confirmButton]}
+                    onPress={() => {
+                      handleStatus(selectedAppointment.id, 'confirmed');
+                      setShowAppointmentModal(false);
+                    }}
+                  >
+                    <Ionicons name="checkmark" size={20} color="#fff" />
+                    <Text style={styles.actionButtonText}>Confirm</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.cancelButton]}
+                    onPress={() => {
+                      handleStatus(selectedAppointment.id, 'cancelled');
+                      setShowAppointmentModal(false);
+                    }}
+                  >
+                    <Ionicons name="close" size={20} color="#fff" />
+                    <Text style={styles.actionButtonText}>Cancel</Text>
+                  </TouchableOpacity>
                 </View>
-              </>
-            )}
+              )}
+              
+              {selectedAppointment.status === 'confirmed' && (
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.cancelButton, styles.fullWidthButton]}
+                  onPress={() => {
+                    handleStatus(selectedAppointment.id, 'cancelled');
+                    setShowAppointmentModal(false);
+                  }}
+                >
+                  <Ionicons name="close" size={20} color="#fff" />
+                  <Text style={styles.actionButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              )}
+              
+              {selectedAppointment.status === 'cancelled' && (
+                <View style={styles.cancelledStatusModal}>
+                  <Ionicons name="information-circle" size={20} color="#666" />
+                  <Text style={styles.cancelledStatusText}>This appointment has been cancelled</Text>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
+        )}
       </Modal>
     </ScrollView>
   );
@@ -841,20 +882,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#014D40',
   },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 6,
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
   cardContent: {
     gap: 12,
     marginBottom: 16,
@@ -877,32 +904,6 @@ const styles = StyleSheet.create({
   cardActions: {
     flexDirection: 'row',
     gap: 12,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    gap: 6,
-    flex: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  confirmButton: {
-    backgroundColor: '#014D40',
-  },
-  cancelButton: {
-    backgroundColor: '#F44336',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
   },
   emptyState: {
     alignItems: 'center',
@@ -989,107 +990,167 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  // Modal Styles
-  modalOverlay: {
+  // Modal Styles - Matching Customer Side
+  modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    width: '90%',
-    maxHeight: '80%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
+    backgroundColor: Colors.background.light,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  modalTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    borderBottomColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#014D40',
+    color: Colors.primary,
   },
   closeButton: {
-    padding: 10,
+    padding: 8,
     borderRadius: 8,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: Colors.background.card,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: Colors.border.light,
   },
-  modalBody: {
-    padding: 24,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    marginBottom: 16,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  detailLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#014D40',
+  modalContent: {
     flex: 1,
+    padding: 20,
   },
-  detailValue: {
-    fontSize: 16,
-    color: '#014D40',
-    fontWeight: '500',
-    flex: 1,
-    textAlign: 'right',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-    gap: 16,
-  },
-  modalActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    gap: 8,
-    flex: 1,
-    justifyContent: 'center',
+  orderDetailCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    backgroundColor: '#014D40',
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
   },
-  modalActionButtonText: {
+  orderDetailHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  orderDetailTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.primary,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  statusText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light,
+  },
+  detailLabel: {
+    fontSize: 16,
+    color: Colors.text.secondary,
+    fontWeight: '600',
+    flex: 1,
+    marginRight: 8,
+  },
+  detailValue: {
+    fontSize: 16,
+    color: Colors.text.primary,
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+    flexWrap: 'wrap',
+  },
+  notesValue: {
+    fontSize: 16,
+    color: Colors.text.primary,
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+    flexWrap: 'wrap',
+  },
+  modalFooter: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 40,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 8,
+    minHeight: 48,
+  },
+  confirmButton: {
+    backgroundColor: Colors.primary,
+  },
+  cancelButton: {
+    backgroundColor: '#EF4444',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  actionButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
-  confirmButton: {
-    backgroundColor: '#014D40',
+  fullWidthButton: {
+    flex: 1,
+    width: '100%',
   },
-  cancelButton: {
-    backgroundColor: '#F44336',
+  cancelledStatusModal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    gap: 8,
+  },
+  cancelledStatusText: {
+    color: '#6B7280',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 

@@ -3,7 +3,6 @@ import { View, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import CustomerSidebar from '../../Customer/components/CustomerSidebar';
 import Header from '../../components/Header';
-import { NotificationProvider } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -49,20 +48,18 @@ export default function CustomerLayout() {
   }
 
   return (
-    <NotificationProvider>
-      <View style={styles.container}>
-        {isMobile && (
-          <Header onHamburgerPress={() => setSidebarOpen(true)} />
-        )}
-        <View style={[styles.content, isMobile && styles.mobileContent]}>
-          {!isMobile && <CustomerSidebar />}
-          <View style={styles.stackContainer}>
-            <Stack screenOptions={{ headerShown: false }} />
-          </View>
-          {isMobile && <CustomerSidebar open={sidebarOpen} setOpen={setSidebarOpen} />}
+    <View style={styles.container}>
+      {isMobile && (
+        <Header onHamburgerPress={() => setSidebarOpen(true)} />
+      )}
+      <View style={[styles.content, isMobile && styles.mobileContent]}>
+        {!isMobile && <CustomerSidebar />}
+        <View style={styles.stackContainer}>
+          <Stack screenOptions={{ headerShown: false }} />
         </View>
+        {isMobile && <CustomerSidebar open={sidebarOpen} setOpen={setSidebarOpen} />}
       </View>
-    </NotificationProvider>
+    </View>
   );
 }
 

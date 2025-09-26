@@ -113,28 +113,29 @@ export default function PurchaseOrderFlow() {
   // Helper functions for status display
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'pending': return Colors.warning;
-      case 'quotation_sent': return Colors.primary;
-      case 'counter_offer_pending': return '#FF9800';
-      case 'in_progress': return Colors.success;
-      case 'ready_for_pickup': return Colors.success;
-      case 'picked_up': return Colors.info;
-      case 'cancelled': return Colors.error;
-      case 'declined': return Colors.error;
-      default: return Colors.neutral[500];
+      case 'pending': return '#f59e0b';
+      case 'quotation_sent': return '#3b82f6';
+      case 'counter_offer_pending': return '#ff9800';
+      case 'in_progress': return '#014D40';
+      case 'ready_for_pickup': return '#10b981';
+      case 'picked_up': return '#059669';
+      case 'declined': return '#dc2626';
+      default: return '#6b7280';
     }
   };
 
   const getStatusText = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'ready_for_pickup':
-        return 'READY FOR PICK UP';
-      case 'counter_offer_pending':
-        return 'COUNTER OFFER PENDING';
+      case 'pending':
+        return 'PENDING';
       case 'quotation_sent':
         return 'QUOTATION SENT';
+      case 'counter_offer_pending':
+        return 'COUNTER OFFER PENDING';
       case 'in_progress':
         return 'IN PROGRESS';
+      case 'ready_for_pickup':
+        return 'READY FOR PICKUP';
       case 'picked_up':
         return 'PICKED UP';
       case 'declined':
@@ -214,7 +215,18 @@ export default function PurchaseOrderFlow() {
       const order = orders.find(o => o.id === selectedOrderForReview.id);
       if (order) {
         setSelectedOrder(order);
-        setShowQuotationModal(true);
+        
+        // Only show quotation modal if order is in a state that requires customer action
+        // Don't show quotation modal for completed/finalized orders (declined, in_progress, ready_for_pickup, picked_up)
+        const shouldShowQuotation = order.status === 'quotation_sent' || 
+                                   order.status === 'counter_offer_pending';
+        
+        if (shouldShowQuotation) {
+          setShowQuotationModal(true);
+        } else {
+          // For completed/finalized orders, just show order details
+          setShowOrderDetails(true);
+        }
       }
     }
   }, [selectedOrderForReview, orders]);

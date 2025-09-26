@@ -3,7 +3,6 @@ import { View, StyleSheet, Dimensions } from 'react-native';
 import { Stack, usePathname } from 'expo-router';
 import AdminSidebar from './components/AdminSidebar';
 import Header from '../../components/Header';
-import { NotificationProvider } from '../../contexts/NotificationContext';
 import { Colors } from '../../constants/Colors';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -13,24 +12,22 @@ export default function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <NotificationProvider>
-      <View style={styles.container}>
-        {isMobile && (
-          <Header onHamburgerPress={() => setSidebarOpen(true)} />
-        )}
-        <View style={[styles.content, isMobile && styles.mobileContent]}>
-          <AdminSidebar open={isMobile ? sidebarOpen : true} setOpen={setSidebarOpen} />
-          <View style={styles.stackContainer}>
-            <Stack 
-              screenOptions={{ 
-                headerShown: false,
-                contentStyle: { backgroundColor: Colors.background.light }
-              }} 
-            />
-          </View>
+    <View style={styles.container}>
+      {isMobile && (
+        <Header onHamburgerPress={() => setSidebarOpen(true)} />
+      )}
+      <View style={[styles.content, isMobile && styles.mobileContent]}>
+        <AdminSidebar open={isMobile ? sidebarOpen : true} setOpen={setSidebarOpen} />
+        <View style={styles.stackContainer}>
+          <Stack 
+            screenOptions={{ 
+              headerShown: false,
+              contentStyle: { backgroundColor: Colors.background.light }
+            }} 
+          />
         </View>
       </View>
-    </NotificationProvider>
+    </View>
   );
 }
 

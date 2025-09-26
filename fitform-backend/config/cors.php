@@ -24,20 +24,29 @@ return [
         'http://localhost:8081',
         'http://localhost:19006',
         'http://localhost:3000',
+        'http://localhost:8000',
         
         // Expo development server
+        'exp://localhost:8081',
         'exp://localhost:19000',
         'exp://localhost:19006',
         
         // Your specific local IP address
+        'http://192.168.1.55:8081',
         'http://192.168.1.55:19006',
+        'http://192.168.1.55:8000',
+        'exp://192.168.1.55:8081',
         'exp://192.168.1.55:19000',
         
         // Common local network IPs
         'http://192.168.1.*:19006',
+        'http://192.168.1.*:8000',
         'http://192.168.0.*:19006',
+        'http://192.168.0.*:8000',
         'http://10.0.0.*:19006',
+        'http://10.0.0.*:8000',
         'http://172.16.*.*:19006',
+        'http://172.16.*.*:8000',
         
         // Expo Go patterns
         'exp://192.168.1.*:19000',

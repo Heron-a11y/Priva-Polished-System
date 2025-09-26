@@ -26,19 +26,37 @@ echo Port 4040 (Ngrok):
 netstat -ano | findstr :4040
 
 echo [3/5] Testing backend connection...
+echo Testing localhost:8000...
 curl -s http://localhost:8000/api/test
 if %errorlevel% equ 0 (
-    echo ✅ Backend is responding!
+    echo ✅ Backend (localhost) is responding!
 ) else (
-    echo ❌ Backend is not responding
+    echo ❌ Backend (localhost) is not responding
 )
 
-echo [4/5] Testing ngrok connection...
-curl -s https://6ce230b8c3f9.ngrok-free.app/api/test
+echo Testing network IP:192.168.1.55:8000...
+curl -s http://192.168.1.55:8000/api/test
 if %errorlevel% equ 0 (
-    echo ✅ Ngrok tunnel is working!
+    echo ✅ Backend (network) is responding!
 ) else (
-    echo ❌ Ngrok tunnel is not responding
+    echo ❌ Backend (network) is not responding
+)
+
+echo [4/5] Testing frontend connection...
+echo Testing localhost:8081...
+curl -s http://localhost:8081
+if %errorlevel% equ 0 (
+    echo ✅ Frontend (localhost) is responding!
+) else (
+    echo ❌ Frontend (localhost) is not responding
+)
+
+echo Testing network IP:192.168.1.55:8081...
+curl -s http://192.168.1.55:8081
+if %errorlevel% equ 0 (
+    echo ✅ Frontend (network) is responding!
+) else (
+    echo ❌ Frontend (network) is not responding
 )
 
 echo [5/5] Checking Laravel logs...
@@ -55,8 +73,18 @@ echo Diagnostic Complete
 echo ========================================
 echo.
 echo If backend is not responding:
-echo 1. Run: start-fitform-complete.bat
+echo 1. Run: start-fitform-easy.bat
 echo 2. Check backend window for errors
 echo 3. Check Laravel logs
+echo.
+echo If frontend is not responding:
+echo 1. Make sure backend is running first
+echo 2. Check frontend window for errors
+echo 3. Try restarting with start-fitform-easy.bat
+echo.
+echo Mobile app access:
+echo - Backend API: http://192.168.1.55:8000/api
+echo - Frontend: http://192.168.1.55:8081
+echo - Mobile: exp://192.168.1.55:8081
 echo.
 pause

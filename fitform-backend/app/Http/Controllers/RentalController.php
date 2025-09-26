@@ -4,15 +4,43 @@ namespace App\Http\Controllers;
 use App\Models\Rental;
 use Illuminate\Http\Request;
 use App\Models\Notification;
+use App\Models\RentalPurchaseHistory;
 use Carbon\Carbon;
 
 class RentalController extends Controller
 {
+    /**
+     * Update history entry when rental status changes
+     */
+    private function updateRentalHistory($rental)
+    {
+        $historyEntry = RentalPurchaseHistory::where('user_id', $rental->user_id)
+            ->where('order_type', 'rental')
+            ->where('item_name', $rental->item_name)
+            ->where('order_date', $rental->rental_date)
+            ->first();
+            
+        if ($historyEntry) {
+            $historyEntry->update([
+                'status' => $rental->status,
+                'quotation_amount' => $rental->quotation_amount,
+                'quotation_notes' => $rental->quotation_notes,
+                'quotation_status' => $rental->quotation_status,
+                'quotation_sent_at' => $rental->quotation_sent_at,
+                'quotation_responded_at' => $rental->quotation_responded_at,
+                'penalty_breakdown' => $rental->penalty_breakdown,
+                'total_penalties' => $rental->total_penalties,
+                'penalty_status' => $rental->penalty_status,
+                'agreement_accepted' => $rental->agreement_accepted,
+            ]);
+        }
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();
         if ($user && isset($user->role) && $user->role === 'admin') {
-            $rentals = Rental::with('user:id,name')->get();
+            $rentals = Rental::with('user:id,name')->whereNull('deleted_at')->get();
             $rentals->transform(function ($rental) {
                 $rental->customer_name = $rental->user ? $rental->user->name : null;
                 // Add penalty breakdown to each rental
@@ -22,7 +50,7 @@ class RentalController extends Controller
             });
             return response()->json(['data' => $rentals]);
         }
-        $rentals = Rental::with('user:id,name')->where('user_id', $user->id)->get();
+        $rentals = Rental::with('user:id,name')->where('user_id', $user->id)->whereNull('deleted_at')->get();
         $rentals->transform(function ($rental) {
             $rental->customer_name = $rental->user ? $rental->user->name : null;
             // Add penalty breakdown to each rental
@@ -71,6 +99,32 @@ class RentalController extends Controller
         ];
         
         $rental = Rental::create($rentalData);
+        
+        // Automatically create history entry
+        \App\Models\RentalPurchaseHistory::create([
+            'user_id' => $rental->user_id,
+            'order_type' => 'rental',
+            'item_name' => $rental->item_name,
+            'order_subtype' => 'rental', // Default value since rental_type doesn't exist
+            'order_date' => $rental->rental_date,
+            'return_date' => $rental->return_date,
+            'status' => $rental->status,
+            'clothing_type' => $rental->clothing_type,
+            'measurements' => $rental->measurements,
+            'notes' => $rental->notes,
+            'customer_name' => $rental->customer_name,
+            'customer_email' => $rental->customer_email,
+            'quotation_amount' => null, // Will be set when quotation is sent
+            'quotation_notes' => null, // Will be set when quotation is sent
+            'quotation_status' => 'pending', // Default value
+            'quotation_sent_at' => null, // Will be set when quotation is sent
+            'quotation_responded_at' => null, // Will be set when customer responds
+            'penalty_breakdown' => null, // Will be set if penalties are calculated
+            'total_penalties' => 0, // Default value
+            'penalty_status' => 'none', // Default value
+            'agreement_accepted' => $rental->agreement_accepted,
+        ]);
+        
         return response()->json($rental, 201);
     }
 
@@ -84,6 +138,8 @@ class RentalController extends Controller
             'sender_role' => 'admin',
             'message' => 'Your rental order #' . $rental->id . ' has been approved.',
             'read' => false,
+            'order_id' => $rental->id,
+            'order_type' => 'Rental',
         ]);
         return response()->json(['success' => true, 'status' => 'approved']);
     }
@@ -98,31 +154,12 @@ class RentalController extends Controller
             'sender_role' => 'admin',
             'message' => 'Your rental order #' . $rental->id . ' has been declined.',
             'read' => false,
+            'order_id' => $rental->id,
+            'order_type' => 'Rental',
         ]);
         return response()->json(['success' => true, 'status' => 'declined']);
     }
 
-    public function cancel($id)
-    {
-        $rental = Rental::findOrFail($id);
-        $rental->status = 'cancelled';
-        
-        // Apply cancellation fee
-        $rental->total_penalties = $rental->cancellation_fee;
-        $rental->penalty_status = 'pending';
-        $rental->penalty_notes = 'Cancellation fee applied';
-        $rental->penalty_calculated_at = now();
-        
-        $rental->save();
-        
-        Notification::create([
-            'user_id' => $rental->user_id,
-            'sender_role' => 'admin',
-            'message' => 'Your rental order #' . $rental->id . ' has been cancelled. Cancellation fee: ₱' . $rental->cancellation_fee,
-            'read' => false,
-        ]);
-        return response()->json(['success' => true, 'status' => 'cancelled']);
-    }
 
     public function setQuotation(Request $request, $id)
     {
@@ -144,11 +181,17 @@ class RentalController extends Controller
         $rental->damage_fee_max = $data['quotation_amount'];
         
         $rental->save();
+        
+        // Update history entry
+        $this->updateRentalHistory($rental);
+        
         Notification::create([
             'user_id' => $rental->user_id,
             'sender_role' => 'admin',
             'message' => 'A quotation has been sent for your rental order #' . $rental->id,
             'read' => false,
+            'order_id' => $rental->id,
+            'order_type' => 'Rental',
         ]);
         return response()->json(['success' => true]);
     }
@@ -160,6 +203,9 @@ class RentalController extends Controller
         $rental->status = 'ready_for_pickup';
         $rental->quotation_responded_at = now();
         $rental->save();
+        
+        // Update history entry
+        $this->updateRentalHistory($rental);
         // Notify all admins
         $admins = \App\Models\User::where('role', 'admin')->get();
         foreach ($admins as $admin) {
@@ -168,6 +214,8 @@ class RentalController extends Controller
                 'sender_role' => 'customer',
                 'message' => 'Customer accepted the quotation for rental order #' . $rental->id,
                 'read' => false,
+                'order_id' => $rental->id,
+                'order_type' => 'Rental',
             ]);
         }
         return response()->json(['success' => true]);
@@ -177,17 +225,22 @@ class RentalController extends Controller
     {
         $rental = Rental::findOrFail($id);
         $rental->quotation_status = 'rejected';
-        $rental->status = 'declined'; // Changed from 'cancelled' to 'declined' as per requirements
+        $rental->status = 'declined';
         $rental->quotation_responded_at = now();
         $rental->save();
+        
+        // Update history entry
+        $this->updateRentalHistory($rental);
         // Notify all admins
         $admins = \App\Models\User::where('role', 'admin')->get();
         foreach ($admins as $admin) {
             Notification::create([
                 'user_id' => $admin->id,
                 'sender_role' => 'customer',
-                'message' => 'Customer rejected the quotation for rental order #' . $rental->id,
+                'message' => 'Customer rejected the quotation for rental order #' . $rental->id . '. Transaction declined.',
                 'read' => false,
+                'order_id' => $rental->id,
+                'order_type' => 'Rental',
             ]);
         }
         return response()->json(['success' => true]);
@@ -206,6 +259,8 @@ class RentalController extends Controller
             'sender_role' => 'admin',
             'message' => 'Your rental order #' . $rental->id . ' has been accepted by admin.',
             'read' => false,
+            'order_id' => $rental->id,
+            'order_type' => 'Rental',
         ]);
         return response()->json(['success' => true, 'status' => 'confirmed']);
     }
@@ -223,6 +278,8 @@ class RentalController extends Controller
             'sender_role' => 'admin',
             'message' => 'Your rental order #' . $rental->id . ' has been declined by admin.',
             'read' => false,
+            'order_id' => $rental->id,
+            'order_type' => 'Rental',
         ]);
         return response()->json(['success' => true, 'status' => 'declined']);
     }
@@ -268,6 +325,8 @@ class RentalController extends Controller
             'sender_role' => 'admin',
             'message' => 'Penalties for rental order #' . $rental->id . ' have been marked as paid.',
             'read' => false,
+            'order_id' => $rental->id,
+            'order_type' => 'Rental',
         ]);
 
         return response()->json(['success' => true]);
@@ -314,6 +373,8 @@ class RentalController extends Controller
             'sender_role' => 'admin',
             'message' => 'Your rental order #' . $rental->id . ' is ready for pickup!',
             'read' => false,
+            'order_id' => $rental->id,
+            'order_type' => 'Rental',
         ]);
         return response()->json(['success' => true, 'status' => 'ready_for_pickup']);
     }
@@ -374,6 +435,8 @@ class RentalController extends Controller
                 'sender_role' => 'customer',
                 'message' => 'Customer made a counter offer of ₱' . number_format($data['counter_offer_amount'], 2) . ' for rental order #' . $rental->id,
                 'read' => false,
+                'order_id' => $rental->id,
+                'order_type' => 'Rental',
             ]);
         }
 
@@ -402,6 +465,8 @@ class RentalController extends Controller
             'sender_role' => 'admin',
             'message' => 'Your counter offer of ₱' . number_format($rental->counter_offer_amount, 2) . ' for rental order #' . $rental->id . ' has been accepted!',
             'read' => false,
+            'order_id' => $rental->id,
+            'order_type' => 'Rental',
         ]);
 
         return response()->json(['success' => true, 'message' => 'Counter offer accepted']);
@@ -419,15 +484,17 @@ class RentalController extends Controller
         }
 
         $rental->counter_offer_status = 'rejected';
-        $rental->status = 'declined'; // Changed from 'rejected' to 'declined' as per requirements
+        $rental->status = 'declined';
         $rental->save();
 
         // Notify customer
         Notification::create([
             'user_id' => $rental->user_id,
             'sender_role' => 'admin',
-            'message' => 'Your counter offer for rental order #' . $rental->id . ' has been rejected. The transaction is now declined.',
+            'message' => 'Your counter offer for rental order #' . $rental->id . ' has been rejected. Transaction declined.',
             'read' => false,
+            'order_id' => $rental->id,
+            'order_type' => 'Rental',
         ]);
 
         return response()->json(['success' => true, 'message' => 'Counter offer rejected']);
@@ -453,6 +520,8 @@ class RentalController extends Controller
             'sender_role' => 'admin',
             'message' => 'Your rental order #' . $rental->id . ' has been marked as picked up.',
             'read' => false,
+            'order_id' => $rental->id,
+            'order_type' => 'Rental',
         ]);
 
         return response()->json(['success' => true, 'status' => 'picked_up']);
@@ -478,8 +547,47 @@ class RentalController extends Controller
             'sender_role' => 'admin',
             'message' => 'Your rental order #' . $rental->id . ' has been marked as returned. Thank you!',
             'read' => false,
+            'order_id' => $rental->id,
+            'order_type' => 'Rental',
         ]);
 
         return response()->json(['success' => true, 'status' => 'returned']);
+    }
+
+    public function destroy(Request $request, $id)
+    {
+        try {
+            \Log::info('Delete rental request received', ['id' => $id, 'headers' => $request->headers->all()]);
+            
+            $rental = Rental::findOrFail($id);
+            
+            // Check if user can delete this rental (only if it's their own rental or if they're admin)
+            $user = $request->user();
+            \Log::info('User authentication check', ['user' => $user ? $user->id : 'null']);
+            
+            if (!$user) {
+                \Log::warning('Unauthenticated delete request');
+                return response()->json(['error' => 'Unauthenticated'], 401);
+            }
+            
+            if ($user->role !== 'admin' && $rental->user_id !== $user->id) {
+                \Log::warning('Unauthorized delete request', ['user_id' => $user->id, 'rental_user_id' => $rental->user_id]);
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
+
+            // Only allow deletion of pending or declined orders
+            if (!in_array($rental->status, ['pending', 'declined'])) {
+                \Log::warning('Attempt to delete non-deletable rental', ['status' => $rental->status]);
+                return response()->json(['error' => 'Cannot delete orders that are in progress or completed'], 400);
+            }
+
+            $rental->forceDelete(); // Hard delete from database
+            \Log::info('Rental permanently deleted', ['id' => $id]);
+            
+            return response()->json(['message' => 'Rental order permanently deleted']);
+        } catch (\Exception $e) {
+            \Log::error('Error deleting rental', ['id' => $id, 'error' => $e->getMessage()]);
+            return response()->json(['error' => 'Server error: ' . $e->getMessage()], 500);
+        }
     }
 } 

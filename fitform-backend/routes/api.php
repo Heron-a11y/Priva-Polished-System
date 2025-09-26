@@ -85,11 +85,9 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         // Rental actions
         Route::post('/rentals/{id}/approve', [\App\Http\Controllers\RentalController::class, 'approve']);
         Route::post('/rentals/{id}/decline', [\App\Http\Controllers\RentalController::class, 'decline']);
-        Route::post('/rentals/{id}/cancel', [\App\Http\Controllers\RentalController::class, 'cancel']);
         // Purchase actions
         Route::post('/purchases/{id}/approve', [\App\Http\Controllers\PurchaseController::class, 'approve']);
         Route::post('/purchases/{id}/decline', [\App\Http\Controllers\PurchaseController::class, 'decline']);
-        Route::post('/purchases/{id}/cancel', [\App\Http\Controllers\PurchaseController::class, 'cancel']);
         // Quotation actions for purchases
         Route::post('/purchases/{id}/set-quotation', [\App\Http\Controllers\PurchaseController::class, 'setQuotation']);
         Route::post('/purchases/{id}/accept-quotation', [\App\Http\Controllers\PurchaseController::class, 'customerAcceptQuotation']);
@@ -125,6 +123,14 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         Route::post('/rentals/{id}/mark-picked-up', [\App\Http\Controllers\RentalController::class, 'markAsPickedUp']);
         // Mark rental as returned
         Route::post('/rentals/{id}/mark-returned', [\App\Http\Controllers\RentalController::class, 'markAsReturned']);
+        
+        // Delete routes
+        Route::delete('/rentals/{id}', [\App\Http\Controllers\RentalController::class, 'destroy']);
+        Route::delete('/purchases/{id}', [\App\Http\Controllers\PurchaseController::class, 'destroy']);
+        
+        // Unified History routes
+        Route::get('/rental-purchase-history', [\App\Http\Controllers\RentalPurchaseHistoryController::class, 'index']);
+        Route::delete('/rental-purchase-history/{id}', [\App\Http\Controllers\RentalPurchaseHistoryController::class, 'destroy']);
         
         // Sizing System Routes
         // Customer sizing routes
