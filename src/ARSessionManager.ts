@@ -9,6 +9,11 @@ interface ARSessionManagerNative {
   getMeasurements(): Promise<ARMeasurements>;
   getSessionStatus(): Promise<SessionStatus>;
   markScanCompleted(scanType: string): Promise<boolean>;
+  // ✅ PHASE 1: New methods for enhanced functionality
+  startRealTimeProcessing(): Promise<boolean>;
+  stopRealTimeProcessing(): Promise<boolean>;
+  // ✅ PHASE 2: Configuration management
+  loadConfiguration(config: any): Promise<boolean>;
 }
 
 // Define the event emitter interface
@@ -213,6 +218,52 @@ class ARSessionManager {
       return await this.nativeModule.markScanCompleted(scanType);
     } catch (error) {
       console.error('Error marking scan completed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * ✅ PHASE 1: Start real-time measurement processing
+   * @returns Promise<boolean> - true if started successfully
+   */
+  async startRealTimeProcessing(): Promise<boolean> {
+    try {
+      const result = await this.nativeModule.startRealTimeProcessing();
+      console.log('Real-time processing started:', result);
+      return result;
+    } catch (error) {
+      console.error('Error starting real-time processing:', error);
+      return false;
+    }
+  }
+
+  /**
+   * ✅ PHASE 1: Stop real-time measurement processing
+   * @returns Promise<boolean> - true if stopped successfully
+   */
+  async stopRealTimeProcessing(): Promise<boolean> {
+    try {
+      const result = await this.nativeModule.stopRealTimeProcessing();
+      console.log('Real-time processing stopped:', result);
+      return result;
+    } catch (error) {
+      console.error('Error stopping real-time processing:', error);
+      return false;
+    }
+  }
+
+  /**
+   * ✅ PHASE 2: Load configuration into native modules
+   * @param config - Configuration object to load
+   * @returns Promise<boolean> - true if configuration loaded successfully
+   */
+  async loadConfiguration(config: any): Promise<boolean> {
+    try {
+      const result = await this.nativeModule.loadConfiguration(config);
+      console.log('Configuration loaded successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('Error loading configuration:', error);
       return false;
     }
   }
