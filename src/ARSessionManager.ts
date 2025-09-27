@@ -1,4 +1,5 @@
 import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
+import { getConfig } from './config/ARConfig';
 
 // Define the native module interface
 interface ARSessionManagerNative {
@@ -310,25 +311,39 @@ class ARSessionManager {
       return false;
     }
 
-    // AR Safeguard: Check confidence threshold (minimum 70% confidence)
-    if (measurements.confidence < 0.7) {
-      console.warn('AR Validation: Confidence below threshold:', measurements.confidence);
+    // Get configuration for validation thresholds
+    const config = getConfig();
+    const minConfidence = config.ar.minConfidenceThreshold;
+    const shoulderRange = config.validation.shoulderWidth;
+    const heightRange = config.validation.height;
+    const proportionRange = config.validation.bodyProportions;
+
+    // AR Safeguard: Check confidence threshold from configuration
+    if (measurements.confidence < minConfidence) {
+      console.warn('AR Validation: Confidence below threshold:', measurements.confidence, 'required:', minConfidence);
       return false;
     }
 
-    // AR Safeguard: Check reasonable ranges for measurements
+    // AR Safeguard: Check reasonable ranges for measurements using configuration
     const shoulderWidth = measurements.shoulderWidthCm;
     const height = measurements.heightCm;
 
-    // Shoulder width should be between 30-60 cm
-    if (shoulderWidth < 30 || shoulderWidth > 60) {
-      console.warn('AR Validation: Shoulder width outside valid range:', shoulderWidth);
+    // Shoulder width validation using configurable ranges
+    if (shoulderWidth < shoulderRange.acceptableMin || shoulderWidth > shoulderRange.acceptableMax) {
+      console.warn('AR Validation: Shoulder width outside acceptable range:', shoulderWidth, 'range:', [shoulderRange.acceptableMin, shoulderRange.acceptableMax]);
       return false;
     }
 
-    // Height should be between 120-220 cm
-    if (height < 120 || height > 220) {
-      console.warn('AR Validation: Height outside valid range:', height);
+    // Height validation using configurable ranges
+    if (height < heightRange.acceptableMin || height > heightRange.acceptableMax) {
+      console.warn('AR Validation: Height outside acceptable range:', height, 'range:', [heightRange.acceptableMin, heightRange.acceptableMax]);
+      return false;
+    }
+
+    // Body proportion validation
+    const heightToShoulderRatio = height / shoulderWidth;
+    if (heightToShoulderRatio < proportionRange.acceptableMinRatio || heightToShoulderRatio > proportionRange.acceptableMaxRatio) {
+      console.warn('AR Validation: Body proportions outside acceptable range:', heightToShoulderRatio, 'range:', [proportionRange.acceptableMinRatio, proportionRange.acceptableMaxRatio]);
       return false;
     }
 

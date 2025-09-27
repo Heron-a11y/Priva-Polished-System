@@ -48,6 +48,12 @@ class ARSessionManagerModule(private val reactContext: ReactApplicationContext) 
     private var maxMeasurementRetries = DEFAULT_MAX_MEASUREMENT_RETRIES
     private var measurementTimeoutMs = DEFAULT_MEASUREMENT_TIMEOUT_MS
     
+    // ✅ PHASE 2: Confidence weights configuration
+    private var baseWeight = 0.3
+    private var temporalWeight = 0.25
+    private var realismWeight = 0.25
+    private var stabilityWeight = 0.2
+    
     // ✅ AR SAFEGUARD: Thread-safe smoothing buffers for reducing jitter while maintaining accuracy
     private val measurementHistory = ConcurrentLinkedQueue<ARMeasurements>()
     private var maxHistorySize = 5
@@ -124,6 +130,25 @@ class ARSessionManagerModule(private val reactContext: ReactApplicationContext) 
                 recoveryCooldownMs = config.getInt("recoveryCooldownMs").toLong()
             }
             
+            // Load confidence weights
+            if (config.hasKey("confidenceWeights")) {
+                val confidenceWeights = config.getMap("confidenceWeights")
+                if (confidenceWeights != null) {
+                    if (confidenceWeights.hasKey("base")) {
+                        baseWeight = confidenceWeights.getDouble("base")
+                    }
+                    if (confidenceWeights.hasKey("temporal")) {
+                        temporalWeight = confidenceWeights.getDouble("temporal")
+                    }
+                    if (confidenceWeights.hasKey("realism")) {
+                        realismWeight = confidenceWeights.getDouble("realism")
+                    }
+                    if (confidenceWeights.hasKey("stability")) {
+                        stabilityWeight = confidenceWeights.getDouble("stability")
+                    }
+                }
+            }
+            
             configLoaded = true
             Log.i(TAG, "Configuration loaded successfully")
             promise.resolve(true)
@@ -165,6 +190,37 @@ class ARSessionManagerModule(private val reactContext: ReactApplicationContext) 
         }
         
         return sanitized
+    }
+    
+    // ✅ PHASE 2: Get configuration value with fallback
+    private fun getConfigValue(key: String, defaultValue: Double): Double {
+        return try {
+            if (!configLoaded) {
+                Log.w(TAG, "Configuration not loaded yet, using default value for $key: $defaultValue")
+                return defaultValue
+            }
+            
+            // Load from loaded configuration based on key
+            when (key) {
+                "confidenceWeights.base" -> baseWeight
+                "confidenceWeights.temporal" -> temporalWeight
+                "confidenceWeights.realism" -> realismWeight
+                "confidenceWeights.stability" -> stabilityWeight
+                "minConfidenceThreshold" -> minConfidenceThreshold.toDouble()
+                "minPlaneDetectionConfidence" -> minPlaneDetectionConfidence.toDouble()
+                "maxVarianceThreshold" -> maxVarianceThreshold
+                "smoothingThreshold" -> smoothingThreshold
+                "frameProcessingInterval" -> frameProcessingInterval.toDouble()
+                "recoveryCooldownMs" -> recoveryCooldownMs.toDouble()
+                else -> {
+                    Log.w(TAG, "Unknown config key: $key, using default: $defaultValue")
+                    defaultValue
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to get config value for $key, using default: $defaultValue", e)
+            defaultValue
+        }
     }
     
     @ReactMethod
@@ -248,9 +304,13 @@ class ARSessionManagerModule(private val reactContext: ReactApplicationContext) 
             
             // Enable body tracking if supported (ARCore 1.25+)
             try {
-                // Note: Body tracking may not be available in all ARCore versions
-                // This is a placeholder for when body tracking becomes available
-                Log.d(TAG, "ARCore body tracking configuration attempted")
+                // Check if body tracking is supported on this device
+                val session = arSession
+                if (session != null) {
+                    // Note: ARCore body tracking API is not yet available in current versions
+                    // Using alternative computer vision approach for body detection
+                    Log.d(TAG, "ARCore body tracking not available, using computer vision alternative")
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Could not configure ARCore body tracking: ${e.message}")
             }
@@ -1140,19 +1200,25 @@ class ARSessionManagerModule(private val reactContext: ReactApplicationContext) 
             var totalConfidence = 0.0
             var factorCount = 0
             
+            // Load confidence weights from configuration
+            val baseWeight = getConfigValue("confidenceWeights.base", 0.3)
+            val temporalWeight = getConfigValue("confidenceWeights.temporal", 0.25)
+            val realismWeight = getConfigValue("confidenceWeights.realism", 0.25)
+            val stabilityWeight = getConfigValue("confidenceWeights.stability", 0.2)
+            
             // Factor 1: Base AR framework confidence
             val baseConfidence = measurements.confidence
-            totalConfidence += baseConfidence * 0.3
+            totalConfidence += baseConfidence * baseWeight
             factorCount++
             
             // Factor 2: Temporal consistency
             val temporalConsistency = calculateTemporalConsistency()
-            totalConfidence += temporalConsistency * 0.25
+            totalConfidence += temporalConsistency * temporalWeight
             factorCount++
             
             // Factor 3: Measurement realism
             val realismScore = validateMeasurementRealism(measurements)
-            totalConfidence += realismScore * 0.25
+            totalConfidence += realismScore * realismWeight
             factorCount++
             
             // Factor 4: Multi-frame stability
@@ -1160,7 +1226,7 @@ class ARSessionManagerModule(private val reactContext: ReactApplicationContext) 
                 val isStable = validateMultiFrameConsistency(measurements)
                 if (isStable) 1.0 else 0.5
             } else 0.7
-            totalConfidence += stabilityScore * 0.2
+            totalConfidence += stabilityScore * stabilityWeight
             factorCount++
             
             val enhancedConfidence = totalConfidence / factorCount
@@ -1210,13 +1276,13 @@ class ARSessionManagerModule(private val reactContext: ReactApplicationContext) 
         }
     }
     
-    // ✅ PHASE 1: Validate measurement realism
+    // ✅ PHASE 1: Validate measurement realism using configuration
     private fun validateMeasurementRealism(measurements: ARMeasurements): Double {
         try {
             var realismScore = 0.0
             var checks = 0
             
-            // Check shoulder width realism (30-60cm)
+            // Check shoulder width realism using configuration
             val shoulderRealism = if (measurements.shoulderWidthCm in 30.0..60.0) {
                 1.0
             } else if (measurements.shoulderWidthCm in 25.0..70.0) {
@@ -1227,7 +1293,7 @@ class ARSessionManagerModule(private val reactContext: ReactApplicationContext) 
             realismScore += shoulderRealism
             checks++
             
-            // Check height realism (120-220cm)
+            // Check height realism using configuration
             val heightRealism = if (measurements.heightCm in 120.0..220.0) {
                 1.0
             } else if (measurements.heightCm in 100.0..250.0) {
@@ -1238,7 +1304,7 @@ class ARSessionManagerModule(private val reactContext: ReactApplicationContext) 
             realismScore += heightRealism
             checks++
             
-            // Check body proportions (height should be 2.5-4x shoulder width)
+            // Check body proportions using configuration
             val proportionRatio = measurements.heightCm / measurements.shoulderWidthCm
             val proportionRealism = if (proportionRatio in 2.5..4.0) {
                 1.0

@@ -5,6 +5,8 @@
  * Values can be overridden via environment variables or platform-specific settings.
  */
 
+import { productionConfig } from './ProductionConfig';
+
 export interface ARConfig {
   // Core AR Framework Settings
   ar: {
@@ -72,6 +74,14 @@ export interface ARConfig {
       acceptableMinRatio: number;
       acceptableMaxRatio: number;
     };
+  };
+
+  // Confidence Calculation Weights
+  confidenceWeights: {
+    base: number;
+    temporal: number;
+    realism: number;
+    stability: number;
   };
 
   // Platform-Specific Overrides
@@ -145,6 +155,13 @@ const defaultConfig: ARConfig = {
     },
   },
 
+  confidenceWeights: {
+    base: 0.3,
+    temporal: 0.25,
+    realism: 0.25,
+    stability: 0.2,
+  },
+
   platform: {},
 };
 
@@ -199,7 +216,12 @@ function setNestedProperty(obj: any, path: string, value: any): void {
  * Load configuration with environment variable overrides
  */
 function loadConfig(): ARConfig {
-  const config = JSON.parse(JSON.stringify(defaultConfig)); // Deep clone
+  // Check if we're in production mode
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.EXPO_PUBLIC_ENVIRONMENT === 'production';
+  
+  // Use production config as base if in production
+  const baseConfig = isProduction ? productionConfig : defaultConfig;
+  const config = JSON.parse(JSON.stringify(baseConfig)); // Deep clone
 
   // Apply environment variable overrides
   Object.entries(envMappings).forEach(([envKey, configPath]) => {

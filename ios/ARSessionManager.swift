@@ -30,6 +30,12 @@ class ARSessionManager: NSObject {
     private var maxMeasurementRetries: Int = 3
     private var measurementTimeoutMs: Double = 10000
     
+    // ✅ PHASE 2: Confidence weights configuration
+    private var baseWeight: Double = 0.3
+    private var temporalWeight: Double = 0.25
+    private var realismWeight: Double = 0.25
+    private var stabilityWeight: Double = 0.2
+    
     // ✅ PHASE 1: Thread-safe multi-frame validation system
     private var frameValidationBuffer: [ARMeasurements] = []
     private var requiredFramesForValidation = 8
@@ -99,6 +105,22 @@ class ARSessionManager: NSObject {
                 }
                 if let cooldown = config["recoveryCooldownMs"] as? Double {
                     self.recoveryCooldownMs = cooldown
+                }
+                
+                // Load confidence weights
+                if let confidenceWeights = config["confidenceWeights"] as? [String: Any] {
+                    if let base = confidenceWeights["base"] as? Double {
+                        self.baseWeight = base
+                    }
+                    if let temporal = confidenceWeights["temporal"] as? Double {
+                        self.temporalWeight = temporal
+                    }
+                    if let realism = confidenceWeights["realism"] as? Double {
+                        self.realismWeight = realism
+                    }
+                    if let stability = confidenceWeights["stability"] as? Double {
+                        self.stabilityWeight = stability
+                    }
                 }
                 
                 self.configLoaded = true
@@ -431,23 +453,23 @@ class ARSessionManager: NSObject {
         
         // Factor 1: Base AR framework confidence
         let baseConfidence = measurements.confidence
-        totalConfidence += baseConfidence * 0.3
+        totalConfidence += baseConfidence * baseWeight
         factorCount += 1
         
         // Factor 2: Temporal consistency
         let temporalConsistency = calculateTemporalConsistency()
-        totalConfidence += temporalConsistency * 0.25
+        totalConfidence += temporalConsistency * temporalWeight
         factorCount += 1
         
         // Factor 3: Measurement realism
         let realismScore = validateMeasurementRealism(measurements)
-        totalConfidence += realismScore * 0.25
+        totalConfidence += realismScore * realismWeight
         factorCount += 1
         
         // Factor 4: Multi-frame stability
         let stabilityScore = frameValidationBuffer.count >= minConsistencyFrames ? 
             (validateMultiFrameConsistency(measurements) ? 1.0 : 0.5) : 0.7
-        totalConfidence += stabilityScore * 0.2
+        totalConfidence += stabilityScore * stabilityWeight
         factorCount += 1
         
         let enhancedConfidence = totalConfidence / Double(factorCount)
@@ -673,6 +695,33 @@ class ARSessionManager: NSObject {
         return hasRequiredFeatures
     }
     
+    // ✅ PHASE 2: Get real iOS device model for performance optimization
+    private func getiOSDeviceModel() -> String {
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let modelCode = String(bytes: Data(bytes: &systemInfo.machine, count: Int(_SYS_NAMELEN)), encoding: .ascii)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Unknown"
+        
+        // Map device codes to performance tiers
+        switch modelCode {
+        case let code where code.hasPrefix("iPhone15,"):
+            return "iPhone 15 Pro"
+        case let code where code.hasPrefix("iPhone14,"):
+            return "iPhone 14 Pro"
+        case let code where code.hasPrefix("iPhone13,"):
+            return "iPhone 13 Pro"
+        case let code where code.hasPrefix("iPhone12,"):
+            return "iPhone 12 Pro"
+        case let code where code.hasPrefix("iPhone11,"):
+            return "iPhone 11 Pro"
+        case let code where code.hasPrefix("iPhone10,"):
+            return "iPhone X"
+        case let code where code.hasPrefix("iPad"):
+            return "iPad Pro"
+        default:
+            return "iPhone 13" // Default to mid-range performance
+        }
+    }
+    
     @objc
     func markScanCompleted(_ scanType: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         DispatchQueue.main.async {
@@ -697,6 +746,55 @@ class ARSessionManager: NSObject {
             } catch {
                 print("ARSessionManager: Error marking scan completed - \(error)")
                 reject("SCAN_ERROR", "Failed to mark scan completed: \(error.localizedDescription)", error)
+            }
+        }
+    }
+    
+    // ✅ PHASE 2: Load configuration from centralized config system
+    @objc
+    func loadConfiguration(_ config: NSDictionary, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        sessionQueue.async {
+            do {
+                // Load AR framework settings
+                if let minConfidence = config["minConfidenceThreshold"] as? Double {
+                    self.minConfidenceThreshold = minConfidence
+                }
+                if let minPlaneConfidence = config["minPlaneDetectionConfidence"] as? Double {
+                    self.minPlaneDetectionConfidence = minPlaneConfidence
+                }
+                if let minLandmarks = config["minBodyLandmarksRequired"] as? Int {
+                    self.minBodyLandmarksRequired = minLandmarks
+                }
+                if let maxRetries = config["maxMeasurementRetries"] as? Int {
+                    self.maxMeasurementRetries = maxRetries
+                }
+                if let timeout = config["measurementTimeoutMs"] as? Double {
+                    self.measurementTimeoutMs = timeout
+                }
+                
+                // Load confidence weights
+                if let confidenceWeights = config["confidenceWeights"] as? NSDictionary {
+                    if let base = confidenceWeights["base"] as? Double {
+                        self.baseWeight = base
+                    }
+                    if let temporal = confidenceWeights["temporal"] as? Double {
+                        self.temporalWeight = temporal
+                    }
+                    if let realism = confidenceWeights["realism"] as? Double {
+                        self.realismWeight = realism
+                    }
+                    if let stability = confidenceWeights["stability"] as? Double {
+                        self.stabilityWeight = stability
+                    }
+                }
+                
+                self.configLoaded = true
+                print("ARSessionManager: Configuration loaded successfully")
+                resolve(true)
+                
+            } catch {
+                print("ARSessionManager: Error loading configuration: \(error)")
+                reject("CONFIG_ERROR", "Failed to load configuration: \(error.localizedDescription)", error)
             }
         }
     }

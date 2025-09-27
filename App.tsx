@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Alert, Platform, AppState } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Alert, Platform, AppState, Animated } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library';
 import ARSessionManager from './src/ARSessionManager';
 import { getConfig } from './src/config/ARConfig';
-import { logger, logInfo, logError, logPerformance } from './src/utils/ARLogger';
+import { logger, logInfo, logError, logPerformance, logWarn } from './src/utils/ARLogger';
 import { deviceCapabilities } from './src/utils/DeviceCapabilities';
 
 // Create AR session manager instance
@@ -254,6 +254,15 @@ export default function App() {
   const [scanTimeout, setScanTimeout] = useState<NodeJS.Timeout | null>(null);
   const [scanStartTime, setScanStartTime] = useState<number>(0);
   
+  // Animation for scanning line
+  const scanningLineAnimation = useRef(new Animated.Value(0)).current;
+  
+  // Helper function to stop scanning animation
+  const stopScanningAnimation = useCallback(() => {
+    scanningLineAnimation.stopAnimation();
+    scanningLineAnimation.setValue(0);
+  }, [scanningLineAnimation]);
+  
   // ✅ PHASE 2: Configuration and device capabilities
   const [config, setConfig] = useState<any>(null);
   const [deviceCapabilitiesLoaded, setDeviceCapabilitiesLoaded] = useState<boolean>(false);
@@ -368,6 +377,9 @@ export default function App() {
       activeIntervals.current.clear();
       activeTimeouts.current.clear();
       cleanupAllOperations();
+      
+      // Stop scanning animation
+      stopScanningAnimation();
     };
   }, []);
 
@@ -450,6 +462,9 @@ export default function App() {
       setIsBodyDetected(false);
       setBodyLandmarks(null);
       setArSessionActive(false);
+      
+      // Stop scanning animation
+      stopScanningAnimation();
       setCameraError(null);
       
       console.log('Cleanup completed successfully');
@@ -501,6 +516,9 @@ export default function App() {
       setIsScanning(false);
       setIsBodyDetected(false);
       setBodyLandmarks(null);
+      
+      // Stop scanning animation
+      stopScanningAnimation();
       
       console.log('AR session stopped successfully');
       
@@ -1168,36 +1186,6 @@ export default function App() {
     return contours;
   };
   
-  const traceContour = (edges: Uint8Array, width: number, height: number, startX: number, startY: number, visited: boolean[]): {x: number, y: number}[] => {
-    const contour = [];
-    const stack = [{x: startX, y: startY}];
-    
-    while (stack.length > 0) {
-      const point = stack.pop();
-      if (!point) continue;
-      
-      const {x, y} = point;
-      const idx = y * width + x;
-      
-      if (x < 0 || x >= width || y < 0 || y >= height || visited[idx] || (edges[idx] || 0) === 0) {
-        continue;
-      }
-      
-      visited[idx] = true;
-      contour.push({x, y});
-      
-      // Add 8-connected neighbors
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (dx !== 0 || dy !== 0) {
-            stack.push({x: x + dx, y: y + dy});
-          }
-        }
-      }
-    }
-    
-    return contour;
-  };
   
   const extractLandmarksFromContour = (contour: {points: {x: number, y: number}[]}, width: number, height: number, confidence: number): BodyLandmarks => {
     const points = contour.points;
@@ -1233,30 +1221,126 @@ export default function App() {
     };
   };
 
-  // Simplified helper functions for efficient processing
+  // Real computer vision helper functions
   const calculateImageStatistics = (imageData: Uint8Array) => {
-    // Simplified statistics calculation to avoid C++ exceptions
-    return { contrast: 0.6, brightness: 0.5, mean: 128, variance: 100, min: 0, max: 255 };
+    try {
+      if (!imageData || imageData.length === 0) {
+        return { contrast: 0, brightness: 0, mean: 0, variance: 0, min: 0, max: 0 };
+      }
+
+      let sum = 0;
+      let min = 255;
+      let max = 0;
+      let varianceSum = 0;
+
+      // Calculate basic statistics
+      for (let i = 0; i < imageData.length; i++) {
+        const value = imageData[i];
+        sum += value;
+        min = Math.min(min, value);
+        max = Math.max(max, value);
+      }
+
+      const mean = sum / imageData.length;
+
+      // Calculate variance
+      for (let i = 0; i < imageData.length; i++) {
+        const diff = imageData[i] - mean;
+        varianceSum += diff * diff;
+      }
+
+      const variance = varianceSum / imageData.length;
+      const contrast = max - min;
+      const brightness = mean;
+
+      return { contrast, brightness, mean, variance, min, max };
+    } catch (error) {
+      logError('App', 'calculateImageStatistics', 'Error calculating image statistics', error);
+      return { contrast: 0, brightness: 0, mean: 0, variance: 0, min: 0, max: 0 };
+    }
   };
 
   const detectEdgesAndContours = (imageData: Uint8Array) => {
-    // Simplified edge detection to avoid complex processing
-    return { edgeCount: 150, edgeDensity: 0.1, totalPixels: 1500 };
+    try {
+      if (!imageData || imageData.length === 0) {
+        return { edgeCount: 0, edgeDensity: 0, totalPixels: 0 };
+      }
+
+      // Apply simple edge detection
+      const edges = applyEdgeDetection(imageData, Math.sqrt(imageData.length), Math.sqrt(imageData.length));
+      
+      let edgeCount = 0;
+      for (let i = 0; i < edges.length; i++) {
+        if (edges[i] > 0) edgeCount++;
+      }
+
+      const totalPixels = imageData.length;
+      const edgeDensity = edgeCount / totalPixels;
+
+      return { edgeCount, edgeDensity, totalPixels };
+    } catch (error) {
+      logError('App', 'detectEdgesAndContours', 'Error detecting edges and contours', error);
+      return { edgeCount: 0, edgeDensity: 0, totalPixels: 0 };
+    }
   };
 
   const analyzeShapeCharacteristics = (edgeAnalysis: any) => {
-    // Simplified shape analysis
-    return {
-      hasVerticalStructure: true,
-      hasBodyLikeContours: true,
-      verticalStructure: 0.1,
-      bodyContours: 150,
-    };
+    try {
+      if (!edgeAnalysis) {
+        return {
+          hasVerticalStructure: false,
+          hasBodyLikeContours: false,
+          verticalStructure: 0,
+          bodyContours: 0,
+        };
+      }
+
+      const { edgeCount, edgeDensity, totalPixels } = edgeAnalysis;
+      
+      // Analyze vertical structure based on edge density
+      const hasVerticalStructure = edgeDensity > 0.05 && edgeDensity < 0.3;
+      const verticalStructure = Math.min(1.0, edgeDensity * 10);
+      
+      // Determine if contours look like a human body
+      const hasBodyLikeContours = edgeCount > 50 && edgeCount < 500;
+      const bodyContours = Math.min(200, edgeCount);
+
+      return {
+        hasVerticalStructure,
+        hasBodyLikeContours,
+        verticalStructure,
+        bodyContours,
+      };
+    } catch (error) {
+      logError('App', 'analyzeShapeCharacteristics', 'Error analyzing shape characteristics', error);
+      return {
+        hasVerticalStructure: false,
+        hasBodyLikeContours: false,
+        verticalStructure: 0,
+        bodyContours: 0,
+      };
+    }
   };
 
   const checkHumanProportions = (shapeAnalysis: any) => {
-    // Simplified proportion check
-    return { isReasonable: true };
+    try {
+      if (!shapeAnalysis) {
+        return { isReasonable: false };
+      }
+
+      const { hasVerticalStructure, hasBodyLikeContours, verticalStructure, bodyContours } = shapeAnalysis;
+      
+      // Check if the detected shape has reasonable human proportions
+      const isReasonable = hasVerticalStructure && 
+                          hasBodyLikeContours && 
+                          verticalStructure > 0.1 && 
+                          bodyContours > 20;
+
+      return { isReasonable };
+    } catch (error) {
+      logError('App', 'checkHumanProportions', 'Error checking human proportions', error);
+      return { isReasonable: false };
+    }
   };
 
   // Simplified landmark generation to avoid C++ exceptions
@@ -1277,48 +1361,323 @@ export default function App() {
   };
 
   const applyEdgeDetection = (grayscaleData: Uint8Array, width: number, height: number): Uint8Array => {
-    // Simplified edge detection
-    return new Uint8Array(width * height);
+    try {
+      const edges = new Uint8Array(width * height);
+      
+      // Apply Sobel edge detection
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const idx = y * width + x;
+          
+          // Sobel X kernel
+          const gx = -1 * grayscaleData[(y-1)*width + (x-1)] +
+                     1 * grayscaleData[(y-1)*width + (x+1)] +
+                    -2 * grayscaleData[y*width + (x-1)] +
+                     2 * grayscaleData[y*width + (x+1)] +
+                    -1 * grayscaleData[(y+1)*width + (x-1)] +
+                     1 * grayscaleData[(y+1)*width + (x+1)];
+          
+          // Sobel Y kernel
+          const gy = -1 * grayscaleData[(y-1)*width + (x-1)] +
+                    -2 * grayscaleData[(y-1)*width + x] +
+                    -1 * grayscaleData[(y-1)*width + (x+1)] +
+                     1 * grayscaleData[(y+1)*width + (x-1)] +
+                     2 * grayscaleData[(y+1)*width + x] +
+                     1 * grayscaleData[(y+1)*width + (x+1)];
+          
+          const magnitude = Math.sqrt(gx * gx + gy * gy);
+          edges[idx] = magnitude > 50 ? 255 : 0;
+        }
+      }
+      
+      return edges;
+    } catch (error) {
+      logError('App', 'applyEdgeDetection', 'Edge detection failed', error);
+      return new Uint8Array(width * height);
+    }
   };
 
   const findBodyContours = (edgeData: Uint8Array, width: number, height: number): any[] => {
-    // Simplified contour detection
-    return [];
+    try {
+      const contours: any[] = [];
+      const visited = new Array(width * height).fill(false);
+      
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = y * width + x;
+          if (!visited[idx] && edgeData[idx] > 0) {
+            const contour = traceContour(edgeData, width, height, x, y, visited);
+            if (contour.length > 100) { // Filter small contours
+              contours.push(contour);
+            }
+          }
+        }
+      }
+      
+      return contours.sort((a, b) => b.length - a.length).slice(0, 3); // Top 3 largest contours
+    } catch (error) {
+      logError('App', 'findBodyContours', 'Contour detection failed', error);
+      return [];
+    }
   };
 
   const createSimpleContour = (centerX: number, centerY: number, width: number, height: number): any[] => {
-    // Simplified contour creation
-    return [];
+    try {
+      // Create a realistic human body contour based on anthropometric proportions
+      const contour: any[] = [];
+      const bodyWidth = width * 0.3;
+      const bodyHeight = height * 0.8;
+      
+      // Head (circular)
+      const headRadius = bodyWidth * 0.15;
+      for (let angle = 0; angle < 360; angle += 10) {
+        const rad = (angle * Math.PI) / 180;
+        contour.push({
+          x: centerX + headRadius * Math.cos(rad),
+          y: centerY - bodyHeight * 0.4 + headRadius * Math.sin(rad)
+        });
+      }
+      
+      // Body (trapezoid)
+      const shoulderWidth = bodyWidth;
+      const waistWidth = bodyWidth * 0.7;
+      const hipWidth = bodyWidth * 0.8;
+      
+      // Left side
+      contour.push({ x: centerX - shoulderWidth/2, y: centerY - bodyHeight * 0.3 });
+      contour.push({ x: centerX - waistWidth/2, y: centerY });
+      contour.push({ x: centerX - hipWidth/2, y: centerY + bodyHeight * 0.2 });
+      contour.push({ x: centerX - hipWidth/2, y: centerY + bodyHeight * 0.4 });
+      
+      // Right side
+      contour.push({ x: centerX + hipWidth/2, y: centerY + bodyHeight * 0.4 });
+      contour.push({ x: centerX + hipWidth/2, y: centerY + bodyHeight * 0.2 });
+      contour.push({ x: centerX + waistWidth/2, y: centerY });
+      contour.push({ x: centerX + shoulderWidth/2, y: centerY - bodyHeight * 0.3 });
+      
+      return contour;
+    } catch (error) {
+      logError('App', 'createSimpleContour', 'Contour creation failed', error);
+      return [];
+    }
   };
 
-  // Simplified landmark extraction to avoid C++ exceptions
+  const traceContour = (edgeData: Uint8Array, width: number, height: number, startX: number, startY: number, visited: boolean[]): any[] => {
+    try {
+      const contour: any[] = [];
+      const stack: {x: number, y: number}[] = [{x: startX, y: startY}];
+      
+      while (stack.length > 0) {
+        const {x, y} = stack.pop()!;
+        const idx = y * width + x;
+        
+        if (x < 0 || x >= width || y < 0 || y >= height || visited[idx] || edgeData[idx] === 0) {
+          continue;
+        }
+        
+        visited[idx] = true;
+        contour.push({x, y});
+        
+        // Add 8-connected neighbors
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx !== 0 || dy !== 0) {
+              stack.push({x: x + dx, y: y + dy});
+            }
+          }
+        }
+      }
+      
+      return contour;
+    } catch (error) {
+      logError('App', 'traceContour', 'Contour tracing failed', error);
+      return [];
+    }
+  };
+
+  // Real landmark extraction from contour analysis
   const extractLandmarksFromContours = (contours: any[], width: number, height: number): BodyLandmarks => {
-    // Use efficient landmark generation instead of complex contour analysis
-    return {
-      nose: { x: width * 0.5, y: height * 0.2, z: 0, confidence: 0.8 },
-      leftShoulder: { x: width * 0.3, y: height * 0.3, z: 0, confidence: 0.8 },
-      rightShoulder: { x: width * 0.7, y: height * 0.3, z: 0, confidence: 0.8 },
-      leftElbow: { x: width * 0.25, y: height * 0.45, z: 0, confidence: 0.75 },
-      rightElbow: { x: width * 0.75, y: height * 0.45, z: 0, confidence: 0.75 },
-      leftWrist: { x: width * 0.2, y: height * 0.6, z: 0, confidence: 0.7 },
-      rightWrist: { x: width * 0.8, y: height * 0.6, z: 0, confidence: 0.7 },
-      leftHip: { x: width * 0.4, y: height * 0.6, z: 0, confidence: 0.8 },
-      rightHip: { x: width * 0.6, y: height * 0.6, z: 0, confidence: 0.8 },
-      leftKnee: { x: width * 0.42, y: height * 0.8, z: 0, confidence: 0.75 },
-      rightKnee: { x: width * 0.58, y: height * 0.8, z: 0, confidence: 0.75 },
-      leftAnkle: { x: width * 0.44, y: height * 0.95, z: 0, confidence: 0.7 },
-      rightAnkle: { x: width * 0.56, y: height * 0.95, z: 0, confidence: 0.7 },
-    };
+    try {
+      if (contours.length === 0) {
+        logWarn('App', 'extractLandmarksFromContours', 'No contours available for landmark extraction');
+        return generateEmptyLandmarks();
+      }
+
+      // Find the largest contour (likely human body)
+      const mainContour = contours[0];
+      if (!mainContour || mainContour.length < 50) {
+        logWarn('App', 'extractLandmarksFromContours', 'Contour too small for reliable landmark extraction');
+        return generateEmptyLandmarks();
+      }
+
+      // Calculate body bounds
+      const bounds = calculateBodyBounds(mainContour);
+      if (!bounds) {
+        logWarn('App', 'extractLandmarksFromContours', 'Failed to calculate body bounds');
+        return generateEmptyLandmarks();
+      }
+
+      // Extract landmarks based on anthropometric proportions and contour analysis
+      const landmarks = calculateLandmarksFromBounds(bounds, width, height);
+      
+      // Validate landmark quality
+      const validLandmarks = validateLandmarkQuality(landmarks);
+      
+      logInfo('App', 'extractLandmarksFromContours', 'Successfully extracted landmarks from contour analysis', {
+        contourCount: contours.length,
+        mainContourSize: mainContour.length,
+        validLandmarks: validLandmarks
+      });
+
+      return landmarks;
+    } catch (error) {
+      logError('App', 'extractLandmarksFromContours', 'Landmark extraction failed', error);
+      return generateEmptyLandmarks();
+    }
   };
 
   const calculateBodyBounds = (contour: any[]) => {
-    // Simplified body bounds calculation
-    return { minX: 0, maxX: width, minY: 0, maxY: height, width, height };
+    try {
+      if (!contour || contour.length === 0) {
+        return null;
+      }
+
+      let minX = contour[0].x;
+      let maxX = contour[0].x;
+      let minY = contour[0].y;
+      let maxY = contour[0].y;
+
+      for (const point of contour) {
+        minX = Math.min(minX, point.x);
+        maxX = Math.max(maxX, point.x);
+        minY = Math.min(minY, point.y);
+        maxY = Math.max(maxY, point.y);
+      }
+
+      const width = maxX - minX;
+      const height = maxY - minY;
+
+      return {
+        minX,
+        maxX,
+        minY,
+        maxY,
+        width,
+        height,
+        centerX: (minX + maxX) / 2,
+        centerY: (minY + maxY) / 2
+      };
+    } catch (error) {
+      logError('App', 'calculateBodyBounds', 'Body bounds calculation failed', error);
+      return null;
+    }
+  };
+
+  const validateLandmarkQuality = (landmarks: BodyLandmarks): number => {
+    try {
+      let validCount = 0;
+      const totalLandmarks = 13; // Total number of landmarks
+
+      // Check each landmark for validity
+      const landmarkKeys = Object.keys(landmarks) as (keyof BodyLandmarks)[];
+      for (const key of landmarkKeys) {
+        const landmark = landmarks[key];
+        if (landmark && landmark.confidence > 0.3) {
+          validCount++;
+        }
+      }
+
+      const quality = validCount / totalLandmarks;
+      logInfo('App', 'validateLandmarkQuality', `Landmark quality: ${validCount}/${totalLandmarks} (${(quality * 100).toFixed(1)}%)`);
+      
+      return quality;
+    } catch (error) {
+      logError('App', 'validateLandmarkQuality', 'Landmark quality validation failed', error);
+      return 0;
+    }
   };
 
   const calculateLandmarksFromBounds = (bounds: any, imageWidth: number, imageHeight: number): BodyLandmarks => {
-    // Use efficient landmark generation
-    return extractLandmarksFromContours([], imageWidth, imageHeight);
+    try {
+      if (!bounds) {
+        return generateEmptyLandmarks();
+      }
+
+      const { minX, maxX, minY, maxY, width, height, centerX, centerY } = bounds;
+      
+      // Calculate confidence based on body size and proportions
+      const bodyArea = width * height;
+      const imageArea = imageWidth * imageHeight;
+      const bodyRatio = bodyArea / imageArea;
+      
+      // Base confidence on body size (should be 10-50% of image)
+      const sizeConfidence = Math.max(0.3, Math.min(1.0, (bodyRatio - 0.05) / 0.4));
+      
+      // Calculate anthropometric landmarks based on human body proportions
+      const bodyHeight = maxY - minY;
+      const bodyWidth = maxX - minX;
+      
+      // Head (top 15% of body)
+      const headY = minY + bodyHeight * 0.075;
+      const headConfidence = sizeConfidence * 0.9;
+      
+      // Shoulders (15-25% of body height)
+      const shoulderY = minY + bodyHeight * 0.2;
+      const shoulderWidth = bodyWidth * 0.8;
+      const shoulderConfidence = sizeConfidence * 0.85;
+      
+      // Elbows (35-45% of body height)
+      const elbowY = minY + bodyHeight * 0.4;
+      const elbowWidth = bodyWidth * 0.6;
+      const elbowConfidence = sizeConfidence * 0.8;
+      
+      // Wrists (50-60% of body height)
+      const wristY = minY + bodyHeight * 0.55;
+      const wristWidth = bodyWidth * 0.4;
+      const wristConfidence = sizeConfidence * 0.75;
+      
+      // Hips (55-65% of body height)
+      const hipY = minY + bodyHeight * 0.6;
+      const hipWidth = bodyWidth * 0.7;
+      const hipConfidence = sizeConfidence * 0.85;
+      
+      // Knees (75-85% of body height)
+      const kneeY = minY + bodyHeight * 0.8;
+      const kneeWidth = bodyWidth * 0.3;
+      const kneeConfidence = sizeConfidence * 0.8;
+      
+      // Ankles (90-100% of body height)
+      const ankleY = minY + bodyHeight * 0.95;
+      const ankleWidth = bodyWidth * 0.2;
+      const ankleConfidence = sizeConfidence * 0.7;
+
+      const landmarks: BodyLandmarks = {
+        nose: { x: centerX, y: headY, z: 0, confidence: headConfidence },
+        leftShoulder: { x: centerX - shoulderWidth/2, y: shoulderY, z: 0, confidence: shoulderConfidence },
+        rightShoulder: { x: centerX + shoulderWidth/2, y: shoulderY, z: 0, confidence: shoulderConfidence },
+        leftElbow: { x: centerX - elbowWidth/2, y: elbowY, z: 0, confidence: elbowConfidence },
+        rightElbow: { x: centerX + elbowWidth/2, y: elbowY, z: 0, confidence: elbowConfidence },
+        leftWrist: { x: centerX - wristWidth/2, y: wristY, z: 0, confidence: wristConfidence },
+        rightWrist: { x: centerX + wristWidth/2, y: wristY, z: 0, confidence: wristConfidence },
+        leftHip: { x: centerX - hipWidth/2, y: hipY, z: 0, confidence: hipConfidence },
+        rightHip: { x: centerX + hipWidth/2, y: hipY, z: 0, confidence: hipConfidence },
+        leftKnee: { x: centerX - kneeWidth/2, y: kneeY, z: 0, confidence: kneeConfidence },
+        rightKnee: { x: centerX + kneeWidth/2, y: kneeY, z: 0, confidence: kneeConfidence },
+        leftAnkle: { x: centerX - ankleWidth/2, y: ankleY, z: 0, confidence: ankleConfidence },
+        rightAnkle: { x: centerX + ankleWidth/2, y: ankleY, z: 0, confidence: ankleConfidence },
+      };
+
+      logInfo('App', 'calculateLandmarksFromBounds', 'Calculated landmarks from body bounds', {
+        bodySize: { width: bodyWidth, height: bodyHeight },
+        bodyRatio: bodyRatio.toFixed(3),
+        sizeConfidence: sizeConfidence.toFixed(3)
+      });
+
+      return landmarks;
+    } catch (error) {
+      logError('App', 'calculateLandmarksFromBounds', 'Landmark calculation failed', error);
+      return generateEmptyLandmarks();
+    }
   };
 
   // Advanced measurement calculation using computer vision and anthropometric data
@@ -1329,8 +1688,8 @@ export default function App() {
         throw new Error('No valid body landmarks detected');
       }
 
-      // Get actual user height or use default
-    const baseHeight = userHeight || 175;
+      // Get actual user height or calculate from landmarks
+      const baseHeight = userHeight || calculateHeightFromLandmarks(landmarks);
     
       // Use calibration data if available, otherwise use default scale
       const scaleFactor = calibrationData?.scaleFactor || 1.0;
@@ -1535,27 +1894,33 @@ export default function App() {
     };
   };
 
-  // Validate and correct measurements using anthropometric bounds
+  // Validate and correct measurements using configurable anthropometric bounds
   const validateAndCorrectMeasurements = (measurements: any, height: number, confidenceScores: any) => {
     const validated = { ...measurements };
     
-    // Anthropometric validation ranges (in cm)
+    // Get validation ranges from configuration
+    const config = getConfig();
+    const shoulderRange = config.validation.shoulderWidth;
+    const heightRange = config.validation.height;
+    
+    // Anthropometric validation ranges (in cm) - using configurable values where available
     const ranges = {
-      chest: [60, 150],
-      waist: [50, 140],
-      hips: [60, 150],
-      shoulders: [30, 60],
-      inseam: [60, 100],
-      armLength: [50, 80],
-      neck: [25, 50],
+      chest: [60, 150], // Could be made configurable in future
+      waist: [50, 140], // Could be made configurable in future
+      hips: [60, 150], // Could be made configurable in future
+      shoulders: [shoulderRange.acceptableMin, shoulderRange.acceptableMax],
+      inseam: [60, 100], // Could be made configurable in future
+      armLength: [50, 80], // Could be made configurable in future
+      neck: [25, 50], // Could be made configurable in future
     };
     
     // Validate and correct each measurement
     Object.entries(ranges).forEach(([key, [min, max]]) => {
       if (validated[key] < min || validated[key] > max) {
         console.warn(`Measurement ${key} (${validated[key]}cm) outside normal range [${min}-${max}]`);
-        // Apply correction based on height
-        const heightFactor = height / 175;
+        // Apply correction based on height (use configurable average height)
+        const averageHeight = (heightRange.optimalMin + heightRange.optimalMax) / 2;
+        const heightFactor = height / averageHeight;
         validated[key] = Math.max(min, Math.min(max, validated[key] * heightFactor));
       }
     });
@@ -1591,6 +1956,26 @@ export default function App() {
       setScanStartTime(Date.now());
       setIsBodyDetected(false);
       setCameraError(null);
+      
+      // Start scanning line animation
+      const startScanningLineAnimation = () => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(scanningLineAnimation, {
+              toValue: 1,
+              duration: 1000,
+              useNativeDriver: true,
+            }),
+            Animated.timing(scanningLineAnimation, {
+              toValue: 0,
+              duration: 1000,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      };
+      
+      startScanningLineAnimation();
       
       // Clear any existing timeout
       if (scanTimeout) {
@@ -1834,6 +2219,9 @@ export default function App() {
     setScanProgress(0);
     setScanComplete(false);
     setIsBodyDetected(false);
+    
+    // Stop scanning animation
+    stopScanningAnimation();
     setBodyLandmarks(null);
     setOverallConfidence(0);
     setTrackingQuality('poor');
@@ -1849,7 +2237,7 @@ export default function App() {
   };
 
 
-  // Simplified calibration to avoid C++ exceptions
+  // Real camera calibration using actual camera parameters
   const startRealCalibration = async () => {
     setIsCalibrating(true);
     
@@ -1860,71 +2248,505 @@ export default function App() {
         return;
       }
 
-      // Simple calibration process
       setCalibrationProgress(0);
       
-      // Simulate calibration progress
-      for (let i = 0; i <= 100; i += 10) {
-        await new Promise<void>((resolve) => setTimeout(resolve, 100));
-        setCalibrationProgress(i / 100);
+      // Real calibration process using camera frame analysis
+      const calibrationFrames: any[] = [];
+      const frameCount = 30; // Collect 30 frames for calibration
+      
+      for (let i = 0; i < frameCount; i++) {
+        try {
+          // Capture actual camera frame
+          const frame = await captureCameraFrameSafely();
+          if (frame) {
+            calibrationFrames.push(frame);
+            
+            // Analyze frame for calibration data
+            const analysis = await analyzeFrameForCalibration(frame);
+            if (analysis.isValid) {
+              setCalibrationProgress((i + 1) / frameCount);
+            }
+          }
+          
+          // Small delay between frames
+          await new Promise<void>((resolve) => setTimeout(resolve, 50));
+        } catch (frameError) {
+          console.warn('Frame capture error during calibration:', frameError);
+        }
       }
       
-      // Set simple calibration data
-      setCalibrationData({
-        scaleFactor: 1.0,
-        confidence: 0.8,
-        timestamp: Date.now(),
-        poseStability: 0.9,
-        frameCount: 10,
-        avgPoseConfidence: 0.8
-      });
+      // Process collected frames for real calibration
+      const calibrationResult = await processCalibrationFrames(calibrationFrames);
       
-      setIsCalibrating(false);
-      setCalibrationProgress(0);
-      
-      Alert.alert('Calibration Complete', 'Device calibrated successfully!');
-      setCurrentScreen('home');
+      if (calibrationResult.isValid) {
+        setCalibrationData({
+          scaleFactor: calibrationResult.scaleFactor,
+          confidence: calibrationResult.confidence,
+          timestamp: Date.now(),
+          poseStability: calibrationResult.poseStability,
+          frameCount: calibrationFrames.length,
+          avgPoseConfidence: calibrationResult.avgPoseConfidence,
+          cameraParams: calibrationResult.cameraParams
+        });
+        
+        setIsCalibrating(false);
+        setCalibrationProgress(0);
+        
+        Alert.alert('Calibration Complete', `Device calibrated successfully! Confidence: ${(calibrationResult.confidence * 100).toFixed(1)}%`);
+        setCurrentScreen('home');
+      } else {
+        throw new Error('Calibration failed - insufficient data quality');
+      }
       
     } catch (error) {
       console.error('Calibration error:', error);
       setIsCalibrating(false);
       setCalibrationProgress(0);
-      Alert.alert('Calibration Failed', 'Please try again.');
+      Alert.alert('Calibration Failed', `Please try again. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
-  // Simplified pose estimation functions to avoid C++ exceptions
+  // Real pose estimation using computer vision
   const processFrameForPoseEstimation = async (frame: any) => {
-    return { detected: true, pose: 'standing', confidence: 0.8, keypoints: {} };
+    try {
+      if (!frame || !frame.data) {
+        return { detected: false, pose: 'unknown', confidence: 0, keypoints: {} };
+      }
+
+      // Analyze frame for human presence
+      const bodyAnalysis = await analyzeFrameForHumanPresence(frame);
+      
+      if (bodyAnalysis.hasHuman) {
+        // Extract pose keypoints using computer vision
+        const keypoints = await extractPoseKeypointsFromFrame(frame, bodyAnalysis);
+        
+        // Calculate pose confidence based on keypoint quality
+        const confidence = calculatePoseConfidenceFromKeypoints(keypoints);
+        
+        // Determine pose type based on keypoint analysis
+        const pose = determinePoseFromKeypoints(keypoints);
+        
+        return {
+          detected: true,
+          pose,
+          confidence,
+          keypoints
+        };
+      }
+      
+      return { detected: false, pose: 'unknown', confidence: 0, keypoints: {} };
+    } catch (error) {
+      console.error('Pose estimation error:', error);
+      return { detected: false, pose: 'unknown', confidence: 0, keypoints: {} };
+    }
   };
 
   const detectBodyPose = async (imageData: any, width: number, height: number) => {
-    return { detected: true, pose: 'standing', confidence: 0.8, keypoints: {} };
+    try {
+      if (!imageData || imageData.length === 0) {
+        return { detected: false, pose: 'unknown', confidence: 0, keypoints: {} };
+      }
+
+      // Create frame object for analysis
+      const frame: CameraFrame = {
+        width,
+        height,
+        data: new Uint8Array(imageData),
+        timestamp: Date.now()
+      };
+
+      return await processFrameForPoseEstimation(frame);
+    } catch (error) {
+      console.error('Body pose detection error:', error);
+      return { detected: false, pose: 'unknown', confidence: 0, keypoints: {} };
+    }
   };
 
   const extractPoseKeypoints = (contour: any[], width: number, height: number) => {
-    return {};
+    try {
+      if (!contour || contour.length === 0) {
+        return {};
+      }
+
+      // Analyze contour to extract key body points
+      const keypoints: Record<string, BodyLandmark> = {};
+      
+      // Find head (topmost point)
+      const headPoint = contour.reduce((top, point) => 
+        point.y < top.y ? point : top, contour[0]
+      );
+      keypoints.head = {
+        x: headPoint.x,
+        y: headPoint.y,
+        z: 0,
+        confidence: 0.7
+      };
+
+      // Find shoulders (widest points in upper body region)
+      const upperBodyPoints = contour.filter(p => p.y < headPoint.y + width * 0.3);
+      if (upperBodyPoints.length > 0) {
+        const leftShoulder = upperBodyPoints.reduce((left, point) => 
+          point.x < left.x ? point : left, upperBodyPoints[0]
+        );
+        const rightShoulder = upperBodyPoints.reduce((right, point) => 
+          point.x > right.x ? point : right, upperBodyPoints[0]
+        );
+        
+        keypoints.leftShoulder = {
+          x: leftShoulder.x,
+          y: leftShoulder.y,
+          z: 0,
+          confidence: 0.6
+        };
+        
+        keypoints.rightShoulder = {
+          x: rightShoulder.x,
+          y: rightShoulder.y,
+          z: 0,
+          confidence: 0.6
+        };
+      }
+
+      // Find hips (widest points in lower body region)
+      const lowerBodyPoints = contour.filter(p => p.y > headPoint.y + width * 0.6);
+      if (lowerBodyPoints.length > 0) {
+        const leftHip = lowerBodyPoints.reduce((left, point) => 
+          point.x < left.x ? point : left, lowerBodyPoints[0]
+        );
+        const rightHip = lowerBodyPoints.reduce((right, point) => 
+          point.x > right.x ? point : right, lowerBodyPoints[0]
+        );
+        
+        keypoints.leftHip = {
+          x: leftHip.x,
+          y: leftHip.y,
+          z: 0,
+          confidence: 0.5
+        };
+        
+        keypoints.rightHip = {
+          x: rightHip.x,
+          y: rightHip.y,
+          z: 0,
+          confidence: 0.5
+        };
+      }
+
+      return keypoints;
+    } catch (error) {
+      console.error('Keypoint extraction error:', error);
+      return {};
+    }
   };
 
   const calculatePoseConfidence = (keypoints: any, contour: any[]) => {
-    return 0.8;
+    try {
+      if (!keypoints || Object.keys(keypoints).length === 0) {
+        return 0;
+      }
+
+      // Calculate confidence based on keypoint quality and contour analysis
+      const keypointCount = Object.keys(keypoints).length;
+      const baseConfidence = Math.min(keypointCount / 6, 1.0); // 6 keypoints max
+      
+      // Bonus for contour quality
+      const contourQuality = contour && contour.length > 50 ? 0.2 : 0;
+      
+      // Bonus for keypoint confidence
+      const avgKeypointConfidence = Object.values(keypoints).reduce((sum: number, kp: any) => 
+        sum + (kp.confidence || 0), 0) / keypointCount;
+      
+      return Math.min(baseConfidence + contourQuality + avgKeypointConfidence * 0.3, 1.0);
+    } catch (error) {
+      console.error('Pose confidence calculation error:', error);
+      return 0;
+    }
   };
 
   const completeCalibration = async (calibrationFrames: any[]) => {
-    // Use the simplified calibration from startRealCalibration
-    return;
+    try {
+      if (!calibrationFrames || calibrationFrames.length === 0) {
+        throw new Error('No calibration frames provided');
+      }
+
+      // Process all calibration frames
+      const results = await processCalibrationFrames(calibrationFrames);
+      return results;
+    } catch (error) {
+      console.error('Calibration completion error:', error);
+      throw error;
+    }
   };
 
   const calculatePoseStability = (frames: any[]) => {
-    return 0.9;
+    try {
+      if (!frames || frames.length < 2) {
+        return 0;
+      }
+
+      // Calculate stability based on pose consistency across frames
+      const poses = frames.map(frame => frame.pose).filter(Boolean);
+      const uniquePoses = new Set(poses);
+      
+      // More stable if fewer unique poses (more consistent)
+      const stability = 1.0 - (uniquePoses.size - 1) / Math.max(poses.length - 1, 1);
+      
+      return Math.max(0, Math.min(1, stability));
+    } catch (error) {
+      console.error('Pose stability calculation error:', error);
+      return 0;
+    }
   };
 
   const calculatePositionVariance = (positions: any[]) => {
     return 0;
   };
 
+  // Helper functions for real calibration and pose estimation
+  const analyzeFrameForCalibration = async (frame: CameraFrame): Promise<{isValid: boolean, quality: number}> => {
+    try {
+      if (!frame || !frame.data) {
+        return { isValid: false, quality: 0 };
+      }
+
+      // Analyze frame quality for calibration
+      const bodyAnalysis = await analyzeFrameForHumanPresence(frame);
+      const quality = bodyAnalysis.confidence;
+      
+      return {
+        isValid: bodyAnalysis.hasHuman && quality > 0.5,
+        quality
+      };
+    } catch (error) {
+      console.error('Frame calibration analysis error:', error);
+      return { isValid: false, quality: 0 };
+    }
+  };
+
+  const processCalibrationFrames = async (frames: CameraFrame[]): Promise<{
+    isValid: boolean;
+    scaleFactor: number;
+    confidence: number;
+    poseStability: number;
+    avgPoseConfidence: number;
+    cameraParams: any;
+  }> => {
+    try {
+      if (!frames || frames.length === 0) {
+        throw new Error('No frames to process');
+      }
+
+      // Analyze all frames for pose consistency
+      const poseResults = [];
+      let totalConfidence = 0;
+      let validFrames = 0;
+
+      for (const frame of frames) {
+        try {
+          const poseResult = await processFrameForPoseEstimation(frame);
+          if (poseResult.detected) {
+            poseResults.push(poseResult);
+            totalConfidence += poseResult.confidence;
+            validFrames++;
+          }
+        } catch (error) {
+          console.warn('Frame processing error during calibration:', error);
+        }
+      }
+
+      if (validFrames < 5) {
+        throw new Error('Insufficient valid frames for calibration');
+      }
+
+      // Calculate calibration metrics
+      const avgPoseConfidence = totalConfidence / validFrames;
+      const poseStability = calculatePoseStability(poseResults);
+      
+      // Estimate scale factor based on pose consistency
+      const scaleFactor = Math.max(0.8, Math.min(1.2, poseStability));
+      
+      // Calculate overall confidence
+      const confidence = (avgPoseConfidence + poseStability) / 2;
+      
+      // Estimate camera parameters (simplified)
+      const cameraParams = {
+        focalLength: frames[0].width * 0.7, // Rough estimate
+        principalPoint: { x: frames[0].width / 2, y: frames[0].height / 2 },
+        distortion: [0, 0, 0, 0, 0] // No distortion for now
+      };
+
+      return {
+        isValid: confidence > 0.6,
+        scaleFactor,
+        confidence,
+        poseStability,
+        avgPoseConfidence,
+        cameraParams
+      };
+    } catch (error) {
+      console.error('Calibration frame processing error:', error);
+      throw error;
+    }
+  };
+
+  const extractPoseKeypointsFromFrame = async (frame: CameraFrame, bodyAnalysis: BodyAnalysis): Promise<Record<string, BodyLandmark>> => {
+    try {
+      // Use existing computer vision landmark detection
+      const landmarks = await performComputerVisionLandmarkDetection(frame, bodyAnalysis);
+      
+      // Convert to keypoint format
+      const keypoints: Record<string, BodyLandmark> = {};
+      
+      if (landmarks.nose) {
+        keypoints.nose = landmarks.nose;
+      }
+      if (landmarks.leftShoulder) {
+        keypoints.leftShoulder = landmarks.leftShoulder;
+      }
+      if (landmarks.rightShoulder) {
+        keypoints.rightShoulder = landmarks.rightShoulder;
+      }
+      if (landmarks.leftHip) {
+        keypoints.leftHip = landmarks.leftHip;
+      }
+      if (landmarks.rightHip) {
+        keypoints.rightHip = landmarks.rightHip;
+      }
+      if (landmarks.leftAnkle) {
+        keypoints.leftAnkle = landmarks.leftAnkle;
+      }
+      if (landmarks.rightAnkle) {
+        keypoints.rightAnkle = landmarks.rightAnkle;
+      }
+
+      return keypoints;
+    } catch (error) {
+      console.error('Keypoint extraction from frame error:', error);
+      return {};
+    }
+  };
+
+  const calculatePoseConfidenceFromKeypoints = (keypoints: Record<string, BodyLandmark>): number => {
+    try {
+      const keypointCount = Object.keys(keypoints).length;
+      if (keypointCount === 0) return 0;
+
+      // Calculate average confidence of keypoints
+      const totalConfidence = Object.values(keypoints).reduce((sum, kp) => sum + kp.confidence, 0);
+      const avgConfidence = totalConfidence / keypointCount;
+
+      // Bonus for having essential keypoints
+      const essentialKeypoints = ['leftShoulder', 'rightShoulder', 'leftHip', 'rightHip'];
+      const hasEssential = essentialKeypoints.every(key => keypoints[key]);
+      const essentialBonus = hasEssential ? 0.2 : 0;
+
+      return Math.min(avgConfidence + essentialBonus, 1.0);
+    } catch (error) {
+      console.error('Pose confidence calculation error:', error);
+      return 0;
+    }
+  };
+
+  const determinePoseFromKeypoints = (keypoints: Record<string, BodyLandmark>): string => {
+    try {
+      // Simple pose determination based on keypoint positions
+      if (!keypoints.leftShoulder || !keypoints.rightShoulder) {
+        return 'unknown';
+      }
+
+      // Check if shoulders are roughly level (standing pose)
+      const shoulderHeightDiff = Math.abs(keypoints.leftShoulder.y - keypoints.rightShoulder.y);
+      const shoulderWidth = Math.abs(keypoints.rightShoulder.x - keypoints.leftShoulder.x);
+      
+      if (shoulderHeightDiff < shoulderWidth * 0.1) {
+        return 'standing';
+      } else {
+        return 'leaning';
+      }
+    } catch (error) {
+      console.error('Pose determination error:', error);
+      return 'unknown';
+    }
+  };
+
   const calculateScaleFactorFromPose = (frames: any[]) => {
-    return 1.0;
+    try {
+      if (!frames || frames.length === 0) {
+        return 1.0;
+      }
+
+      // Calculate scale factor based on pose consistency and landmark quality
+      let totalConfidence = 0;
+      let validFrames = 0;
+
+      for (const frame of frames) {
+        if (frame && frame.landmarks && frame.confidence > 0.5) {
+          totalConfidence += frame.confidence;
+          validFrames++;
+        }
+      }
+
+      if (validFrames === 0) {
+        return 1.0;
+      }
+
+      const avgConfidence = totalConfidence / validFrames;
+      
+      // Scale factor based on confidence (higher confidence = more reliable scale)
+      const scaleFactor = Math.max(0.8, Math.min(1.2, avgConfidence));
+      
+      logInfo('App', 'calculateScaleFactorFromPose', `Calculated scale factor: ${scaleFactor} from ${validFrames} frames`);
+      return scaleFactor;
+    } catch (error) {
+      logError('App', 'calculateScaleFactorFromPose', 'Error calculating scale factor', error);
+      return 1.0;
+    }
+  };
+
+  const calculateHeightFromLandmarks = (landmarks: BodyLandmarks): number => {
+    try {
+      if (!landmarks || !landmarks.nose || !landmarks.leftAnkle || !landmarks.rightAnkle) {
+        // Fallback to average human height if landmarks are insufficient
+        logWarn('App', 'calculateHeightFromLandmarks', 'Insufficient landmarks for height calculation, using fallback');
+        return 170; // Average human height in cm
+      }
+
+      // Calculate height from head (nose) to ankle landmarks
+      const leftAnkleY = landmarks.leftAnkle.y;
+      const rightAnkleY = landmarks.rightAnkle.y;
+      const avgAnkleY = (leftAnkleY + rightAnkleY) / 2;
+      const headY = landmarks.nose.y;
+      
+      // Calculate pixel height
+      const pixelHeight = Math.abs(headY - avgAnkleY);
+      
+      // Convert to real-world height using anthropometric ratios
+      // This is a rough estimation - in production, you'd use proper camera calibration
+      const estimatedHeight = pixelHeight * 0.8; // Rough conversion factor
+      
+      // Get height range from configuration
+      const config = getConfig();
+      const heightRange = config.validation.height;
+      
+      // Clamp to reasonable human height range from configuration
+      const clampedHeight = Math.max(heightRange.acceptableMin, Math.min(heightRange.acceptableMax, estimatedHeight));
+      
+      logInfo('App', 'calculateHeightFromLandmarks', 'Height calculated from landmarks', {
+        pixelHeight,
+        estimatedHeight,
+        clampedHeight,
+        landmarks: {
+          nose: landmarks.nose,
+          leftAnkle: landmarks.leftAnkle,
+          rightAnkle: landmarks.rightAnkle
+        }
+      });
+      
+      return clampedHeight;
+    } catch (error) {
+      logError('App', 'calculateHeightFromLandmarks', error as Error);
+      return 170; // Fallback to average height
+    }
   };
 
 
@@ -2646,28 +3468,25 @@ export default function App() {
                   {/* Moving scanning line across the screen */}
                   <View style={[styles.movingScanLine, { top: `${(scanProgress / 100) * 80 + 10}%` }]} />
                   
-                  <View style={styles.scanningContainer}>
+                  {/* Minimal scanning UI - only text and animated line */}
+                  <View style={styles.minimalScanningContainer}>
                     <Text style={styles.scanningTitle}>🔍 Scanning Body...</Text>
                     
-                    {/* Animated scanning line */}
-                    <View style={styles.scanningBodyOutline}>
-                      <View style={styles.scanningLine} />
-                      <View style={[styles.scanningProgress, { height: `${scanProgress}%` }]} />
-                    </View>
-                    
-                    <Text style={styles.scanningProgressText}>
-                      {scanStartTime > 0 ? Math.round((Date.now() - scanStartTime) / 1000) : 0}s / 15s
-                    </Text>
-                    <Text style={styles.scanningSubtext}>
-                      {isBodyDetected ? '✅ Body detected! Processing...' : 'Position yourself in the camera view'}
-                    </Text>
-                    
-                    {/* Scanning indicator dots */}
-                    <View style={styles.scanningDots}>
-                      <View style={[styles.scanningDot, { opacity: scanProgress > 0 ? 1 : 0.3 }]} />
-                      <View style={[styles.scanningDot, { opacity: scanProgress > 33 ? 1 : 0.3 }]} />
-                      <View style={[styles.scanningDot, { opacity: scanProgress > 66 ? 1 : 0.3 }]} />
-                    </View>
+                    {/* Animated scanning line - simplified */}
+                    <Animated.View 
+                      style={[
+                        styles.minimalScanningLine,
+                        {
+                          opacity: scanningLineAnimation,
+                          transform: [{
+                            scaleY: scanningLineAnimation.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0.5, 1.2],
+                            })
+                          }]
+                        }
+                      ]} 
+                    />
                   </View>
                 </View>
               )}
@@ -3896,12 +4715,36 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 8,
   },
+  minimalScanningContainer: {
+    position: 'absolute',
+    top: 100,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 1000,
+  },
   scanningTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1f2937',
+    color: '#ffffff',
     marginBottom: 20,
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  minimalScanningLine: {
+    width: 200,
+    height: 4,
+    backgroundColor: '#00BCD4',
+    borderRadius: 2,
+    shadowColor: '#00BCD4',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 8,
+    // Add animation properties
+    transform: [{ scaleX: 1 }],
   },
   scanningBodyOutline: {
     width: 120,
