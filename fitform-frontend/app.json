@@ -22,6 +22,8 @@
       }
     },
     "android": {
+      "package": "com.fitform.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -29,7 +31,29 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.INTERNET",
-        "android.permission.ACCESS_NETWORK_STATE"
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.VIBRATE"
+      ],
+      "uses-feature": [
+        {
+          "name": "android.hardware.camera",
+          "required": true
+        },
+        {
+          "name": "android.hardware.camera.autofocus",
+          "required": false
+        },
+        {
+          "name": "android.hardware.sensor.accelerometer",
+          "required": true
+        },
+        {
+          "name": "android.hardware.sensor.gyroscope",
+          "required": true
+        }
       ]
     },
     "web": {
@@ -43,17 +67,27 @@
           "cameraPermission": "Allow FitForm to access your camera for AR body measurements and sizing features."
         }
       ],
-      "expo-router"
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "34.0.0"
+          }
+        }
+      ]
     ],
     "sdkVersion": "54.0.0",
     "scheme": "fitform",
     "extra": {
       "eas": {
-        "projectId": "your-project-id-here"
+        "projectId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
       }
     },
     "updates": {
-      "url": "https://u.expo.dev/your-project-id-here"
+      "url": "https://u.expo.dev/a1b2c3d4-e5f6-7890-abcd-ef1234567890"
     },
     "runtimeVersion": {
       "policy": "sdkVersion"

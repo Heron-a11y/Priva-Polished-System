@@ -33,7 +33,7 @@ const NETWORK_CONFIG = {
 
 class NetworkConfig {
     constructor() {
-        this.currentMode = 'lan'; // Default to LAN mode for network access
+        this.currentMode = 'local'; // Default to local mode for development
     }
 
     // Get current network configuration
@@ -156,6 +156,13 @@ class NetworkConfig {
         
         // Fallback to local if nothing works
         console.log('⚠️ No network modes working, falling back to local');
+        await this.setNetworkMode('local');
+        return 'local';
+    }
+
+    // Force fallback to local mode
+    async fallbackToLocal() {
+        console.log('🔄 Falling back to local mode due to connection issues');
         await this.setNetworkMode('local');
         return 'local';
     }

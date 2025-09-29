@@ -4,23 +4,38 @@
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "prebuild": "expo prebuild",
+    "run:ios": "expo run:ios",
+    "run:android": "expo run:android",
+    "validate-assets": "node validate-assets.js",
+    "verify-build": "node verify-build.js",
+    "prebuild:ios": "npm run verify-build && expo prebuild --platform ios",
+    "prebuild:android": "npm run verify-build && expo prebuild --platform android"
   },
   "dependencies": {
-    "expo": "~54.0.0",
-    "expo-camera": "~17.0.7",
+    "@expo/metro-runtime": "~6.1.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "~54.0.9",
+    "expo-asset": "~12.0.8",
+    "expo-camera": "~17.0.8",
+    "expo-constants": "~18.0.0",
     "expo-dev-client": "~6.0.12",
-    "expo-constants": "~17.1.6",
-    "expo-status-bar": "~2.2.3",
-    "react": "18.3.1",
-    "react-native": "0.76.3"
+    "expo-gl": "~16.0.7",
+    "expo-media-library": "~18.2.0",
+    "expo-sensors": "~15.0.7",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.4",
+    "react-native-vision-camera": "^4.7.2",
+    "react-native-web": "~0.21.1"
   },
   "devDependencies": {
     "@babel/core": "^7.26.0",
-    "@types/react": "~18.3.12",
-    "typescript": "^5.1.3"
+    "@types/react": "~19.1.10",
+    "typescript": "~5.9.2"
   },
   "private": true
 }

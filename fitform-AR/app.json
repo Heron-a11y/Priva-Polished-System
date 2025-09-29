@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "AR Body Measurements",
-    "slug": "ar-body-measurements",
+    "name": "FitForm AR",
+    "slug": "fitform-ar",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,31 +16,42 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "infoPlist": {
-        "NSCameraUsageDescription": "This app uses the camera to capture body measurements using AR technology."
-      }
+      "bundleIdentifier": "com.fitform.ar"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FFFFFF"
+        "backgroundColor": "#ffffff"
       },
+      "package": "com.fitform.ar",
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.VIBRATE"
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
       "expo-dev-client",
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow AR Body Measurements to access your camera for body tracking and measurements."
+          "cameraPermission": "Allow FitForm AR to access your camera for AR body measurements."
         }
       ]
     ],
-    "sdkVersion": "54.0.0"
+    "scheme": "fitform-ar",
+    "extra": {
+      "eas": {
+        "projectId": "d8228bab-7030-482a-b009-b8ea22f988aa"
+      }
+    }
   }
 }

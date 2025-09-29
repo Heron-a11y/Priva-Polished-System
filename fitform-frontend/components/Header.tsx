@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, TouchableOpacity, StyleSheet, Modal, Text, Pressable, Alert, FlatList, StatusBar, Platform, SafeAreaView } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Modal, Text, Pressable, Alert, FlatList, StatusBar, Platform, SafeAreaView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,6 +18,10 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
   const router = useRouter();
   const { logout, user, isLoading } = useAuth();
   const { triggerOrderReview } = useNotificationContext();
+
+  // Debug user data
+  console.log('🔍 Header - User data:', user);
+  console.log('🔍 Header - Profile image:', user?.profile_image);
 
   const fetchNotifications = async () => {
     setLoadingNotif(true);
@@ -125,7 +129,17 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
             onPress={toggleModal}
             activeOpacity={0.7}
           >
-            <Ionicons name="person-circle-outline" size={28} color="#fff" />
+            {user?.profile_image ? (
+              <Image 
+                source={{ uri: user.profile_image }} 
+                style={styles.profileImage}
+                resizeMode="cover"
+                onError={(error) => console.log('❌ Image load error:', error)}
+                onLoad={() => console.log('✅ Profile image loaded:', user.profile_image)}
+              />
+            ) : (
+              <Ionicons name="person-circle-outline" size={28} color="#fff" />
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -428,6 +442,13 @@ const styles = StyleSheet.create({
   notifTextUnread: {
     fontWeight: 'bold',
     color: '#014D40',
+  },
+  profileImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#fff',
   },
 });
 

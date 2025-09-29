@@ -1,0 +1,16 @@
+@echo off
+echo 🧹 Clearing Metro cache and restarting development server...
+
+echo 📁 Removing .expo folder...
+if exist .expo rmdir /s /q .expo
+
+echo 📁 Removing node_modules/.cache folder...
+if exist node_modules\.cache rmdir /s /q node_modules\.cache
+
+echo 📁 Removing metro cache...
+if exist %TEMP%\metro-* rmdir /s /q %TEMP%\metro-*
+
+echo 🚀 Starting development server with clear cache...
+npx expo start --clear --port 8088
+
+pause

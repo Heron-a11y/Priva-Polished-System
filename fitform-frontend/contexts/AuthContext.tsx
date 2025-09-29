@@ -6,6 +6,7 @@ interface User {
   name: string;
   email: string;
   role: 'customer' | 'admin';
+  profile_image?: string | null;
 }
 
 interface AuthContextType {
@@ -16,6 +17,7 @@ interface AuthContextType {
   register: (userData: any) => Promise<boolean>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -94,6 +96,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const refreshUser = async () => {
+    try {
+      console.log('🔄 Refreshing user data...');
+      const response = await apiService.getCurrentUser();
+      console.log('📥 User refresh response:', response);
+      if (response.success) {
+        console.log('✅ User data updated:', response.data.user);
+        setUser(response.data.user);
+      }
+    } catch (error) {
+      console.error('❌ Error refreshing user:', error);
+    }
+  };
+
   useEffect(() => {
     checkAuth();
   }, []);
@@ -106,6 +122,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     logout,
     checkAuth,
+    refreshUser,
   };
 
   return (

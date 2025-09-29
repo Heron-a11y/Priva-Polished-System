@@ -18,15 +18,19 @@ class ApiService {
             console.log('🌐 Current network mode:', mode);
             this.updateBaseURL();
             
-            // If not in ngrok mode, try to auto-detect
-            if (mode !== 'ngrok') {
-                console.log('🔄 Auto-detecting best network...');
+            // Test current connection
+            const connectionTest = await this.testApiConnection();
+            if (!connectionTest.success) {
+                console.log('🔄 Current network mode failed, auto-detecting...');
                 const detectedMode = await networkConfig.autoDetectNetwork();
                 console.log('🔍 Detected network mode:', detectedMode);
                 this.updateBaseURL();
             }
         } catch (error) {
             console.log('⚠️ Failed to initialize network config:', error);
+            // Fallback to local mode
+            await networkConfig.fallbackToLocal();
+            this.updateBaseURL();
         }
     }
 
@@ -96,6 +100,8 @@ class ApiService {
             const headers = await this.getHeaders();
             const url = `${this.baseURL}${endpoint}`;
 
+            console.log(`🌐 Making API request to: ${url}`);
+
             const response = await fetch(url, {
                 ...options,
                 headers: {
@@ -103,6 +109,28 @@ class ApiService {
                     ...options.headers,
                 },
             });
+
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const textResponse = await response.text();
+                console.error('❌ Non-JSON response received:', {
+                    status: response.status,
+                    contentType,
+                    response: textResponse.substring(0, 200) + (textResponse.length > 200 ? '...' : '')
+                });
+                
+                // If we're not using local mode and get a non-JSON response, try local mode
+                const currentMode = await networkConfig.getNetworkMode();
+                if (currentMode !== 'local') {
+                    console.log('🔄 Non-JSON response detected, trying local mode...');
+                    await networkConfig.fallbackToLocal();
+                    this.updateBaseURL();
+                    return this.request(endpoint, options); // Retry with local mode
+                }
+                
+                throw new Error(`Server returned non-JSON response (${response.status}): ${textResponse.substring(0, 100)}`);
+            }
 
             const data = await response.json();
 
@@ -118,6 +146,18 @@ class ApiService {
             return data;
         } catch (error) {
             console.error('API Error:', error);
+            
+            // If it's a network error and we're not using local mode, try local mode
+            if (error.message.includes('fetch') || error.message.includes('network') || error.message.includes('ERR_NGROK')) {
+                const currentMode = await networkConfig.getNetworkMode();
+                if (currentMode !== 'local') {
+                    console.log('🔄 Network error detected, trying local mode...');
+                    await networkConfig.fallbackToLocal();
+                    this.updateBaseURL();
+                    return this.request(endpoint, options); // Retry with local mode
+                }
+            }
+            
             throw error;
         }
     }
@@ -131,16 +171,21 @@ class ApiService {
     }
 
     async login(credentials) {
-        const response = await this.request('/login', {
-            method: 'POST',
-            body: JSON.stringify(credentials),
-        });
+        try {
+            const response = await this.request('/login', {
+                method: 'POST',
+                body: JSON.stringify(credentials),
+            });
 
-        if (response.success && response.data.token) {
-            this.setToken(response.data.token);
+            if (response.success && response.data.token) {
+                this.setToken(response.data.token);
+            }
+
+            return response;
+        } catch (error) {
+            console.error('Login error:', error);
+            throw error;
         }
-
-        return response;
     }
 
     async logout() {
@@ -388,6 +433,138 @@ class ApiService {
             console.log('API Service - Authentication failed:', error);
             await this.clearToken();
             return false;
+        }
+    }
+
+    // Profile Management
+    async getProfile() {
+        return this.request('/profile');
+    }
+
+    async updateProfile(profileData) {
+        return this.request('/profile', {
+            method: 'PUT',
+            body: JSON.stringify(profileData),
+        });
+    }
+
+    async changePassword(passwordData) {
+        return this.request('/profile/change-password', {
+            method: 'POST',
+            body: JSON.stringify(passwordData),
+        });
+    }
+
+    async uploadProfileImage(imageUri) {
+        console.log('🖼️ Starting profile image upload:', imageUri);
+        
+        // Create FormData for React Native with proper format
+        const formData = new FormData();
+        formData.append('profile_image', {
+            uri: imageUri,
+            type: 'image/jpeg',
+            name: 'profile_image.jpg',
+        });
+
+        // Get auth token for authorization
+        const token = await this.getToken();
+        console.log('🔑 Auth token available:', !!token);
+        
+        const headers = {
+            'Accept': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` }),
+            // Don't set Content-Type, let FormData set it automatically
+        };
+
+        const url = `${this.baseURL}/profile/upload-image`;
+        console.log(`🌐 Uploading profile image to: ${url}`);
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData,
+                headers: headers,
+            });
+
+            console.log('📥 Response status:', response.status);
+            console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()));
+
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const textResponse = await response.text();
+                console.error('❌ Non-JSON response received:', {
+                    status: response.status,
+                    contentType,
+                    response: textResponse.substring(0, 200) + (textResponse.length > 200 ? '...' : '')
+                });
+                throw new Error(`Server returned non-JSON response (${response.status}): ${textResponse.substring(0, 100)}`);
+            }
+
+            const data = await response.json();
+            console.log('✅ Response data:', data);
+
+            if (!response.ok) {
+                throw new Error(data.message || `API request failed with status ${response.status}`);
+            }
+
+            return data;
+        } catch (error) {
+            console.error('❌ Upload error:', error);
+            throw error;
+        }
+    }
+
+    async deleteProfileImage() {
+        return this.request('/profile/image', {
+            method: 'DELETE',
+        });
+    }
+
+    // Admin Profile Management
+    async getProfileStats() {
+        return this.request('/admin/profile/stats');
+    }
+
+    async getAllUsers() {
+        return this.request('/admin/users');
+    }
+
+    async updateUserRole(userId, role) {
+        return this.request(`/admin/users/${userId}/role`, {
+            method: 'PUT',
+            body: JSON.stringify({ role }),
+        });
+    }
+
+    // Test API connectivity
+    async testApiConnection() {
+        try {
+            console.log('🧪 Testing API connection to:', this.baseURL);
+            const response = await fetch(`${this.baseURL}/test`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const textResponse = await response.text();
+                throw new Error(`Non-JSON response: ${textResponse.substring(0, 100)}`);
+            }
+
+            const data = await response.json();
+            console.log('✅ API connection successful:', data);
+            return { success: true, data };
+        } catch (error) {
+            console.error('❌ API connection failed:', error);
+            return { success: false, error: error.message };
         }
     }
 

@@ -161,6 +161,18 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         // Admin Measurement History Routes (New Table)
         Route::get('/admin/measurement-history', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'index']);
         Route::get('/admin/measurement-history/stats', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'stats']);
+        
+        // Profile Management Routes
+        Route::get('/profile', [\App\Http\Controllers\ProfileController::class, 'show']);
+        Route::put('/profile', [\App\Http\Controllers\ProfileController::class, 'update']);
+        Route::post('/profile/change-password', [\App\Http\Controllers\ProfileController::class, 'changePassword']);
+        Route::post('/profile/upload-image', [\App\Http\Controllers\ProfileController::class, 'uploadImage']);
+        Route::delete('/profile/image', [\App\Http\Controllers\ProfileController::class, 'deleteProfileImage']);
+        
+        // Admin Profile Management Routes
+        Route::get('/admin/profile/stats', [\App\Http\Controllers\ProfileController::class, 'getStats']);
+        Route::get('/admin/users', [\App\Http\Controllers\ProfileController::class, 'getAllUsers']);
+        Route::put('/admin/users/{id}/role', [\App\Http\Controllers\ProfileController::class, 'updateUserRole']);
         Route::get('/admin/measurement-history/{id}', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'show']);
         Route::post('/admin/measurement-history', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'store']);
         Route::put('/admin/measurement-history/{id}', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'update']);

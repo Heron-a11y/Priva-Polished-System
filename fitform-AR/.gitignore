@@ -25,6 +25,8 @@ project.xcworkspace
 # Android/IntelliJ
 #
 build/
+android/build/
+android/app/build/
 .idea
 .gradle
 local.properties
@@ -33,6 +35,8 @@ local.properties
 .cxx/
 *.keystore
 !debug.keystore
+# Debug keystore should not be committed
+android/app/debug.keystore
 
 # node.js
 #

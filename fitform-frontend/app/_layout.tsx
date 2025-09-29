@@ -44,12 +44,21 @@ function AppContent() {
 
   useEffect(() => {
     if (!isLoading && fontsLoaded) {
-      // Always redirect to login first, regardless of authentication status
-      if (pathname !== '/login' && pathname !== '/register' && !isRoleSpecificPage) {
+      // Only redirect to login if not authenticated and not on login/register pages
+      if (!isAuthenticated && pathname !== '/login' && pathname !== '/register' && !isRoleSpecificPage) {
         router.replace('/login');
+      } else if (isAuthenticated && user) {
+        // Redirect authenticated users to their appropriate dashboard
+        if (pathname === '/login' || pathname === '/register') {
+          if (user.role === 'customer') {
+            router.replace('/customer/dashboard');
+          } else if (user.role === 'admin') {
+            router.replace('/admin/dashboard');
+          }
+        }
       }
     }
-  }, [isLoading, fontsLoaded, pathname, router, isRoleSpecificPage]);
+  }, [isLoading, fontsLoaded, pathname, router, isRoleSpecificPage, isAuthenticated, user]);
 
   // Show loading screen while checking authentication and loading fonts
   if (isLoading || !fontsLoaded) {
