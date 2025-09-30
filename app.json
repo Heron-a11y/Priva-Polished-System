@@ -12,6 +12,9 @@
         "projectId": "472eab38-662e-4105-aa66-8901d4b082ab"
       }
     },
-    "owner": "itb03"
+    "owner": "itb03",
+    "android": {
+      "package": "com.itb03.arbodymeasurements"
+    }
   }
 }

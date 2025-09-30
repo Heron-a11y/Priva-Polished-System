@@ -159,6 +159,10 @@ dependencies {
     // ARCore dependencies for AR body tracking
     implementation 'com.google.ar:core:1.40.0'
     implementation 'com.google.ar.sceneform:filament-android:1.17.1'
+    
+    // Additional dependencies for enhanced body tracking
+    implementation 'com.google.ar.sceneform:animation:1.17.1'
+    implementation 'com.google.ar.sceneform:rendering:1.17.1'
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
