@@ -122,9 +122,14 @@ export default function CustomerDashboardScreen() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
+      // Load appointments once and use the data for both stats and recent appointments
+      const appointmentsResponse = await apiService.getAppointments();
+      const appointments = Array.isArray(appointmentsResponse) ? appointmentsResponse : [];
+      
+      // Use the same appointments data for both stats and recent appointments
       await Promise.all([
-        loadStats(),
-        loadRecentAppointments(),
+        loadStatsWithData(appointments),
+        loadRecentAppointmentsWithData(appointments),
         loadRecentOrders()
       ]);
     } catch (error) {
@@ -179,6 +184,37 @@ export default function CustomerDashboardScreen() {
     } catch (error) {
       console.error('Error loading recent orders:', error);
       setRecentOrders([]);
+    }
+  };
+
+  // Optimized functions that use already-fetched data
+  const loadStatsWithData = async (appointments: any[]) => {
+    try {
+      const upcoming = appointments.filter(apt => 
+        new Date(apt.appointment_date) > new Date() && apt.status === 'confirmed'
+      ).length;
+      
+      setStats(prev => ({
+        ...prev,
+        totalAppointments: appointments.length,
+        upcomingAppointments: upcoming
+      }));
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
+  };
+
+  const loadRecentAppointmentsWithData = async (appointments: any[]) => {
+    try {
+      // Get recent appointments (last 5)
+      const recent = appointments
+        .sort((a, b) => new Date(b.appointment_date).getTime() - new Date(a.appointment_date).getTime())
+        .slice(0, 5);
+      
+      setRecentAppointments(recent);
+    } catch (error) {
+      console.error('Error loading recent appointments:', error);
+      setRecentAppointments([]);
     }
   };
 

@@ -1,0 +1,48 @@
+# Ignore backend directory and all parent directories
+../fitform-backend/
+../fitform-AR/
+../*
+
+# Ignore node_modules
+node_modules/
+
+# Ignore build artifacts
+android/build/
+ios/build/
+.expo/
+dist/
+
+# Ignore logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Ignore OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Ignore any symlinks
+storage/
+public/storage/
+
+# Ignore documentation files that reference backend
+*.md
+debug-connection.bat
+test-backend-simple.js
+debug-connection.js
+configure-lan-ip.js
+start-lan-ip-force.js
+test-backend-connection.js
+quick-metro-fix.bat
+fix-metro-errors.bat
+fix-metro-cache.bat
+clear-metro-cache.bat
+clear-cache-and-restart.bat
+clear-all-cache.bat
+clear-all-cache-v2.bat

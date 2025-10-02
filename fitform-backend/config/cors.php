@@ -31,27 +31,28 @@ return [
         'exp://localhost:19000',
         'exp://localhost:19006',
         
-        // Your specific local IP address
-        'http://192.168.1.55:8081',
-        'http://192.168.1.55:19006',
-        'http://192.168.1.55:8000',
-        'exp://192.168.1.55:8081',
-        'exp://192.168.1.55:19000',
-        
-        // Common local network IPs
+        // LAN access patterns for mobile development
+        'http://192.168.1.*:8081',
         'http://192.168.1.*:19006',
         'http://192.168.1.*:8000',
+        'http://192.168.0.*:8081',
         'http://192.168.0.*:19006',
         'http://192.168.0.*:8000',
+        'http://10.0.0.*:8081',
         'http://10.0.0.*:19006',
         'http://10.0.0.*:8000',
+        'http://172.16.*.*:8081',
         'http://172.16.*.*:19006',
         'http://172.16.*.*:8000',
         
-        // Expo Go patterns
+        // Expo Go LAN patterns
+        'exp://192.168.1.*:8081',
         'exp://192.168.1.*:19000',
+        'exp://192.168.0.*:8081',
         'exp://192.168.0.*:19000',
+        'exp://10.0.0.*:8081',
         'exp://10.0.0.*:19000',
+        'exp://172.16.*.*:8081',
         'exp://172.16.*.*:19000',
         
         // Allow all origins for development (remove in production)
@@ -60,20 +61,18 @@ return [
 
     'allowed_origins_patterns' => [
         // Allow any local network IP for development
+        'exp://192\.168\..*:8081',
         'exp://192\.168\..*:19000',
+        'exp://10\.0\..*:8081',
         'exp://10\.0\..*:19000',
+        'exp://172\.16\..*:8081',
         'exp://172\.16\..*:19000',
+        'http://192\.168\..*:8081',
         'http://192\.168\..*:19006',
+        'http://10\.0\..*:8081',
         'http://10\.0\..*:19006',
+        'http://172\.16\..*:8081',
         'http://172\.16\..*:19006',
-        
-        // Expo Go tunnel patterns
-        'https://.*\.exp\.direct',
-        
-        // Ngrok tunnel patterns
-        'https://.*\.ngrok-free\.app',
-        'https://.*\.ngrok\.io',
-        'https://.*\.ngrok\.app',
     ],
 
     'allowed_headers' => ['*'],

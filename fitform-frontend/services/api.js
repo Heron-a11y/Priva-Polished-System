@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import networkConfig from './network-config';
 
 // Base API configuration - will be dynamically set based on network mode
-let API_BASE_URL = 'http://localhost:8000/api'; // Default fallback                
+let API_BASE_URL = 'http://192.168.1.104:8000/api'; // Default LAN URL
 
 class ApiService {
     constructor() {
@@ -21,15 +21,24 @@ class ApiService {
             // Test current connection
             const connectionTest = await this.testApiConnection();
             if (!connectionTest.success) {
-                console.log('🔄 Current network mode failed, auto-detecting...');
-                const detectedMode = await networkConfig.autoDetectNetwork();
-                console.log('🔍 Detected network mode:', detectedMode);
+                console.log('🔄 Current network mode failed, trying local mode...');
+                await networkConfig.setNetworkMode('local');
                 this.updateBaseURL();
+                
+                // Test local connection
+                const localTest = await this.testApiConnection();
+                if (!localTest.success) {
+                    console.log('❌ Local connection also failed, check if backend is running');
+                } else {
+                    console.log('✅ Local connection successful');
+                }
+            } else {
+                console.log('✅ Connection test successful');
             }
         } catch (error) {
             console.log('⚠️ Failed to initialize network config:', error);
             // Fallback to local mode
-            await networkConfig.fallbackToLocal();
+            await networkConfig.setNetworkMode('local');
             this.updateBaseURL();
         }
     }
@@ -102,13 +111,20 @@ class ApiService {
 
             console.log(`🌐 Making API request to: ${url}`);
 
+            // Create AbortController for timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+
             const response = await fetch(url, {
                 ...options,
                 headers: {
                     ...headers,
                     ...options.headers,
                 },
+                signal: controller.signal,
             });
+
+            clearTimeout(timeoutId);
 
             // Check if response is JSON
             const contentType = response.headers.get('content-type');
@@ -147,15 +163,21 @@ class ApiService {
         } catch (error) {
             console.error('API Error:', error);
             
-            // If it's a network error and we're not using local mode, try local mode
-            if (error.message.includes('fetch') || error.message.includes('network') || error.message.includes('ERR_NGROK')) {
-                const currentMode = await networkConfig.getNetworkMode();
-                if (currentMode !== 'local') {
-                    console.log('🔄 Network error detected, trying local mode...');
-                    await networkConfig.fallbackToLocal();
-                    this.updateBaseURL();
-                    return this.request(endpoint, options); // Retry with local mode
-                }
+            // Handle specific error types
+            if (error.name === 'AbortError') {
+                console.error('❌ Request timeout - server may be down or slow');
+                throw new Error('Request timeout - please check your internet connection and try again');
+            }
+            
+            if (error.message.includes('fetch') || error.message.includes('network')) {
+                console.error('❌ Network error - check LAN connection');
+                console.error('💡 Make sure both devices are on the same network');
+                throw new Error('Network error - please check your LAN connection');
+            }
+            
+            if (error.message.includes('Failed to fetch')) {
+                console.error('❌ Failed to fetch - check LAN connection');
+                throw new Error('Cannot connect to server - please check your LAN connection');
             }
             
             throw error;
@@ -541,13 +563,21 @@ class ApiService {
     async testApiConnection() {
         try {
             console.log('🧪 Testing API connection to:', this.baseURL);
+            
+            // Create AbortController for timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+            
             const response = await fetch(`${this.baseURL}/test`, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
                 },
+                signal: controller.signal,
             });
+
+            clearTimeout(timeoutId);
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -563,7 +593,11 @@ class ApiService {
             console.log('✅ API connection successful:', data);
             return { success: true, data };
         } catch (error) {
-            console.error('❌ API connection failed:', error);
+            if (error.name === 'AbortError') {
+                console.error('❌ API connection timeout - server may be down');
+                return { success: false, error: 'Connection timeout - check if backend is running' };
+            }
+            console.error('❌ API connection failed:', error.message);
             return { success: false, error: error.message };
         }
     }

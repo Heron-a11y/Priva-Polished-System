@@ -131,10 +131,17 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
           >
             {user?.profile_image ? (
               <Image 
-                source={{ uri: user.profile_image }} 
+                source={{ 
+                  uri: user.profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.104:8000'),
+                  cache: 'force-cache' // Force cache for persistence
+                }} 
                 style={styles.profileImage}
                 resizeMode="cover"
-                onError={(error) => console.log('❌ Image load error:', error)}
+                onError={(error) => {
+                  console.log('❌ Image load error:', error);
+                  console.log('🔄 Trying original URL:', user.profile_image);
+                  // Fallback to default icon on error
+                }}
                 onLoad={() => console.log('✅ Profile image loaded:', user.profile_image)}
               />
             ) : (

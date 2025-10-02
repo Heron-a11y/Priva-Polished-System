@@ -177,13 +177,34 @@ class AppointmentController extends Controller
         if ($user->role !== 'admin') {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
-        $appointments = Appointment::with('user:id,name')->orderBy('appointment_date', 'desc')->get();
+        $appointments = Appointment::with('user:id,name,profile_image')->orderBy('appointment_date', 'desc')->get();
+        
+        // Debug logging
+        \Log::info('Admin appointments query result:', [
+            'total_appointments' => $appointments->count(),
+            'first_appointment_user' => $appointments->first() ? $appointments->first()->user : null
+        ]);
+        
         $appointments->transform(function ($appointment) {
             $appointment->customer_name = $appointment->user ? $appointment->user->name : null;
+            $appointment->customer_profile_image = $appointment->user ? $appointment->user->profile_image : null;
+            
+            // Debug logging for each appointment
+            \Log::info('Processing appointment:', [
+                'appointment_id' => $appointment->id,
+                'customer_name' => $appointment->customer_name,
+                'customer_profile_image' => $appointment->customer_profile_image,
+                'user_data' => $appointment->user ? $appointment->user->toArray() : null
+            ]);
+            
             unset($appointment->user);
             return $appointment;
         });
-        return response()->json($appointments);
+        
+        $result = $appointments->toArray();
+        \Log::info('Final appointments result:', $result);
+        
+        return response()->json($result);
     }
 
     // Get dates where the current user already has an appointment
@@ -235,7 +256,7 @@ class AppointmentController extends Controller
             'confirmed_appointments' => Appointment::where('status', 'confirmed')->count(),
             'cancelled_appointments' => Appointment::where('status', 'cancelled')->count(),
             'total_customers' => Appointment::distinct('user_id')->count(),
-            'recent_appointments' => Appointment::with('user:id,name')
+            'recent_appointments' => Appointment::with('user:id,name,profile_image')
                 ->orderBy('appointment_date', 'desc')
                 ->limit(5)
                 ->get()

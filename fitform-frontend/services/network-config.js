@@ -1,39 +1,27 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Network configuration for different environments
+// Network configuration for LAN access
 const NETWORK_CONFIG = {
     // Local development
     local: {
         backendUrl: 'http://localhost:8000/api',
         expoUrl: 'exp://localhost:8081',
-        description: 'Local development (localhost only)'
+        description: 'Local development (localhost)',
+        priority: 1
     },
-    
-    // Ngrok tunnel
-    ngrok: {
-        backendUrl: 'https://c51a906a7960.ngrok-free.app/api',
-        expoUrl: 'exp://c51a906a7960.ngrok-free.app:443',
-        description: 'Ngrok tunnel (accessible from any network)'
-    },
-    
-    // Auto-detect ngrok (fallback)
-    ngrokAuto: {
-        backendUrl: 'https://c51a906a7960.ngrok-free.app/api',
-        expoUrl: 'exp://c51a906a7960.ngrok-free.app:443',
-        description: 'Auto-detect ngrok tunnel'
-    },
-    
-    // LAN network
+    // LAN access (auto-detect local IP)
     lan: {
-        backendUrl: 'http://192.168.1.55:8000/api', // Your local IP address
-        expoUrl: 'exp://192.168.1.55:8081',
-        description: 'LAN network (local network only)'
+        backendUrl: 'http://192.168.1.104:8000/api', // Will be auto-detected
+        expoUrl: 'exp://192.168.1.104:8081', // Will be auto-detected
+        description: 'LAN access (accessible from same network)',
+        priority: 2
     }
 };
 
 class NetworkConfig {
     constructor() {
-        this.currentMode = 'local'; // Default to local mode for development
+        this.currentMode = 'lan'; // Default to LAN mode for development
+        console.log('🌐 NetworkConfig initialized with LAN mode');
     }
 
     // Get current network configuration
@@ -79,18 +67,18 @@ class NetworkConfig {
         }));
     }
 
-    // Update ngrok URL dynamically
-    updateNgrokUrl(newUrl) {
-        if (NETWORK_CONFIG.ngrok) {
-            NETWORK_CONFIG.ngrok.backendUrl = `${newUrl}/api`;
-            NETWORK_CONFIG.ngrok.expoUrl = `exp://${newUrl.replace('https://', '')}:443`;
-            console.log(`🌐 Updated ngrok URL to: ${newUrl}`);
+    // Update LAN IP dynamically
+    updateLanIp(newIp) {
+        if (NETWORK_CONFIG.lan) {
+            NETWORK_CONFIG.lan.backendUrl = `http://${newIp}:8000/api`;
+            NETWORK_CONFIG.lan.expoUrl = `exp://${newIp}:8081`;
+            console.log(`🌐 Updated LAN IP to: ${newIp}`);
         }
     }
 
-    // Get current ngrok URL
-    getCurrentNgrokUrl() {
-        return NETWORK_CONFIG.ngrok ? NETWORK_CONFIG.ngrok.backendUrl.replace('/api', '') : null;
+    // Get current LAN IP
+    getCurrentLanIp() {
+        return NETWORK_CONFIG.lan ? NETWORK_CONFIG.lan.backendUrl.replace('http://', '').replace(':8000/api', '') : null;
     }
 
     // Test network connectivity
@@ -101,7 +89,7 @@ class NetworkConfig {
             
             // Create AbortController for timeout
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased timeout
             
             const response = await fetch(`${config.backendUrl}/test`, {
                 method: 'GET',
@@ -131,33 +119,137 @@ class NetworkConfig {
         }
     }
 
-    // Auto-detect best network mode
+    // Auto-detect network and update configuration
     async autoDetectNetwork() {
-        console.log('🔍 Auto-detecting best network mode...');
+        console.log('🔍 Auto-detecting network configuration...');
         
-        // Test each mode with a small delay between tests
-        for (const mode of Object.keys(NETWORK_CONFIG)) {
-            try {
-                this.currentMode = mode;
-                const result = await this.testConnection();
-                
-                if (result.success) {
-                    console.log(`✅ Auto-detected working network: ${mode}`);
-                    await this.setNetworkMode(mode);
-                    return mode;
-                }
-                
-                // Small delay between tests to avoid overwhelming the network
-                await new Promise(resolve => setTimeout(resolve, 500));
-            } catch (error) {
-                console.log(`❌ Error testing ${mode}:`, error.message);
+        // For mobile devices, prioritize LAN over localhost
+        // First try LAN connection
+        try {
+            const lanIp = await this.detectLanIp();
+            if (lanIp) {
+                console.log(`✅ Auto-detected LAN IP: ${lanIp}`);
+                await this.setNetworkMode('lan');
+                return 'lan';
             }
+        } catch (error) {
+            console.log('❌ Error detecting LAN IP:', error.message);
         }
         
-        // Fallback to local if nothing works
-        console.log('⚠️ No network modes working, falling back to local');
-        await this.setNetworkMode('local');
-        return 'local';
+        // If LAN fails, try local connection
+        try {
+            const localTest = await this.testLocalConnection();
+            if (localTest.success) {
+                console.log('✅ Local connection successful');
+                await this.setNetworkMode('local');
+                return 'local';
+            }
+        } catch (error) {
+            console.log('❌ Local connection failed:', error.message);
+        }
+        
+        // Fallback to LAN mode (better for mobile devices)
+        console.log('⚠️ Using LAN mode as fallback');
+        await this.setNetworkMode('lan');
+        return 'lan';
+    }
+    
+    // Test local connection
+    async testLocalConnection() {
+        try {
+            console.log('🧪 Testing local connection to: http://localhost:8000/api/test');
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
+            const response = await fetch('http://localhost:8000/api/test', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                },
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('✅ Local connection successful:', data);
+                return { success: true, data };
+            } else {
+                console.log('❌ Local connection failed:', response.status, response.statusText);
+                return { success: false, error: `HTTP ${response.status}` };
+            }
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log('❌ Local connection timeout');
+                return { success: false, error: 'Connection timeout' };
+            }
+            console.log('❌ Local connection error:', error.message);
+            return { success: false, error: error.message };
+        }
+    }
+    
+    // Auto-detect LAN IP
+    async detectLanIp() {
+        try {
+            console.log('🔍 Attempting to detect LAN IP...');
+            
+            // For mobile devices, we'll use the configured LAN IP
+            // The LAN IP should be set during development setup
+            const currentLanIp = this.getCurrentLanIp();
+            if (currentLanIp && currentLanIp !== '192.168.1.100') {
+                console.log(`🌐 Using configured LAN IP: ${currentLanIp}`);
+                return currentLanIp;
+            }
+            
+            // Try to get the local IP by making a request to a service that returns it
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
+            // Try multiple methods to get local IP
+            const ipServices = [
+                'https://api.ipify.org?format=json',
+                'https://ipapi.co/json/',
+                'https://httpbin.org/ip'
+            ];
+            
+            for (const service of ipServices) {
+                try {
+                    const response = await fetch(service, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                },
+                signal: controller.signal
+            });
+            
+                    if (response.ok) {
+                        const data = await response.json();
+                        let ip = data.ip || data.origin;
+                        
+                        if (ip) {
+                            // Check if it's a local network IP
+                            if (ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) {
+                                console.log(`🌐 Detected LAN IP: ${ip}`);
+                                this.updateLanIp(ip);
+                                return ip;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.log(`⚠️ Failed to get IP from ${service}:`, error.message);
+                }
+            }
+            
+            // Fallback: Use the configured LAN IP even if detection failed
+            console.log('⚠️ Could not auto-detect LAN IP, using configured IP');
+            return currentLanIp || '192.168.1.104';
+        } catch (error) {
+            console.log('⚠️ Could not detect LAN IP:', error.message);
+            // Return configured IP as fallback
+            return this.getCurrentLanIp() || '192.168.1.104';
+        }
     }
 
     // Force fallback to local mode

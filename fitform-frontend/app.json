@@ -15,15 +15,24 @@
     "assetBundlePatterns": [
       "**/*"
     ],
-    "ios": {
-      "supportsTablet": true,
-      "infoPlist": {
-        "NSCameraUsageDescription": "This app uses the camera for AR body measurements and sizing features."
-      }
-    },
     "android": {
       "package": "com.fitform.app",
       "versionCode": 1,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "fitform"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -81,16 +90,30 @@
     ],
     "sdkVersion": "54.0.0",
     "scheme": "fitform",
-    "extra": {
-      "eas": {
-        "projectId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fitform.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera for AR body measurements and sizing features.",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLName": "fitform",
+            "CFBundleURLSchemes": [
+              "fitform"
+            ]
+          }
+        ]
       }
-    },
-    "updates": {
-      "url": "https://u.expo.dev/a1b2c3d4-e5f6-7890-abcd-ef1234567890"
     },
     "runtimeVersion": {
       "policy": "sdkVersion"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b64b2d05-e207-478a-86ca-c89886ee6b10"
+      }
+    },
+    "owner": "imnot_heron"
   }
 }

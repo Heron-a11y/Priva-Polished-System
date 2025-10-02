@@ -279,7 +279,7 @@ export default function AdminProfileScreen() {
           <Image
             source={
               profile.profile_image
-                ? { uri: profile.profile_image }
+                ? { uri: profile.profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.104:8000') }
                 : require('../../assets/images/priva-logo.jpg')
             }
             style={styles.profileImage}

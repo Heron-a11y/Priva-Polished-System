@@ -104,6 +104,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (response.success) {
         console.log('✅ User data updated:', response.data.user);
         setUser(response.data.user);
+        
+        // Cache profile image URL for persistence
+        if (response.data.user.profile_image) {
+          console.log('💾 Caching profile image URL:', response.data.user.profile_image);
+        }
       }
     } catch (error) {
       console.error('❌ Error refreshing user:', error);

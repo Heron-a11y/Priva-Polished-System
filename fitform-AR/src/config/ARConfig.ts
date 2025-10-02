@@ -94,24 +94,24 @@ export interface ARConfig {
 // Default configuration values
 const defaultConfig: ARConfig = {
   ar: {
-    minConfidenceThreshold: 0.7,
-    minPlaneDetectionConfidence: 0.8,
-    minBodyLandmarksRequired: 8,
-    maxMeasurementRetries: 3,
-    measurementTimeoutMs: 10000,
+    minConfidenceThreshold: 0.75,  // Increased for better accuracy
+    minPlaneDetectionConfidence: 0.85,  // Increased for better plane detection
+    minBodyLandmarksRequired: 10,  // Increased for more stable tracking
+    maxMeasurementRetries: 5,  // Increased for better reliability
+    measurementTimeoutMs: 15000,  // Increased timeout for complex measurements
   },
 
   performance: {
     frameProcessingInterval: {
-      highEnd: 50,    // 50ms for high-end devices
-      midRange: 100,  // 100ms for mid-range devices
-      lowEnd: 200,    // 200ms for low-end devices
+      highEnd: 33,    // ~30 FPS for high-end devices
+      midRange: 66,   // ~15 FPS for mid-range devices
+      lowEnd: 133,    // ~7.5 FPS for low-end devices
     },
-    maxHistorySize: 5,
-    smoothingThreshold: 0.1,
-    requiredFramesForValidation: 8,
-    maxVarianceThreshold: 2.5,
-    minConsistencyFrames: 5,
+    maxHistorySize: 8,  // Increased for better smoothing
+    smoothingThreshold: 0.08,  // Reduced for more responsive tracking
+    requiredFramesForValidation: 10,  // Increased for better validation
+    maxVarianceThreshold: 2.0,  // Reduced for stricter consistency
+    minConsistencyFrames: 6,  // Increased for better stability
   },
 
   memory: {

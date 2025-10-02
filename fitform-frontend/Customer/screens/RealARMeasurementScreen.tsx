@@ -259,7 +259,13 @@ interface MeasurementData {
   timestamp: number;
 }
 
-export default function App() {
+interface ARMeasurementScreenProps {
+  onComplete?: (measurements: any) => void;
+  onCancel?: () => void;
+}
+
+export default function ARMeasurementScreen({ onComplete, onCancel }: ARMeasurementScreenProps) {
+  const router = useRouter();
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [currentStep, setCurrentStep] = useState<'front' | 'side'>('front');
   const [measurements, setMeasurements] = useState<any>({});
@@ -2283,7 +2289,7 @@ export default function App() {
           { text: 'Grant Permission', onPress: () => {
             // Try to request permission again
             if (MediaLibrary) {
-              MediaLibrary.requestPermissionsAsync().then(result => {
+              MediaLibrary.requestPermissionsAsync().then((result: { granted: boolean }) => {
                 if (result.granted) {
                   console.log('Media permission granted');
                 } else {
@@ -2871,12 +2877,21 @@ export default function App() {
         }]);
       });
       
+      // If onComplete prop is provided, call it with the measurements
+      if (onComplete) {
+        onComplete(newMeasurements);
+      } else {
       setCurrentScreen('review');
+      }
       
     } catch (error) {
       console.error('Error completing measurement:', error);
       // Still proceed with measurement completion even if real-time stop fails
+      if (onComplete) {
+        onComplete(measurements);
+      } else {
       setCurrentScreen('review');
+      }
     }
   };
 
@@ -2972,7 +2987,22 @@ export default function App() {
   const renderHomeScreen = () => (
     <View style={styles.container}>
       <View style={styles.homeHeader}>
+        <TouchableOpacity
+          style={styles.homeBackButton}
+          onPress={() => {
+            if (onCancel) {
+              onCancel();
+            } else {
+              // If no onCancel prop, use router to go back
+              router.back();
+            }
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={24} color={Colors.primary} />
+        </TouchableOpacity>
         <Text style={styles.homeHeaderTitle}>AR Body Measurements</Text>
+        <View style={styles.homeHeaderSpacer} />
       </View>
 
       <ScrollView 
@@ -3009,21 +3039,21 @@ export default function App() {
             style={styles.primaryButton}
             onPress={startMeasurement}
           >
-            <Text style={styles.primaryButtonText}>▶ Start Measurement</Text>
+            <Text style={styles.primaryButtonText} numberOfLines={2}>▶ Start Measurement</Text>
           </TouchableOpacity>
     
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() => setCurrentScreen('instructions')}
           >
-            <Text style={styles.secondaryButtonText}>ℹ️ How It Works</Text>
+            <Text style={styles.secondaryButtonText} numberOfLines={2}>ℹ️ How It Works</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() => setCurrentScreen('diagnostics')}
           >
-            <Text style={styles.secondaryButtonText}>🔧 System Diagnostics</Text>
+            <Text style={styles.secondaryButtonText} numberOfLines={2}>🔧 System Diagnostics</Text>
           </TouchableOpacity>
 
         </View>
@@ -3132,14 +3162,14 @@ export default function App() {
             style={styles.primaryButton}
             onPress={() => setCurrentScreen('ar-measurement')}
           >
-            <Text style={styles.primaryButtonText} numberOfLines={1}>📷 Start AR Measurement</Text>
+            <Text style={styles.primaryButtonText} numberOfLines={2}>📷 Start AR Measurement</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() => setCurrentScreen('home')}
           >
-            <Text style={styles.secondaryButtonText}>Back to Home</Text>
+            <Text style={styles.secondaryButtonText} numberOfLines={2}>Back to Home</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -3148,12 +3178,30 @@ export default function App() {
 
   const renderARMeasurementScreen = () => (
     <View style={styles.fullScreenContainer}>
+      {/* Back Button */}
+      <View style={styles.arBackButtonContainer}>
+        <TouchableOpacity
+          style={styles.arBackButton}
+          onPress={() => {
+            if (onCancel) {
+              onCancel();
+            } else {
+              setCurrentScreen('home');
+            }
+          }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="arrow-back" size={24} color={Colors.text.inverse} />
+          <Text style={styles.arBackButtonText}>Back</Text>
+        </TouchableOpacity>
+      </View>
+      
       <View style={styles.arContainer}>
         {!permission?.granted ? (
           <View style={styles.permissionContainer}>
             <Text style={styles.permissionText}>Camera permission required</Text>
             <TouchableOpacity style={styles.primaryButton} onPress={requestPermission}>
-              <Text style={styles.primaryButtonText}>Grant Permission</Text>
+              <Text style={styles.primaryButtonText} numberOfLines={2}>Grant Permission</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -3806,7 +3854,7 @@ export default function App() {
               setSideMeasurements(null);
             }}
           >
-            <Text style={styles.primaryButtonText}>💾 Save Measurements</Text>
+            <Text style={styles.primaryButtonText} numberOfLines={2}>💾 Save Measurements</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -3826,7 +3874,7 @@ export default function App() {
               setVisibilityIssues([]);
             }}
           >
-            <Text style={styles.secondaryButtonText}>🔄 Retake Measurements</Text>
+            <Text style={styles.secondaryButtonText} numberOfLines={2}>🔄 Retake Measurements</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -3887,14 +3935,14 @@ export default function App() {
               setNativeErrorLog([]);
             }}
           >
-            <Text style={styles.primaryButtonText}>Clear Error Log</Text>
+            <Text style={styles.primaryButtonText} numberOfLines={2}>Clear Error Log</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() => setCurrentScreen('home')}
           >
-            <Text style={styles.secondaryButtonText}>Back to Home</Text>
+            <Text style={styles.secondaryButtonText} numberOfLines={2}>Back to Home</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -4030,8 +4078,8 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: Colors.primary,
-    paddingVertical: 18,
-    paddingHorizontal: 60,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     borderRadius: 16,
     alignItems: 'center',
     marginBottom: 13,
@@ -4051,15 +4099,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.3,
-    textTransform: 'uppercase',
     textAlign: 'center',
-    flexShrink: 0,
+    flexShrink: 1,
   },
   secondaryButton: {
     borderWidth: 2,
     borderColor: '#3b82f6',
-    paddingVertical: 18,
-    paddingHorizontal: 32,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     borderRadius: 16,
     alignItems: 'center',
     backgroundColor: '#ffffff',
@@ -4074,9 +4121,11 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: '#3b82f6',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
+    textAlign: 'center',
+    flexShrink: 1,
   },
   infoBox: {
     backgroundColor: '#f8fafc',
@@ -5247,20 +5296,31 @@ const styles = StyleSheet.create({
 
   // Home screen specific styles
   homeHeader: {
-    flexDirection: 'column',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 15,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
+  homeBackButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   homeHeaderTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: Colors.primary,
     textAlign: 'center',
+    flex: 1,
+  },
+  homeHeaderSpacer: {
+    width: 40, // Same width as back button to center the title
   },
   homeContent: {
     flex: 1,
@@ -5286,6 +5346,33 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.primary,
     textAlign: 'center',
+  },
+
+  // AR Back Button Styles
+  arBackButtonContainer: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    zIndex: 1000,
+  },
+  arBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 25,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  arBackButtonText: {
+    color: Colors.text.inverse,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 
   // Full screen AR container

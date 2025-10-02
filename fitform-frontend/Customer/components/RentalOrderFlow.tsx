@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, FlatList, ScrollView, Dimensions, Modal, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useRouter } from 'expo-router';
 import apiService from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotificationContext } from '../../contexts/NotificationContext';
 import { Colors } from '../../constants/Colors';
 import SuccessModal from '../../components/SuccessModal';
+import ARMeasurementScreen from '../screens/RealARMeasurementScreen';
 
 const { width } = Dimensions.get('window');
 
@@ -68,6 +70,19 @@ interface RentalForm {
   agreementAccepted: boolean;
 }
 
+// Complete measurements interface for AR and manual input
+interface CompleteMeasurements {
+  height: number;
+  chest: number;
+  waist: number;
+  hips: number;
+  shoulders: number;
+  inseam: number;
+  armLength: number;
+  neck: number;
+  thigh: number;
+}
+
 export default function RentalOrderFlow() {
   const [orders, setOrders] = useState<RentalOrder[]>([]);
   const [loading, setLoading] = useState(false);
@@ -89,9 +104,25 @@ export default function RentalOrderFlow() {
   const [showCounterOfferModal, setShowCounterOfferModal] = useState(false);
   const [counterOfferAmount, setCounterOfferAmount] = useState('');
   const [counterOfferNotes, setCounterOfferNotes] = useState('');
+  
+  // AR Measurement states
+  const [showARMeasurement, setShowARMeasurement] = useState(false);
+  const [measurementMethod, setMeasurementMethod] = useState<'ar' | 'manual' | null>(null);
+  const [arMeasurements, setArMeasurements] = useState<CompleteMeasurements | null>(null);
+  const [manualMeasurements, setManualMeasurements] = useState<CompleteMeasurements>({
+    height: 0,
+    chest: 0,
+    waist: 0,
+    hips: 0,
+    shoulders: 0,
+    inseam: 0,
+    armLength: 0,
+    neck: 0
+  });
 
   const { user } = useAuth();
   const { selectedOrderForReview, clearOrderReview } = useNotificationContext();
+  const router = useRouter();
 
   const handleStartDateChange = (event: any, selectedDate?: Date) => {
     setShowStartDatePicker(false);
@@ -99,6 +130,38 @@ export default function RentalOrderFlow() {
       setFormData({...formData, startDate: selectedDate.toISOString().split('T')[0]});
     }
   };
+
+  // AR Measurement handlers
+  const handleARMeasurementComplete = (measurements: any) => {
+    setArMeasurements(measurements);
+    setShowARMeasurement(false);
+    setMeasurementMethod('ar');
+    console.log('AR Measurements received:', measurements);
+  };
+
+  const handleARMeasurementCancel = () => {
+    setShowARMeasurement(false);
+    setMeasurementMethod(null);
+  };
+
+  const handleMeasurementMethodSelect = (method: 'ar' | 'manual') => {
+    setMeasurementMethod(method);
+    if (method === 'ar') {
+      setShowARMeasurement(true);
+    }
+  };
+
+  // Complete measurement fields for manual input
+  const COMPLETE_MEASUREMENT_FIELDS = [
+    { key: 'height', label: 'Height', description: 'Your total height in cm' },
+    { key: 'chest', label: 'Chest', description: 'Chest circumference at fullest point' },
+    { key: 'waist', label: 'Waist', description: 'Natural waistline circumference' },
+    { key: 'hips', label: 'Hips', description: 'Hip circumference at fullest point' },
+    { key: 'shoulders', label: 'Shoulders', description: 'Distance across shoulders' },
+    { key: 'inseam', label: 'Inseam', description: 'Inner leg length from crotch to ankle' },
+    { key: 'armLength', label: 'Arm Length', description: 'Shoulder to wrist length' },
+    { key: 'neck', label: 'Neck', description: 'Neck circumference' }
+  ];
 
 
 
@@ -155,6 +218,19 @@ export default function RentalOrderFlow() {
       newErrors.otherType = 'Please specify the rental type';
     }
     if (!formData.startDate) newErrors.startDate = 'Please select pickup date';
+    if (!measurementMethod) newErrors.measurementMethod = 'Please select a measurement method';
+    if (measurementMethod === 'ar' && !arMeasurements) {
+      newErrors.measurementMethod = 'Please complete AR measurement';
+    }
+    if (measurementMethod === 'manual') {
+      // Validate all manual measurement fields
+      COMPLETE_MEASUREMENT_FIELDS.forEach(field => {
+        const value = manualMeasurements[field.key as keyof CompleteMeasurements];
+        if (!value || value <= 0) {
+          newErrors[field.key] = `${field.label} is required and must be greater than 0`;
+        }
+      });
+    }
     if (!formData.agreementAccepted) newErrors.agreementAccepted = 'You must accept the rental agreement';
 
     // Validate date formats
@@ -177,6 +253,44 @@ export default function RentalOrderFlow() {
       const returnDate = new Date(startDate);
       returnDate.setDate(startDate.getDate() + 5);
 
+      // Prepare measurements based on method
+      let measurements = {
+        height: 0,
+        chest: 0,
+        waist: 0,
+        hips: 0,
+        shoulders: 0,
+        inseam: 0,
+        armLength: 0,
+        neck: 0,
+        thigh: 0
+      };
+
+      if (measurementMethod === 'ar' && arMeasurements) {
+        measurements = {
+          height: arMeasurements.height || 0,
+          chest: arMeasurements.chest || 0,
+          waist: arMeasurements.waist || 0,
+          hips: arMeasurements.hips || 0,
+          shoulders: arMeasurements.shoulders || 0,
+          inseam: arMeasurements.inseam || 0,
+          armLength: arMeasurements.armLength || 0,
+          neck: arMeasurements.neck || 0,
+          thigh: arMeasurements.thigh || 0
+        };
+      } else if (measurementMethod === 'manual') {
+        measurements = {
+          height: manualMeasurements.height || 0,
+          chest: manualMeasurements.chest || 0,
+          waist: manualMeasurements.waist || 0,
+          hips: manualMeasurements.hips || 0,
+          shoulders: manualMeasurements.shoulders || 0,
+          inseam: manualMeasurements.inseam || 0,
+          armLength: manualMeasurements.armLength || 0,
+          neck: manualMeasurements.neck || 0
+        };
+      }
+
       const payload = {
         item_name: formData.rentalType === 'other' ? formData.otherType : 
                    RENTAL_TYPES.find(t => t.id === formData.rentalType)?.label,
@@ -190,14 +304,8 @@ export default function RentalOrderFlow() {
         rental_date: formData.startDate, // Use start_date as rental_date
         clothing_type: formData.rentalType === 'other' ? formData.otherType : 
                       RENTAL_TYPES.find(t => t.id === formData.rentalType)?.label,
-        measurements: {
-          bust: 0,
-          waist: 0,
-          hips: 0,
-          shoulder_width: 0,
-          arm_length: 0,
-          inseam: 0
-        }, // Default measurements for rental orders
+        measurements: measurements,
+        measurement_method: measurementMethod, // Track measurement method
         agreement_accepted: formData.agreementAccepted // Add agreement_accepted
       };
 
@@ -543,6 +651,138 @@ export default function RentalOrderFlow() {
               </View>
             </View>
 
+            {/* Measurement Method Selection */}
+            <View style={styles.formSection}>
+              <Text style={styles.formSectionTitle}>Measurement Method</Text>
+              <Text style={styles.formSectionSubtitle}>
+                Choose how you'd like to provide your measurements
+              </Text>
+              
+              <View style={styles.measurementMethodContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.measurementMethodCard,
+                    measurementMethod === 'ar' && styles.selectedMeasurementMethod
+                  ]}
+                  onPress={() => handleMeasurementMethodSelect('ar')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.measurementMethodIcon}>
+                    <Ionicons name="scan" size={32} color={measurementMethod === 'ar' ? Colors.primary : Colors.text.secondary} />
+                  </View>
+                  <Text style={[styles.measurementMethodTitle, measurementMethod === 'ar' && styles.selectedMeasurementMethodText]}>
+                    AR Measurement
+                  </Text>
+                  <Text style={styles.measurementMethodDescription}>
+                    Use your camera for accurate body measurements
+                  </Text>
+                  {measurementMethod === 'ar' && (
+                    <View style={styles.selectedIndicator}>
+                      <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.measurementMethodCard,
+                    measurementMethod === 'manual' && styles.selectedMeasurementMethod
+                  ]}
+                  onPress={() => handleMeasurementMethodSelect('manual')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.measurementMethodIcon}>
+                    <Ionicons name="create-outline" size={32} color={measurementMethod === 'manual' ? Colors.primary : Colors.text.secondary} />
+                  </View>
+                  <Text style={[styles.measurementMethodTitle, measurementMethod === 'manual' && styles.selectedMeasurementMethodText]}>
+                    Manual Input
+                  </Text>
+                  <Text style={styles.measurementMethodDescription}>
+                    Enter measurements manually
+                  </Text>
+                  {measurementMethod === 'manual' && (
+                    <View style={styles.selectedIndicator}>
+                      <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Show AR Measurement Results */}
+              {measurementMethod === 'ar' && arMeasurements && (
+                <View style={styles.arResultsContainer}>
+                  <Text style={styles.arResultsTitle}>AR Measurement Results</Text>
+                  <View style={styles.arResultsGrid}>
+                    {Object.entries(arMeasurements).map(([key, value]) => (
+                      <View key={key} style={styles.arResultItem}>
+                        <Text style={styles.arResultLabel}>{key.replace('_', ' ').toUpperCase()}</Text>
+                        <Text style={styles.arResultValue}>{value} cm</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Manual Input Fields */}
+              {measurementMethod === 'manual' && (
+                <View style={styles.manualInputContainer}>
+                  <Text style={styles.manualInputTitle}>Manual Measurement Input</Text>
+                  <Text style={styles.manualInputSubtitle}>Enter your measurements in centimeters</Text>
+                  
+                  <View style={styles.measurementGrid}>
+                    {COMPLETE_MEASUREMENT_FIELDS.map(field => (
+                      <View key={field.key} style={styles.measurementGridItem}>
+                        <Text style={styles.measurementFieldLabel}>{field.label}</Text>
+                        <Text style={styles.measurementFieldDescription}>{field.description}</Text>
+                        <TextInput
+                          style={styles.measurementInput}
+                          placeholder={`${field.label} (cm)`}
+                          value={manualMeasurements[field.key as keyof CompleteMeasurements] > 0 ? 
+                                 manualMeasurements[field.key as keyof CompleteMeasurements].toString() : ''}
+                          onChangeText={(text) => {
+                            const value = parseFloat(text) || 0;
+                            setManualMeasurements(prev => ({
+                              ...prev,
+                              [field.key]: value
+                            }));
+                          }}
+                          keyboardType="numeric"
+                        />
+                        {errors[field.key] && (
+                          <Text style={styles.measurementError}>{errors[field.key]}</Text>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Change Measurement Method Button */}
+              {measurementMethod && (
+                <TouchableOpacity
+                  style={styles.changeMethodButton}
+                  onPress={() => {
+                    setMeasurementMethod(null);
+                    setArMeasurements(null);
+                    setManualMeasurements({
+                      height: 0,
+                      chest: 0,
+                      waist: 0,
+                      hips: 0,
+                      shoulders: 0,
+                      inseam: 0,
+                      armLength: 0,
+                      neck: 0
+                    });
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="arrow-back" size={16} color={Colors.primary} />
+                  <Text style={styles.changeMethodButtonText}>Change Measurement Method</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             {/* Special Requests */}
             <View style={styles.formSection}>
               <Text style={styles.formSectionTitle}>Special Requests</Text>
@@ -613,6 +853,14 @@ export default function RentalOrderFlow() {
                 )}
               </View>
             </View>
+
+            {/* Measurement Method Error */}
+            {errors.measurementMethod && (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle" size={16} color={Colors.error} />
+                <Text style={styles.errorText}>{errors.measurementMethod}</Text>
+              </View>
+            )}
           </ScrollView>
 
           {/* Modal Actions */}
@@ -713,6 +961,26 @@ export default function RentalOrderFlow() {
                     {selectedOrder.notes || 'None'}
                   </Text>
                 </View>
+                
+                {/* Measurement Details */}
+                {selectedOrder.measurements && (
+                  <>
+                    <View style={styles.measurementsSpacer} />
+                    <View style={styles.measurementsTitleContainer}>
+                      <Text style={styles.measurementsTitle}>Measurements</Text>
+                    </View>
+                    {Object.entries(selectedOrder.measurements).map(([key, value]) => (
+                      <View key={key} style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>
+                          {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}:
+                        </Text>
+                        <Text style={styles.detailValue}>
+                          {value} cm
+                        </Text>
+                      </View>
+                    ))}
+                  </>
+                )}
                 
                 {selectedOrder.quotation_status === 'accepted' && selectedOrder.quotation_amount && (
                   <View style={styles.detailRow}>
@@ -1091,6 +1359,20 @@ export default function RentalOrderFlow() {
           </View>
         </View>
       </Modal>
+
+      {/* AR Measurement Modal */}
+      {showARMeasurement && (
+        <Modal
+          visible={showARMeasurement}
+          animationType="slide"
+          presentationStyle="fullScreen"
+        >
+          <ARMeasurementScreen
+            onComplete={handleARMeasurementComplete}
+            onCancel={handleARMeasurementCancel}
+          />
+        </Modal>
+      )}
 
       {/* Date Pickers */}
       {showStartDatePicker && (
@@ -2021,6 +2303,201 @@ const styles = StyleSheet.create({
     color: '#92400E',
     fontWeight: '500',
     flex: 1,
+  },
+  
+  // AR Measurement Styles
+  formSectionSubtitle: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  measurementMethodContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  measurementMethodCard: {
+    flex: 1,
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 6,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.border.light,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    position: 'relative',
+  },
+  selectedMeasurementMethod: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + '15',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  measurementMethodIcon: {
+    marginBottom: 12,
+  },
+  measurementMethodTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  selectedMeasurementMethodText: {
+    color: Colors.primary,
+  },
+  measurementMethodDescription: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  arResultsContainer: {
+    backgroundColor: Colors.primary + '10',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: Colors.primary + '30',
+  },
+  arResultsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  arResultsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  arResultItem: {
+    width: '48%',
+    backgroundColor: Colors.background.card,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  arResultLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.text.secondary,
+    marginBottom: 4,
+  },
+  arResultValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  
+  // Manual Input Styles
+  manualInputContainer: {
+    backgroundColor: Colors.primary + '10',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: Colors.primary + '30',
+  },
+  manualInputTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  manualInputSubtitle: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  measurementField: {
+    marginBottom: 16,
+  },
+  measurementGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  measurementGridItem: {
+    width: '48%',
+    marginBottom: 15,
+    padding: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  measurementFieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginBottom: 4,
+  },
+  measurementFieldDescription: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  measurementInput: {
+    backgroundColor: Colors.background.card,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: Colors.text.primary,
+  },
+  measurementError: {
+    color: Colors.error,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  changeMethodButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.background.card,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  changeMethodButtonText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  measurementsSpacer: {
+    height: 20,
+  },
+  measurementsTitleContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  measurementsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.text.primary,
+    textAlign: 'center',
   },
   
   // Modal container styles matching order details modal

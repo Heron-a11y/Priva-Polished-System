@@ -9,6 +9,7 @@ import {
   TextInput,
   Alert,
   Dimensions,
+  Image,
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import apiService from '../../services/api';
@@ -666,7 +667,19 @@ const AppointmentsScreen = () => {
                 <View key={appointment.id} style={styles.appointmentCard}>
                   <View style={styles.cardHeader}>
                     <View style={styles.customerInfo}>
-                      <Ionicons name="person-circle" size={20} color="#014D40" />
+                      {user?.profile_image ? (
+                        <Image 
+                          source={{ 
+                            uri: user.profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.104:8000'),
+                            cache: 'force-cache'
+                          }} 
+                          style={styles.customerProfileImage}
+                          resizeMode="cover"
+                          onError={(error) => console.log('❌ Profile image error:', error)}
+                        />
+                      ) : (
+                        <Ionicons name="person-circle" size={20} color="#014D40" />
+                      )}
                       <Text style={styles.customerName}>
                         {user?.name || 'Your Appointment'}
                       </Text>
@@ -1285,6 +1298,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flex: 1,
+  },
+  customerProfileImage: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#014D40',
   },
   customerName: {
     fontSize: 16,

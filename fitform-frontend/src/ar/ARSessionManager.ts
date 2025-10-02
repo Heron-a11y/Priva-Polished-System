@@ -67,10 +67,16 @@ class ARSessionManager {
     } else if (Platform.OS === 'ios') {
       this.nativeModule = NativeModules.ARSessionManager;
     } else {
-      throw new Error('AR Session Manager is not supported on this platform');
+      this.nativeModule = null as any; // Set to null for unsupported platforms
     }
 
-    // Initialize event emitter
+    // Check if native module is available
+    if (!this.nativeModule) {
+      console.log('⚠️ ARSessionManager native module not available (expected in development mode)');
+      // Don't throw error, just set to null and continue
+    }
+
+    // Initialize event emitter only if native module exists
     if (this.nativeModule) {
       this.eventEmitter = new NativeEventEmitter(this.nativeModule as any);
     }
@@ -82,6 +88,10 @@ class ARSessionManager {
    */
   async isARSupported(): Promise<boolean> {
     try {
+      if (!this.nativeModule) {
+        console.log('⚠️ ARSessionManager native module not available - AR not supported');
+        return false;
+      }
       if (Platform.OS === 'android') {
         return await this.nativeModule.isARCoreSupported();
       } else if (Platform.OS === 'ios') {
@@ -260,6 +270,10 @@ class ARSessionManager {
    */
   async loadConfiguration(config: any): Promise<boolean> {
     try {
+      if (!this.nativeModule) {
+        console.log('⚠️ ARSessionManager native module not available - skipping configuration');
+        return false;
+      }
       const result = await this.nativeModule.loadConfiguration(config);
       console.log('Configuration loaded successfully:', result);
       return result;

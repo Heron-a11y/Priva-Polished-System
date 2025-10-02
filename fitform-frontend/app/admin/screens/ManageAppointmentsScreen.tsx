@@ -10,7 +10,8 @@ import {
   TextInput,
   Dimensions,
   RefreshControl,
-  Modal
+  Modal,
+  Image
 } from 'react-native';
 import apiService from '../../../services/api';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,6 +40,7 @@ interface Appointment {
   status: string;
   customer_name?: string;
   customer?: string;
+  customer_profile_image?: string;
 }
 
 interface AppointmentStats {
@@ -80,6 +82,13 @@ const ManageAppointmentsScreen = () => {
         apiService.getAllAppointments(),
         apiService.getAppointmentStats()
       ]);
+      
+      console.log('🔍 Admin Appointments API Response:', appointmentsRes);
+      console.log('🔍 First appointment data:', appointmentsRes[0]);
+      if (appointmentsRes[0]) {
+        console.log('🔍 Customer profile image:', appointmentsRes[0].customer_profile_image);
+        console.log('🔍 Customer name:', appointmentsRes[0].customer_name);
+      }
       
       setAppointments(Array.isArray(appointmentsRes) ? appointmentsRes : appointmentsRes.data || []);
       setStats(statsRes);
@@ -227,7 +236,19 @@ const ManageAppointmentsScreen = () => {
       <View key={appointment.id} style={styles.appointmentCard}>
         <View style={styles.cardHeader}>
           <View style={styles.customerInfo}>
-            <Ionicons name="person-circle" size={20} color="#014D40" />
+            {appointment.customer_profile_image ? (
+              <Image 
+                source={{ 
+                  uri: appointment.customer_profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.104:8000'),
+                  cache: 'force-cache'
+                }} 
+                style={styles.customerProfileImage}
+                resizeMode="cover"
+                onError={(error) => console.log('❌ Customer profile image error:', error)}
+              />
+            ) : (
+              <Ionicons name="person-circle" size={20} color="#014D40" />
+            )}
             <Text style={styles.customerName}>
               {appointment.customer_name || appointment.customer || 'Unknown Customer'}
             </Text>
@@ -876,6 +897,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flex: 1,
+  },
+  customerProfileImage: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#014D40',
   },
   customerName: {
     fontSize: 16,

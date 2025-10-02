@@ -277,7 +277,7 @@ export default function RentalPurchaseHistory() {
         type: 'rental' as const,
         item_name: rental.item_name,
         status: rental.status,
-        date: rental.rental_date,
+        date: rental.created_at || rental.rental_date,
         amount: rental.quotation_amount ? Number(rental.quotation_amount) : 0,
         clothing_type: rental.clothing_type,
         notes: rental.notes,
@@ -292,7 +292,7 @@ export default function RentalPurchaseHistory() {
         type: 'purchase' as const,
         item_name: purchase.item_name || 'Custom Garment',
         status: purchase.status,
-        date: purchase.purchase_date || purchase.created_at,
+        date: purchase.created_at || purchase.purchase_date || new Date().toISOString(),
         amount: (purchase.quotation_amount || purchase.quotation_price) ? Number(purchase.quotation_amount || purchase.quotation_price) : 0,
         clothing_type: purchase.clothing_type || 'Custom',
         notes: purchase.notes
@@ -356,7 +356,34 @@ export default function RentalPurchaseHistory() {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+    if (!dateString || dateString === 'null' || dateString === 'undefined') return 'N/A';
+    
+    // Debug log to see what we're getting
+    console.log('Formatting date:', dateString, 'Type:', typeof dateString);
+    
+    // Try to parse the date string
+    let date = new Date(dateString);
+    
+    // If the first attempt fails, try parsing with different formats
+    if (isNaN(date.getTime())) {
+      // Try parsing as ISO string with timezone
+      date = new Date(dateString.replace(' ', 'T'));
+    }
+    
+    // If still invalid, try parsing as timestamp
+    if (isNaN(date.getTime())) {
+      const timestamp = parseInt(dateString);
+      if (!isNaN(timestamp)) {
+        date = new Date(timestamp);
+      }
+    }
+    
+    // Check if the date is valid after all attempts
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date string:', dateString);
+      return 'Date not available';
+    }
+    
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -440,9 +467,9 @@ export default function RentalPurchaseHistory() {
         <View style={styles.statusContainer}>
           <View style={[
             styles.statusBadge,
-            { backgroundColor: getStatusColor(item.status) }
+            { backgroundColor: getStatusColor(item.status) + '20' }
           ]}>
-            <Text style={styles.statusText}>
+            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
               {getStatusText(item.status)}
             </Text>
           </View>
@@ -515,78 +542,89 @@ export default function RentalPurchaseHistory() {
 
           <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
             <View style={styles.orderDetailCard}>
-              <Text style={styles.orderDetailTitle}>{selectedItem.item_name}</Text>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedItem.status) + '20' }]}>
-                <Text style={[styles.statusText, { color: getStatusColor(selectedItem.status) }]}>
-                  {getStatusText(selectedItem.status)}
-                </Text>
+              <View style={styles.orderDetailHeader}>
+                <Text style={styles.orderDetailTitle}>{selectedItem.item_name}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedItem.status) + '20' }]}>
+                  <Text style={[styles.statusText, { color: getStatusColor(selectedItem.status) }]}>
+                    {getStatusText(selectedItem.status)}
+                  </Text>
+                </View>
               </View>
               
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Type:</Text>
-                <Text style={styles.detailValue}>
+              <View style={styles.orderDetailItem}>
+                <Text style={styles.orderDetailLabel}>Order ID:</Text>
+                <Text style={styles.orderDetailValue}>#{selectedItem.id}</Text>
+              </View>
+
+              <View style={styles.orderDetailItem}>
+                <Text style={styles.orderDetailLabel}>Order Type:</Text>
+                <Text style={styles.orderDetailValue}>
                   {selectedItem.type === 'rental' ? 'Rental' : 'Purchase'}
                 </Text>
               </View>
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Clothing Type:</Text>
-                <Text style={styles.detailValue}>{selectedItem.clothing_type}</Text>
+              <View style={styles.orderDetailItem}>
+                <Text style={styles.orderDetailLabel}>Clothing Type:</Text>
+                <Text style={styles.orderDetailValue}>{selectedItem.clothing_type}</Text>
               </View>
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Date:</Text>
-                <Text style={styles.detailValue}>{formatDate(selectedItem.date)}</Text>
+              <View style={styles.orderDetailItem}>
+                <Text style={styles.orderDetailLabel}>Transaction Date:</Text>
+                <Text style={styles.orderDetailValue}>{formatDate(selectedItem.date)}</Text>
               </View>
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Amount:</Text>
-                <Text style={styles.detailValue}>{formatCurrency(selectedItem.amount)}</Text>
+              <View style={styles.orderDetailItem}>
+                <Text style={styles.orderDetailLabel}>Amount:</Text>
+                <Text style={styles.orderDetailValue}>{formatCurrency(selectedItem.amount)}</Text>
               </View>
 
               {selectedItem.notes && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Notes:</Text>
-                  <Text style={[styles.detailValue, styles.notesValue]}>
+                <View style={styles.orderDetailItem}>
+                  <Text style={styles.orderDetailLabel}>Notes:</Text>
+                  <Text style={[styles.orderDetailValue, styles.notesValue]}>
                     {selectedItem.notes}
                   </Text>
                 </View>
               )}
 
               {selectedItem.penalty_status && selectedItem.penalty_status !== 'none' && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Penalty Status:</Text>
-                  <Text style={styles.detailValue}>
+                <View style={styles.orderDetailItem}>
+                  <Text style={styles.orderDetailLabel}>Penalty Status:</Text>
+                  <Text style={styles.orderDetailValue}>
                     {selectedItem.penalty_status.toUpperCase()} - Total: {formatCurrency(selectedItem.total_penalties || 0)}
                   </Text>
                 </View>
               )}
 
+              {/* Measurement Details */}
               {originalItem && 'measurements' in originalItem && originalItem.measurements && (
-                <View style={styles.measurementsSection}>
-                  <Text style={styles.measurementsTitle}>Measurements:</Text>
-                  <View style={styles.measurementsGrid}>
-                    {Object.entries(originalItem.measurements)
-                      .filter(([key, value]) => value !== null && value !== undefined && value !== '')
-                      .length > 0 ? (
-                        Object.entries(originalItem.measurements)
-                          .filter(([key, value]) => value !== null && value !== undefined && value !== '')
-                          .map(([key, value]) => (
-                            <View key={key} style={styles.measurementItem}>
-                              <Text style={styles.measurementLabel}>
-                                {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:
-                              </Text>
-                              <Text style={styles.measurementValue}>{value}</Text>
-                            </View>
-                          ))
-                      ) : (
-                        <View style={styles.measurementItem}>
-                          <Text style={styles.measurementLabel}>No measurements available</Text>
-                          <Text style={styles.measurementValue}>-</Text>
-                        </View>
-                      )}
+                <>
+                  <View style={styles.measurementsSpacer} />
+                  <View style={styles.measurementsTitleContainer}>
+                    <Text style={styles.measurementsTitle}>Measurements</Text>
                   </View>
-                </View>
+                  {Object.entries(originalItem.measurements)
+                    .filter(([key, value]) => value !== null && value !== undefined && value !== '')
+                    .length > 0 ? (
+                      Object.entries(originalItem.measurements)
+                        .filter(([key, value]) => value !== null && value !== undefined && value !== '')
+                        .map(([key, value]) => (
+                          <View key={key} style={styles.orderDetailItem}>
+                            <Text style={styles.orderDetailLabel}>
+                              {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}:
+                            </Text>
+                            <Text style={styles.orderDetailValue}>
+                              {value} cm
+                            </Text>
+                          </View>
+                        ))
+                    ) : (
+                      <View style={styles.orderDetailItem}>
+                        <Text style={styles.orderDetailLabel}>No measurements available</Text>
+                        <Text style={styles.orderDetailValue}>-</Text>
+                      </View>
+                    )}
+                </>
               )}
             </View>
           </ScrollView>
@@ -1217,20 +1255,49 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background.card,
     borderRadius: 16,
     padding: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    marginBottom: 16,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: Colors.border.light,
+    elevation: 4,
+  },
+  orderDetailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
   },
   orderDetailTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.primary,
-    marginBottom: 12,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    flex: 1,
+    marginRight: 12,
+  },
+  orderDetailItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light,
+    flexWrap: 'wrap',
+  },
+  orderDetailLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.secondary,
+    flex: 1,
+    marginRight: 8,
+  },
+  orderDetailValue: {
+    fontSize: 16,
+    color: Colors.text.primary,
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+    flexWrap: 'wrap',
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -1318,5 +1385,12 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'right',
     flexWrap: 'wrap',
+  },
+  measurementsSpacer: {
+    height: 20,
+  },
+  measurementsTitleContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
   },
 });

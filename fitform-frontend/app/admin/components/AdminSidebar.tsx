@@ -25,7 +25,7 @@ interface AdminSidebarProps {
 const AdminSidebar: React.FC<AdminSidebarProps> = ({ open, setOpen }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const isSidebarOpen = typeof open === 'boolean' ? open : !isMobile;
   const handleSetOpen = setOpen || (() => {});
 
@@ -65,11 +65,37 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ open, setOpen }) => {
             <TouchableOpacity style={styles.closeButton} onPress={() => handleSetOpen(false)}>
               <Ionicons name="close" size={28} color="#fff" />
             </TouchableOpacity>
-            <View style={styles.logoWrapper}>
-              <Image source={require('../../../assets/images/priva-logo.jpg')} style={styles.logoImage} />
-            </View>
-            <Text style={styles.brand}>Priva Atelier</Text>
-            <Text style={styles.tagline}>GOWN SUITS BARONG</Text>
+            {user ? (
+              <>
+                <View style={styles.logoWrapper}>
+                  {user.profile_image ? (
+                    <Image 
+                      source={{ 
+                        uri: user.profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.104:8000'),
+                        cache: 'force-cache'
+                      }} 
+                      style={styles.logoImage}
+                      resizeMode="cover"
+                      onError={(error) => console.log('❌ Profile image error:', error)}
+                    />
+                  ) : (
+                    <View style={styles.defaultProfileContainer}>
+                      <Ionicons name="person" size={50} color="#FFD700" />
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.brand}>{user.name}</Text>
+                <Text style={styles.tagline}>{user.email}</Text>
+              </>
+            ) : (
+              <>
+                <View style={styles.logoWrapper}>
+                  <Image source={require('../../../assets/images/priva-logo.jpg')} style={styles.logoImage} />
+                </View>
+                <Text style={styles.brand}>Priva Atelier</Text>
+                <Text style={styles.tagline}>GOWN SUITS BARONG</Text>
+              </>
+            )}
           </View>
           <View style={styles.menuContainer}>
             {adminMenuItems.map((item) => (
@@ -109,11 +135,37 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ open, setOpen }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.logoWrapper}>
-          <Image source={require('../../../assets/images/priva-logo.jpg')} style={styles.logoImage} />
-        </View>
-        <Text style={styles.brand}>Priva Atelier</Text>
-        <Text style={styles.tagline}>GOWN SUITS BARONG</Text>
+        {user ? (
+          <>
+            <View style={styles.logoWrapper}>
+              {user.profile_image ? (
+                <Image 
+                  source={{ 
+                    uri: user.profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.104:8000'),
+                    cache: 'force-cache'
+                  }} 
+                  style={styles.logoImage}
+                  resizeMode="cover"
+                  onError={(error) => console.log('❌ Profile image error:', error)}
+                />
+              ) : (
+                <View style={styles.defaultProfileContainer}>
+                  <Ionicons name="person" size={50} color="#FFD700" />
+                </View>
+              )}
+            </View>
+            <Text style={styles.brand}>{user.name}</Text>
+            <Text style={styles.tagline}>{user.email}</Text>
+          </>
+        ) : (
+          <>
+            <View style={styles.logoWrapper}>
+              <Image source={require('../../../assets/images/priva-logo.jpg')} style={styles.logoImage} />
+            </View>
+            <Text style={styles.brand}>Priva Atelier</Text>
+            <Text style={styles.tagline}>GOWN SUITS BARONG</Text>
+          </>
+        )}
       </View>
       <View style={styles.menuContainer}>
         {adminMenuItems.map((item) => (
@@ -250,6 +302,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 10,
+  },
+  defaultProfileContainer: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    borderWidth: 2,
+    borderColor: '#FFD700',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

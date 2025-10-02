@@ -47,15 +47,13 @@ function AppContent() {
       // Only redirect to login if not authenticated and not on login/register pages
       if (!isAuthenticated && pathname !== '/login' && pathname !== '/register' && !isRoleSpecificPage) {
         router.replace('/login');
-      } else if (isAuthenticated && user) {
-        // Redirect authenticated users to their appropriate dashboard
-        if (pathname === '/login' || pathname === '/register') {
-          if (user.role === 'customer') {
-            router.replace('/customer/dashboard');
-          } else if (user.role === 'admin') {
-            router.replace('/admin/dashboard');
-          }
-        }
+      } 
+      // Remove automatic redirection for authenticated users
+      // Let users stay on login screen if they want to switch accounts
+      // Only redirect if they're already on a protected route
+      else if (isAuthenticated && user && pathname !== '/login' && pathname !== '/register') {
+        // User is authenticated and on a protected route - allow them to stay
+        console.log('✅ User authenticated, staying on current route:', pathname);
       }
     }
   }, [isLoading, fontsLoaded, pathname, router, isRoleSpecificPage, isAuthenticated, user]);

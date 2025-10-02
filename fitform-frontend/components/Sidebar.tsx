@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Platform, Image } from 'react-native';
 import { Link, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../contexts/AuthContext';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const isMobile = SCREEN_WIDTH < 600;
@@ -13,6 +14,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
   const pathname = usePathname();
+  const { user } = useAuth();
   const isSidebarOpen = typeof open === 'boolean' ? open : !isMobile;
   const handleSetOpen = setOpen || (() => {});
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -44,9 +46,33 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
             <TouchableOpacity style={styles.closeButton} onPress={() => handleSetOpen(false)}>
               <Ionicons name="close" size={28} color="#fff" />
             </TouchableOpacity>
-            <Image source={require('../assets/images/priva-logo.jpg')} style={styles.logoImage} resizeMode="contain" />
-            <Text style={styles.brandName}>Priva Atelier</Text>
-            <Text style={styles.brandSubtitle}>GOWN SUITS BARONG</Text>
+            {user ? (
+              <>
+                {user.profile_image ? (
+                  <Image 
+                    source={{ 
+                      uri: user.profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.104:8000'),
+                      cache: 'force-cache'
+                    }} 
+                    style={styles.logoImage}
+                    resizeMode="cover"
+                    onError={(error) => console.log('❌ Profile image error:', error)}
+                  />
+                ) : (
+                  <View style={styles.defaultProfileContainer}>
+                    <Ionicons name="person" size={50} color="#FFD700" />
+                  </View>
+                )}
+                <Text style={styles.brandName}>{user.name}</Text>
+                <Text style={styles.brandSubtitle}>{user.email}</Text>
+              </>
+            ) : (
+              <>
+                <Image source={require('../assets/images/priva-logo.jpg')} style={styles.logoImage} resizeMode="contain" />
+                <Text style={styles.brandName}>Priva Atelier</Text>
+                <Text style={styles.brandSubtitle}>GOWN SUITS BARONG</Text>
+              </>
+            )}
           </View>
           <View style={styles.menuContainer}>
             {menuItems.map((item) => (
@@ -167,9 +193,33 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
   return (
     <View style={styles.container}>
       <View style={styles.logoArea}>
-        <Image source={require('../assets/images/priva-logo.jpg')} style={styles.logoImage} resizeMode="contain" />
-        <Text style={styles.brandName}>Priva Atelier</Text>
-        <Text style={styles.brandSubtitle}>GOWN SUITS BARONG</Text>
+        {user ? (
+          <>
+            {user.profile_image ? (
+              <Image 
+                source={{ 
+                  uri: user.profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.104:8000'),
+                  cache: 'force-cache'
+                }} 
+                style={styles.logoImage}
+                resizeMode="cover"
+                onError={(error) => console.log('❌ Profile image error:', error)}
+              />
+            ) : (
+              <View style={styles.defaultProfileContainer}>
+                <Ionicons name="person" size={50} color="#FFD700" />
+              </View>
+            )}
+            <Text style={styles.brandName}>{user.name}</Text>
+            <Text style={styles.brandSubtitle}>{user.email}</Text>
+          </>
+        ) : (
+          <>
+            <Image source={require('../assets/images/priva-logo.jpg')} style={styles.logoImage} resizeMode="contain" />
+            <Text style={styles.brandName}>Priva Atelier</Text>
+            <Text style={styles.brandSubtitle}>GOWN SUITS BARONG</Text>
+          </>
+        )}
       </View>
       <View style={styles.menuContainer}>
         {menuItems.map((item) => (
@@ -397,6 +447,50 @@ const styles = StyleSheet.create({
   activeDropdownText: {
     color: '#FFD700',
     fontWeight: 'bold',
+  },
+  profileSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  profileImageContainer: {
+    marginRight: 12,
+  },
+  profileImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#FFD700',
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  profileName: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  profileRole: {
+    color: '#FFD700',
+    fontSize: 12,
+    textTransform: 'capitalize',
+  },
+  defaultProfileContainer: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 2,
+    borderColor: '#FFD700',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
   },
 });
 
