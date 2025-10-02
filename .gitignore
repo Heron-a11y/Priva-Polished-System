@@ -115,3 +115,7 @@ web-build/
 # Misc
 *.tgz
 *.tar.gz
+
+# Large executable files
+cloudflared.exe
+*.exe
