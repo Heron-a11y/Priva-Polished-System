@@ -47,12 +47,12 @@ class AppointmentController extends Controller
             ], 422);
         }
 
-        // Check if appointment time is within business hours (10 AM to 5 PM, last slot at 4 PM)
+        // Check if appointment time is within business hours (10 AM to 7 PM, last slot at 6 PM)
         $appointmentHour = $appointmentDate->hour;
-        if ($appointmentHour < 10 || $appointmentHour >= 17) { // 10 AM to 5 PM (17:00), last slot at 4 PM (16:00)
+        if ($appointmentHour < 10 || $appointmentHour >= 19) { // 10 AM to 7 PM (19:00), last slot at 6 PM (18:00)
             return response()->json([
                 'success' => false,
-                'message' => 'Appointments can only be scheduled between 10:00 AM and 5:00 PM. Please select a time within business hours.',
+                'message' => 'Appointments can only be scheduled between 10:00 AM and 7:00 PM. Please select a time within business hours.',
                 'error' => 'outside_business_hours'
             ], 422);
         }
@@ -138,12 +138,12 @@ class AppointmentController extends Controller
             ], 422);
         }
 
-        // Check if rescheduled appointment time is within business hours (10 AM to 5 PM, last slot at 4 PM)
+        // Check if rescheduled appointment time is within business hours (10 AM to 7 PM, last slot at 6 PM)
         $appointmentHour = $appointmentDate->hour;
-        if ($appointmentHour < 10 || $appointmentHour >= 17) { // 10 AM to 5 PM (17:00), last slot at 4 PM (16:00)
+        if ($appointmentHour < 10 || $appointmentHour >= 19) { // 10 AM to 7 PM (19:00), last slot at 6 PM (18:00)
             return response()->json([
                 'success' => false,
-                'message' => 'Appointments can only be rescheduled between 10:00 AM and 5:00 PM. Please select a time within business hours.',
+                'message' => 'Appointments can only be rescheduled between 10:00 AM and 7:00 PM. Please select a time within business hours.',
                 'error' => 'outside_business_hours'
             ], 422);
         }

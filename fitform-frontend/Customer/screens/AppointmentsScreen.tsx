@@ -407,7 +407,7 @@ const AppointmentsScreen = () => {
       } else if (error.message && error.message.includes('past')) {
         Alert.alert('Invalid Date', 'Cannot schedule appointments in the past. Please select a current or future date.');
       } else if (error.message && error.message.includes('business hours')) {
-        Alert.alert('Invalid Time', 'Appointments can only be scheduled between 10:00 AM and 5:00 PM. Please select a time within business hours.');
+        Alert.alert('Invalid Time', 'Appointments can only be scheduled between 10:00 AM and 7:00 PM. Please select a time within business hours.');
       } else if (error.message && error.message.includes('user already has appointment')) {
         Alert.alert('Booked', 'You already have an appointment on this date. Only 1 appointment per customer per day is allowed.');
       } else if (error.message && error.message.includes('time slot taken')) {
@@ -474,7 +474,7 @@ const AppointmentsScreen = () => {
       if (error.message && error.message.includes('past dates')) {
         Alert.alert('Invalid Date', 'Cannot reschedule appointments to past dates. Please select a current or future date.');
       } else if (error.message && error.message.includes('business hours')) {
-        Alert.alert('Invalid Time', 'Appointments can only be rescheduled between 10:00 AM and 5:00 PM. Please select a time within business hours.');
+        Alert.alert('Invalid Time', 'Appointments can only be rescheduled between 10:00 AM and 7:00 PM. Please select a time within business hours.');
       } else {
         Alert.alert('Error', 'Failed to reschedule appointment');
       }
@@ -645,7 +645,7 @@ const AppointmentsScreen = () => {
           {/* Business Hours Info */}
           <View style={styles.businessHoursInfo}>
             <Text style={styles.businessHoursTitle}>Business Hours</Text>
-            <Text style={styles.businessHoursText}>10:00 AM - 5:00 PM</Text>
+            <Text style={styles.businessHoursText}>10:00 AM - 7:00 PM</Text>
           </View>
 
         </View>
@@ -769,7 +769,7 @@ const AppointmentsScreen = () => {
                 placeholder="Enter service type (e.g., Fitting, Consultation, Measurement)"
               />
 
-              <Text style={styles.label}>Preferred Time (10 AM - 5 PM)</Text>
+              <Text style={styles.label}>Preferred Time (10 AM - 7 PM)</Text>
               <View style={styles.timeSelectionContainer}>
                 <TouchableOpacity
                   style={[
@@ -916,6 +916,48 @@ const AppointmentsScreen = () => {
                     takenTimes.includes('16:00') && styles.disabledTimeSlotText
                   ]}>
                     4:00 PM {takenTimes.includes('16:00') ? '(Taken)' : ''}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.timeSlot, 
+                    newAppointment.preferred_time === '17:00' && styles.selectedTimeSlot,
+                    takenTimes.includes('17:00') && styles.disabledTimeSlot
+                  ]}
+                  onPress={() => {
+                    if (!takenTimes.includes('17:00')) {
+                      setNewAppointment({ ...newAppointment, preferred_time: '17:00' });
+                    }
+                  }}
+                  disabled={takenTimes.includes('17:00')}
+                >
+                  <Text style={[
+                    styles.timeSlotText, 
+                    newAppointment.preferred_time === '17:00' && styles.selectedTimeSlotText,
+                    takenTimes.includes('17:00') && styles.disabledTimeSlotText
+                  ]}>
+                    5:00 PM {takenTimes.includes('17:00') ? '(Taken)' : ''}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.timeSlot, 
+                    newAppointment.preferred_time === '18:00' && styles.selectedTimeSlot,
+                    takenTimes.includes('18:00') && styles.disabledTimeSlot
+                  ]}
+                  onPress={() => {
+                    if (!takenTimes.includes('18:00')) {
+                      setNewAppointment({ ...newAppointment, preferred_time: '18:00' });
+                    }
+                  }}
+                  disabled={takenTimes.includes('18:00')}
+                >
+                  <Text style={[
+                    styles.timeSlotText, 
+                    newAppointment.preferred_time === '18:00' && styles.selectedTimeSlotText,
+                    takenTimes.includes('18:00') && styles.disabledTimeSlotText
+                  ]}>
+                    6:00 PM {takenTimes.includes('18:00') ? '(Taken)' : ''}
                   </Text>
                 </TouchableOpacity>
               </View>

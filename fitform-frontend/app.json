@@ -81,9 +81,9 @@
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 34,
-            "targetSdkVersion": 34,
-            "buildToolsVersion": "34.0.0"
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0"
           }
         }
       ]
@@ -111,9 +111,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "b64b2d05-e207-478a-86ca-c89886ee6b10"
+        "projectId": "cc993368-372e-4b49-98cf-a4d49b90c579"
       }
     },
-    "owner": "imnot_heron"
+    "owner": "herooon"
   }
 }
