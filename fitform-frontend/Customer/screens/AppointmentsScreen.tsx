@@ -12,6 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import apiService from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -85,6 +86,10 @@ const AppointmentsScreen = () => {
   }>({});
   const [showAppointmentDetails, setShowAppointmentDetails] = useState(false);
   const [selectedAppointmentDetails, setSelectedAppointmentDetails] = useState<Appointment | null>(null);
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [selectedTime, setSelectedTime] = useState(new Date());
+  const [timeError, setTimeError] = useState<string>('');
   const router = useRouter();
   const { register } = useAuth();
 
@@ -148,21 +153,11 @@ const AppointmentsScreen = () => {
   }, [currentViewDate]);
 
   useEffect(() => {
+    // Only log in development mode to improve performance
+    if (__DEV__) {
     console.log('Appointments state changed:', appointments);
     console.log('Marked dates:', getMarkedDates());
-    
-    // Debug each appointment
-    appointments.forEach((app, index) => {
-      console.log(`Appointment ${index + 1} details:`, {
-        id: app.id,
-        service_type: app.service_type,
-        appointment_date: app.appointment_date,
-        formatted_time: formatAppointmentTime(app.appointment_date),
-        status: app.status,
-        notes: app.notes,
-        customer_name: app.customer_name
-      });
-    });
+    }
   }, [appointments]);
 
   const fetchAppointments = async () => {
@@ -186,6 +181,62 @@ const AppointmentsScreen = () => {
       console.error('Error fetching appointments:', error);
       setAppointments([]);
     }
+  };
+
+  // Time picker functions
+  const handleTimeChange = (event: any, selectedDate?: Date) => {
+    setShowTimePicker(false);
+    if (selectedDate) {
+      setSelectedTime(selectedDate);
+      const timeString = selectedDate.toTimeString().slice(0, 5); // Get HH:MM format
+      
+      // Clear any existing time errors first
+      setTimeError('');
+      
+      // Validate the selected time
+      validateSelectedTime(timeString);
+      
+      // Always update the appointment with the selected time
+      setNewAppointment({ ...newAppointment, preferred_time: timeString });
+    }
+  };
+
+  const openTimePicker = () => {
+    // Set initial time based on current preferred_time or default to 10:00
+    const currentTime = newAppointment.preferred_time || '10:00';
+    const [hours, minutes] = currentTime.split(':').map(Number);
+    const date = new Date();
+    date.setHours(hours, minutes, 0, 0);
+    setSelectedTime(date);
+    setShowTimePicker(true);
+  };
+
+  const isTimeWithinBusinessHours = (timeString: string) => {
+    const [hours, minutes] = timeString.split(':').map(Number);
+    const totalMinutes = hours * 60 + minutes;
+    const businessStart = 10 * 60; // 10:00 AM in minutes
+    const businessEnd = 18 * 60; // 6:00 PM in minutes
+    return totalMinutes >= businessStart && totalMinutes <= businessEnd;
+  };
+
+  const isTimeAlreadyTaken = (timeString: string) => {
+    return takenTimes.includes(timeString);
+  };
+
+  const validateSelectedTime = (timeString: string) => {
+    setTimeError('');
+    
+    if (!isTimeWithinBusinessHours(timeString)) {
+      setTimeError('Time must be between 10:00 AM and 6:00 PM');
+      return false;
+    }
+    
+    if (isTimeAlreadyTaken(timeString)) {
+      setTimeError('This time slot is already taken. Please select another time.');
+      return false;
+    }
+    
+    return true;
   };
 
   const fetchBookedDates = async () => {
@@ -224,111 +275,37 @@ const AppointmentsScreen = () => {
     // Check if the date is in the past
     const selectedDate = new Date(selectedDateStr);
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
+    // Use local timezone for accurate date comparison
+    const todayStr = today.getFullYear() + '-' + 
+      String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+      String(today.getDate()).padStart(2, '0');
+    const selectedDateStrOnly = selectedDateStr.split('T')[0];
     
-    if (selectedDate < today) {
+    if (selectedDateStrOnly < todayStr) {
       Alert.alert('Invalid Date', 'Cannot schedule appointments in the past. Please select a current or future date.');
       return;
     }
     
-    // Fetch daily capacity for the selected date
-    await fetchDailyCapacity(selectedDateStr);
-    
-    // Check if there are appointments on this date for the current user
-    const appointmentsOnDate = appointments.filter(
-      appointment => appointment.appointment_date.split('T')[0] === selectedDateStr
-    );
-    
-    // Additional check: ensure we're only looking at the current user's appointments
-    const userAppointmentsOnDate = appointmentsOnDate.filter(
-      appointment => appointment.user_id === user?.id
-    );
-    
-    console.log('Selected date:', selectedDateStr);
-    console.log('All appointments:', appointments);
-    console.log('Appointments on selected date:', appointmentsOnDate);
-    console.log('Current user:', user);
-    
-    // Debug each appointment on the selected date
-    appointmentsOnDate.forEach((app, index) => {
-      console.log(`Appointment ${index + 1}:`, {
-        id: app.id,
-        service_type: app.service_type,
-        appointment_date: app.appointment_date,
-        status: app.status,
-        notes: app.notes,
-        customer_name: app.customer_name
-      });
-    });
-    
-    // Check if the user already has an appointment on this date (frontend validation)
-    const userHasAppointmentOnDate = userAppointmentsOnDate.length > 0;
-    
-    // Also check backend response if available
-    const backendSaysUserHasAppointment = dailyCapacity && dailyCapacity.user_has_appointment;
-    
-    console.log('Appointment validation check:', {
-      selectedDate: selectedDateStr,
-      allAppointmentsOnDate: appointmentsOnDate.length,
-      userAppointmentsOnDate: userAppointmentsOnDate.length,
-      userHasAppointmentOnDate: userHasAppointmentOnDate,
-      backendSaysUserHasAppointment: backendSaysUserHasAppointment,
-      currentUserId: user?.id,
-      userAppointments: userAppointmentsOnDate
-    });
-    
-    // Check if daily limit is reached (5 appointments per day)
-    if (dailyCapacity && dailyCapacity.appointments_today >= 5) {
-      Alert.alert(
-        'Daily Limit Reached', 
-        `Maximum 5 appointments per day allowed. Currently ${dailyCapacity.appointments_today}/5 appointments booked. Please select another date.`
-      );
-      return;
-    }
-
-    if (userHasAppointmentOnDate || backendSaysUserHasAppointment) {
-      // Show existing appointment details
-      let appointmentDetails = '';
-      if (userAppointmentsOnDate.length > 0) {
-        appointmentDetails = userAppointmentsOnDate.map(app => {
-          const appointmentTime = formatAppointmentTime(app.appointment_date);
-          return `${app.service_type} at ${appointmentTime} - ${app.status}${app.notes ? `\nNotes: ${app.notes}` : ''}`;
-        }).join('\n\n');
-      } else {
-        // If we don't have the appointment details loaded, show a generic message
-        appointmentDetails = 'You have an existing appointment on this date.';
-      }
-      
-      Alert.alert(
-        `Your Appointment on ${selectedDateStr}`, 
-        `${appointmentDetails}\n\nYou already have an appointment on this date. Only 1 appointment per customer per day is allowed.`
-      );
-      return;
-    }
-
-    if (appointmentsOnDate.length > 0) {
-      // This should not happen since we already checked user_has_appointment above
-      // But just in case, show the appointment details
-      const appointmentDetails = appointmentsOnDate.map(app => {
-        const appointmentTime = formatAppointmentTime(app.appointment_date);
-        return `${app.service_type} at ${appointmentTime} - ${app.status}${app.notes ? `\nNotes: ${app.notes}` : ''}`;
-      }).join('\n\n');
-      
-      Alert.alert(
-        `Your Appointment on ${selectedDateStr}`, 
-        `${appointmentDetails}\n\nYou already have an appointment on this date. Only 1 appointment per customer per day is allowed.`
-      );
-    } else {
-      // Create new appointment
-      const isoDate = selectedDateStr + 'T00:00:00';
+    // Open modal immediately for better UX
       setSelectedDate(selectedDateStr);
       setNewAppointment({
         ...newAppointment,
-        appointment_date: isoDate,
+        appointment_date: selectedDateStr, // Store just the date string
         preferred_time: '10:00', // Reset to default time
       });
       setModalVisible(true);
-    }
+    
+    // Perform validation in background without blocking UI
+    Promise.all([
+      fetchDailyCapacity(selectedDateStr),
+      fetchAppointments()
+    ]).then(() => {
+      // Validation completed, no need to do anything else
+      // The modal is already open and user can proceed
+    }).catch((error) => {
+      console.error('Error during background validation:', error);
+      // Keep modal open for user to try again
+    });
   };
 
   const handleCreateAppointment = async () => {
@@ -343,6 +320,18 @@ const AppointmentsScreen = () => {
       return;
     }
 
+    // Validate business hours and check for time errors
+    if (!isTimeWithinBusinessHours(newAppointment.preferred_time)) {
+      setTimeError('Time must be between 10:00 AM and 6:00 PM');
+      return;
+    }
+
+    // Check if time is already taken (this will be handled by UI validation)
+    if (isTimeAlreadyTaken(newAppointment.preferred_time)) {
+      setTimeError('This time slot is already taken. Please select another time.');
+      return;
+    }
+
     // Validate that service_type is not a username
     if (newAppointment.service_type.trim().toLowerCase() === 'plengskie' || 
         newAppointment.service_type.trim().toLowerCase() === user?.name?.toLowerCase()) {
@@ -352,18 +341,30 @@ const AppointmentsScreen = () => {
 
     // Validate that preferred time is not taken
     if (takenTimes.includes(newAppointment.preferred_time)) {
-      Alert.alert('Time Slot Taken', 'This time slot is already taken. Please select another time.');
+      setTimeError('This time slot is already taken. Please select another time.');
       return;
     }
 
     try {
       // Combine date and time for the appointment
-      // Ensure the time is in the correct format (HH:MM:SS)
-      const selectedDate = newAppointment.appointment_date.split('T')[0];
+      const selectedDate = newAppointment.appointment_date; // This is now just the date string (YYYY-MM-DD)
       const selectedTime = newAppointment.preferred_time;
       
-      // Create the full datetime string in proper ISO format
-      const fullDateTime = `${selectedDate}T${selectedTime}:00`;
+      // Create a proper Date object and convert to the format the backend expects
+      const appointmentDateTime = new Date(`${selectedDate}T${selectedTime}:00`);
+      
+      // Validate the date is valid
+      if (isNaN(appointmentDateTime.getTime())) {
+        Alert.alert('Invalid Date', 'The selected date and time combination is invalid. Please try again.');
+        return;
+      }
+      
+      // Convert to the format the backend expects: YYYY-MM-DD HH:MM:SS (local time, no timezone)
+      const fullDateTime = appointmentDateTime.getFullYear() + '-' +
+        String(appointmentDateTime.getMonth() + 1).padStart(2, '0') + '-' +
+        String(appointmentDateTime.getDate()).padStart(2, '0') + ' ' +
+        String(appointmentDateTime.getHours()).padStart(2, '0') + ':' +
+        String(appointmentDateTime.getMinutes()).padStart(2, '0') + ':00';
       
       const appointmentData = {
         ...newAppointment,
@@ -373,7 +374,8 @@ const AppointmentsScreen = () => {
       console.log('Original appointment data:', newAppointment);
       console.log('Selected date:', selectedDate);
       console.log('Selected time:', selectedTime);
-      console.log('Full datetime string:', fullDateTime);
+      console.log('Appointment DateTime object:', appointmentDateTime);
+      console.log('Full datetime string (Backend format):', fullDateTime);
       console.log('Combined appointment data:', appointmentData);
       console.log('Final appointment_date being sent:', appointmentData.appointment_date);
       console.log('Current user:', user);
@@ -384,6 +386,7 @@ const AppointmentsScreen = () => {
         setModalVisible(false);
         
         // Clear the form fields after successful creation
+        setTimeError(''); // Clear time error
         setNewAppointment({
           appointment_date: '',
           service_type: '',
@@ -407,11 +410,11 @@ const AppointmentsScreen = () => {
       } else if (error.message && error.message.includes('past')) {
         Alert.alert('Invalid Date', 'Cannot schedule appointments in the past. Please select a current or future date.');
       } else if (error.message && error.message.includes('business hours')) {
-        Alert.alert('Invalid Time', 'Appointments can only be scheduled between 10:00 AM and 7:00 PM. Please select a time within business hours.');
+        setTimeError('Appointments can only be scheduled between 10:00 AM and 6:00 PM. Please select a time within business hours.');
       } else if (error.message && error.message.includes('user already has appointment')) {
         Alert.alert('Booked', 'You already have an appointment on this date. Only 1 appointment per customer per day is allowed.');
       } else if (error.message && error.message.includes('time slot taken')) {
-        Alert.alert('Time Slot Taken', 'This time slot is already taken by another customer. Please select a different time.');
+        setTimeError('This time slot is already taken by another customer. Please select a different time.');
       } else if (error.message && error.message.includes('daily limit reached')) {
         Alert.alert('Daily Limit Reached', 'Maximum 5 appointments per day allowed. Please select another date.');
       } else {
@@ -452,8 +455,17 @@ const AppointmentsScreen = () => {
     
     try {
       // For rescheduling, we'll use the same time as the original appointment
-      const originalTime = appointmentToReschedule.appointment_date.split('T')[1] || '10:00:00';
-      const rescheduleDateTime = rescheduleDate + 'T' + originalTime;
+      let originalTime = '10:00:00';
+      
+      // Handle different date formats from the database
+      if (appointmentToReschedule.appointment_date.includes('T')) {
+        originalTime = appointmentToReschedule.appointment_date.split('T')[1];
+      } else if (appointmentToReschedule.appointment_date.includes(' ')) {
+        originalTime = appointmentToReschedule.appointment_date.split(' ')[1];
+      }
+      
+      // Create the reschedule datetime in the format the backend expects
+      const rescheduleDateTime = rescheduleDate + ' ' + originalTime;
       
       console.log('Rescheduling appointment:', {
         originalDate: appointmentToReschedule.appointment_date,
@@ -474,7 +486,7 @@ const AppointmentsScreen = () => {
       if (error.message && error.message.includes('past dates')) {
         Alert.alert('Invalid Date', 'Cannot reschedule appointments to past dates. Please select a current or future date.');
       } else if (error.message && error.message.includes('business hours')) {
-        Alert.alert('Invalid Time', 'Appointments can only be rescheduled between 10:00 AM and 7:00 PM. Please select a time within business hours.');
+        Alert.alert('Invalid Time', 'Appointments can only be rescheduled between 10:00 AM and 6:00 PM. Please select a time within business hours.');
       } else {
         Alert.alert('Error', 'Failed to reschedule appointment');
       }
@@ -483,11 +495,18 @@ const AppointmentsScreen = () => {
 
   const getMarkedDates = () => {
     const marked: { [date: string]: any } = {};
-    const today = new Date().toISOString().split('T')[0];
+    // Get current date in local timezone to avoid timezone issues
+    const now = new Date();
+    const today = now.getFullYear() + '-' + 
+      String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+      String(now.getDate()).padStart(2, '0');
     
+    // Only log in development mode
+    if (__DEV__) {
     console.log('Appointments for calendar marking:', appointments);
     console.log('Booked dates:', bookedDates);
     console.log('Today:', today);
+    }
     
     // Mark booked dates as unavailable (but allow today to be tappable if not fully booked)
     bookedDates.forEach((date) => {
@@ -585,7 +604,12 @@ const AppointmentsScreen = () => {
           <Calendar
             onDayPress={handleDateSelect}
             markedDates={getMarkedDates()}
-            minDate={new Date().toISOString().split('T')[0]}
+            minDate={(() => {
+              const now = new Date();
+              return now.getFullYear() + '-' + 
+                String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                String(now.getDate()).padStart(2, '0');
+            })()}
             theme={{
               backgroundColor: '#fff',
               calendarBackground: '#fff',
@@ -642,10 +666,20 @@ const AppointmentsScreen = () => {
             </View>
           </View>
           
+          {/* Policy Button */}
+          <TouchableOpacity
+            style={styles.policyButtonContainer}
+            onPress={() => setShowPolicyModal(true)}
+          >
+            <Ionicons name="information-circle" size={20} color="#014D40" />
+            <Text style={styles.policyButtonText}>View Appointment Policy</Text>
+            <Ionicons name="chevron-forward" size={16} color="#014D40" />
+          </TouchableOpacity>
+          
           {/* Business Hours Info */}
           <View style={styles.businessHoursInfo}>
             <Text style={styles.businessHoursTitle}>Business Hours</Text>
-            <Text style={styles.businessHoursText}>10:00 AM - 7:00 PM</Text>
+            <Text style={styles.businessHoursText}>10:00 AM - 6:00 PM</Text>
           </View>
 
         </View>
@@ -736,15 +770,25 @@ const AppointmentsScreen = () => {
       <Modal
         visible={isModalVisible}
         animationType="slide"
-        transparent={true}
+        presentationStyle="pageSheet"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Schedule Appointment</Text>
-              <TouchableOpacity onPress={() => {
+        <View style={styles.scheduleModalContainer}>
+          <View style={styles.scheduleModalHeader}>
+            <View style={styles.scheduleModalHeaderContent}>
+              <View style={styles.scheduleModalIconContainer}>
+                <Ionicons name="calendar" size={24} color={Colors.primary} />
+              </View>
+               <View style={styles.scheduleModalTitleContainer}>
+                 <Text style={styles.scheduleModalTitle} numberOfLines={1}>
+                   Schedule Appointment
+                 </Text>
+               </View>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
                 setModalVisible(false);
+                setTimeError(''); // Clear time error
                 // Reset form when modal is closed
                 setNewAppointment({
                   appointment_date: '',
@@ -752,234 +796,114 @@ const AppointmentsScreen = () => {
                   preferred_time: '10:00',
                   notes: '',
                 });
-              }}>
-                <Ionicons name="close" size={24} color="#666" />
+              }}
+              style={styles.scheduleModalCloseButton}
+            >
+              <Ionicons name="close" size={24} color={Colors.text.primary} />
               </TouchableOpacity>
             </View>
             
-            <View style={styles.modalBody}>
-              <Text style={styles.label}>Service Type</Text>
+          <ScrollView style={styles.scheduleModalContent} showsVerticalScrollIndicator={false}>
+            {/* Service Type Card */}
+            <View style={styles.scheduleModalCard}>
+              <View style={styles.scheduleModalCardHeader}>
+                <Ionicons name="shirt" size={20} color={Colors.primary} />
+                <Text style={styles.scheduleModalCardTitle}>Service Type</Text>
+              </View>
               <TextInput
-                style={styles.input}
+                style={styles.scheduleModalInput}
                 value={newAppointment.service_type}
                 onChangeText={(text) => {
                   console.log('Service type changed to:', text);
                   setNewAppointment({ ...newAppointment, service_type: text });
                 }}
                 placeholder="Enter service type (e.g., Fitting, Consultation, Measurement)"
+                placeholderTextColor={Colors.text.secondary}
               />
+            </View>
 
-              <Text style={styles.label}>Preferred Time (10 AM - 7 PM)</Text>
-              <View style={styles.timeSelectionContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.timeSlot, 
-                    newAppointment.preferred_time === '10:00' && styles.selectedTimeSlot,
-                    takenTimes.includes('10:00') && styles.disabledTimeSlot
-                  ]}
-                  onPress={() => {
-                    if (!takenTimes.includes('10:00')) {
-                      setNewAppointment({ ...newAppointment, preferred_time: '10:00' });
-                    }
-                  }}
-                  disabled={takenTimes.includes('10:00')}
-                >
-                  <Text style={[
-                    styles.timeSlotText, 
-                    newAppointment.preferred_time === '10:00' && styles.selectedTimeSlotText,
-                    takenTimes.includes('10:00') && styles.disabledTimeSlotText
-                  ]}>
-                    10:00 AM {takenTimes.includes('10:00') ? '(Taken)' : ''}
+            {/* Time Selection Card */}
+            <View style={styles.scheduleModalCard}>
+              <View style={styles.scheduleModalCardHeader}>
+                <Ionicons name="time" size={20} color={Colors.primary} />
+                <Text style={styles.scheduleModalCardTitle}>Preferred Time</Text>
+              </View>
+              <Text style={styles.scheduleModalCardSubtitle}>Select time between 10 AM - 6 PM</Text>
+              
+              {/* Time Picker Button */}
+              <TouchableOpacity
+                style={styles.timePickerButton}
+                onPress={openTimePicker}
+              >
+                <View style={styles.timePickerContent}>
+                  <Ionicons name="time" size={20} color={Colors.primary} />
+                  <View style={styles.timePickerTextContainer}>
+                    <Text style={styles.timePickerLabel}>Selected Time</Text>
+                    <Text style={styles.timePickerValue}>
+                      {newAppointment.preferred_time ? 
+                        (() => {
+                          const [hours, minutes] = newAppointment.preferred_time.split(':');
+                          const hour = parseInt(hours);
+                          const ampm = hour >= 12 ? 'PM' : 'AM';
+                          const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+                          return `${displayHour}:${minutes} ${ampm}`;
+                        })() : 
+                        '10:00 AM'
+                      }
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-down" size={20} color={Colors.text.secondary} />
+                </View>
+              </TouchableOpacity>
+
+              {/* Time Validation Error */}
+              {timeError && (
+                <View style={styles.timeValidationError}>
+                  <Ionicons name="warning" size={16} color={Colors.error} />
+                  <Text style={styles.timeValidationText}>
+                    {timeError}
                   </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.timeSlot, 
-                    newAppointment.preferred_time === '11:00' && styles.selectedTimeSlot,
-                    takenTimes.includes('11:00') && styles.disabledTimeSlot
-                  ]}
-                  onPress={() => {
-                    if (!takenTimes.includes('11:00')) {
-                      setNewAppointment({ ...newAppointment, preferred_time: '11:00' });
-                    }
-                  }}
-                  disabled={takenTimes.includes('11:00')}
-                >
-                  <Text style={[
-                    styles.timeSlotText, 
-                    newAppointment.preferred_time === '11:00' && styles.selectedTimeSlotText,
-                    takenTimes.includes('11:00') && styles.disabledTimeSlotText
-                  ]}>
-                    11:00 AM {takenTimes.includes('11:00') ? '(Taken)' : ''}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.timeSlot, 
-                    newAppointment.preferred_time === '12:00' && styles.selectedTimeSlot,
-                    takenTimes.includes('12:00') && styles.disabledTimeSlot
-                  ]}
-                  onPress={() => {
-                    if (!takenTimes.includes('12:00')) {
-                      setNewAppointment({ ...newAppointment, preferred_time: '12:00' });
-                    }
-                  }}
-                  disabled={takenTimes.includes('12:00')}
-                >
-                  <Text style={[
-                    styles.timeSlotText, 
-                    newAppointment.preferred_time === '12:00' && styles.selectedTimeSlotText,
-                    takenTimes.includes('12:00') && styles.disabledTimeSlotText
-                  ]}>
-                    12:00 PM {takenTimes.includes('12:00') ? '(Taken)' : ''}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.timeSlot, 
-                    newAppointment.preferred_time === '13:00' && styles.selectedTimeSlot,
-                    takenTimes.includes('13:00') && styles.disabledTimeSlot
-                  ]}
-                  onPress={() => {
-                    if (!takenTimes.includes('13:00')) {
-                      setNewAppointment({ ...newAppointment, preferred_time: '13:00' });
-                    }
-                  }}
-                  disabled={takenTimes.includes('13:00')}
-                >
-                  <Text style={[
-                    styles.timeSlotText, 
-                    newAppointment.preferred_time === '13:00' && styles.selectedTimeSlotText,
-                    takenTimes.includes('13:00') && styles.disabledTimeSlotText
-                  ]}>
-                    1:00 PM {takenTimes.includes('13:00') ? '(Taken)' : ''}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.timeSlot, 
-                    newAppointment.preferred_time === '14:00' && styles.selectedTimeSlot,
-                    takenTimes.includes('14:00') && styles.disabledTimeSlot
-                  ]}
-                  onPress={() => {
-                    if (!takenTimes.includes('14:00')) {
-                      setNewAppointment({ ...newAppointment, preferred_time: '14:00' });
-                    }
-                  }}
-                  disabled={takenTimes.includes('14:00')}
-                >
-                  <Text style={[
-                    styles.timeSlotText, 
-                    newAppointment.preferred_time === '14:00' && styles.selectedTimeSlotText,
-                    takenTimes.includes('14:00') && styles.disabledTimeSlotText
-                  ]}>
-                    2:00 PM {takenTimes.includes('14:00') ? '(Taken)' : ''}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.timeSlot, 
-                    newAppointment.preferred_time === '15:00' && styles.selectedTimeSlot,
-                    takenTimes.includes('15:00') && styles.disabledTimeSlot
-                  ]}
-                  onPress={() => {
-                    if (!takenTimes.includes('15:00')) {
-                      setNewAppointment({ ...newAppointment, preferred_time: '15:00' });
-                    }
-                  }}
-                  disabled={takenTimes.includes('15:00')}
-                >
-                  <Text style={[
-                    styles.timeSlotText, 
-                    newAppointment.preferred_time === '15:00' && styles.selectedTimeSlotText,
-                    takenTimes.includes('15:00') && styles.disabledTimeSlotText
-                  ]}>
-                    3:00 PM {takenTimes.includes('15:00') ? '(Taken)' : ''}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.timeSlot, 
-                    newAppointment.preferred_time === '16:00' && styles.selectedTimeSlot,
-                    takenTimes.includes('16:00') && styles.disabledTimeSlot
-                  ]}
-                  onPress={() => {
-                    if (!takenTimes.includes('16:00')) {
-                      setNewAppointment({ ...newAppointment, preferred_time: '16:00' });
-                    }
-                  }}
-                  disabled={takenTimes.includes('16:00')}
-                >
-                  <Text style={[
-                    styles.timeSlotText, 
-                    newAppointment.preferred_time === '16:00' && styles.selectedTimeSlotText,
-                    takenTimes.includes('16:00') && styles.disabledTimeSlotText
-                  ]}>
-                    4:00 PM {takenTimes.includes('16:00') ? '(Taken)' : ''}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.timeSlot, 
-                    newAppointment.preferred_time === '17:00' && styles.selectedTimeSlot,
-                    takenTimes.includes('17:00') && styles.disabledTimeSlot
-                  ]}
-                  onPress={() => {
-                    if (!takenTimes.includes('17:00')) {
-                      setNewAppointment({ ...newAppointment, preferred_time: '17:00' });
-                    }
-                  }}
-                  disabled={takenTimes.includes('17:00')}
-                >
-                  <Text style={[
-                    styles.timeSlotText, 
-                    newAppointment.preferred_time === '17:00' && styles.selectedTimeSlotText,
-                    takenTimes.includes('17:00') && styles.disabledTimeSlotText
-                  ]}>
-                    5:00 PM {takenTimes.includes('17:00') ? '(Taken)' : ''}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.timeSlot, 
-                    newAppointment.preferred_time === '18:00' && styles.selectedTimeSlot,
-                    takenTimes.includes('18:00') && styles.disabledTimeSlot
-                  ]}
-                  onPress={() => {
-                    if (!takenTimes.includes('18:00')) {
-                      setNewAppointment({ ...newAppointment, preferred_time: '18:00' });
-                    }
-                  }}
-                  disabled={takenTimes.includes('18:00')}
-                >
-                  <Text style={[
-                    styles.timeSlotText, 
-                    newAppointment.preferred_time === '18:00' && styles.selectedTimeSlotText,
-                    takenTimes.includes('18:00') && styles.disabledTimeSlotText
-                  ]}>
-                    6:00 PM {takenTimes.includes('18:00') ? '(Taken)' : ''}
-                  </Text>
-                </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Time Picker Modal */}
+              {showTimePicker && (
+                <DateTimePicker
+                  value={selectedTime}
+                  mode="time"
+                  is24Hour={false}
+                  display="default"
+                  onChange={handleTimeChange}
+                />
+              )}
               </View>
 
-              <Text style={styles.label}>Notes</Text>
+            {/* Notes Card */}
+            <View style={styles.scheduleModalCard}>
+              <View style={styles.scheduleModalCardHeader}>
+                <Ionicons name="document-text" size={20} color={Colors.primary} />
+                <Text style={styles.scheduleModalCardTitle}>Additional Notes</Text>
+              </View>
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={styles.scheduleModalTextArea}
                 value={newAppointment.notes}
                 onChangeText={(text) =>
                   setNewAppointment({ ...newAppointment, notes: text })
                 }
-                placeholder="Add any notes (optional)"
+                placeholder="Add any special requirements or notes (optional)"
+                placeholderTextColor={Colors.text.secondary}
                 multiline
                 numberOfLines={4}
               />
             </View>
+          </ScrollView>
 
-            <View style={styles.modalActions}>
+          <View style={styles.scheduleModalFooter}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelModalButton]}
+              style={styles.scheduleModalCancelButton}
                 onPress={() => {
                   setModalVisible(false);
+                  setTimeError(''); // Clear time error
                   // Reset form when cancel is pressed
                   setNewAppointment({
                     appointment_date: '',
@@ -989,15 +913,16 @@ const AppointmentsScreen = () => {
                   });
                 }}
               >
-                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+                <Ionicons name="close-circle" size={20} color={Colors.text.primary} />
+                <Text style={styles.scheduleModalCancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.confirmModalButton]}
+              style={styles.scheduleModalConfirmButton}
                 onPress={handleCreateAppointment}
               >
-                <Text style={styles.confirmModalButtonText}>Schedule</Text>
+              <Ionicons name="checkmark" size={20} color="#fff" />
+              <Text style={styles.scheduleModalConfirmButtonText}>Schedule</Text>
               </TouchableOpacity>
-            </View>
           </View>
         </View>
       </Modal>
@@ -1158,8 +1083,8 @@ const AppointmentsScreen = () => {
                       handleCancel(selectedAppointmentDetails.id);
                     }}
                   >
-                    <Ionicons name="close-circle" size={20} color="#fff" />
-                    <Text style={styles.actionButtonText}>Cancel</Text>
+                    <Ionicons name="close-circle" size={20} color={Colors.text.primary} />
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -1171,8 +1096,8 @@ const AppointmentsScreen = () => {
                     handleCancel(selectedAppointmentDetails.id);
                   }}
                 >
-                  <Ionicons name="close-circle" size={20} color="#fff" />
-                  <Text style={styles.actionButtonText}>Cancel</Text>
+                  <Ionicons name="close-circle" size={20} color={Colors.text.primary} />
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
               )}
               {selectedAppointmentDetails.status === 'cancelled' && (
@@ -1184,6 +1109,98 @@ const AppointmentsScreen = () => {
             </View>
           </View>
         )}
+      </Modal>
+
+      {/* Appointment Policy Modal */}
+      <Modal
+        visible={showPolicyModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowPolicyModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Appointment Policy</Text>
+            <TouchableOpacity
+              onPress={() => setShowPolicyModal(false)}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color={Colors.text.primary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.orderDetailCard}>
+              <View style={styles.orderDetailHeader}>
+                <View style={styles.agreementIconContainer}>
+                  <Ionicons name="business" size={40} color={Colors.primary} />
+                </View>
+                <Text style={styles.orderDetailTitle}>Appointment Policy & Guidelines</Text>
+                <Text style={styles.agreementSubtitle}>
+                  Please read and understand our appointment policies
+                </Text>
+              </View>
+              
+              <View style={styles.agreementTermsContainer}>
+                <View style={styles.agreementTermCard}>
+                  <View style={styles.agreementTermHeader}>
+                    <Ionicons name="people" size={20} color={Colors.primary} />
+                    <Text style={styles.agreementTermTitle}>Daily Capacity</Text>
+                  </View>
+                  <Text style={styles.agreementTermDescription}>
+                    The business caters to a maximum of 5 clients per day (both online appointments and walk-ins). Each customer can schedule only 1 appointment per day.
+                  </Text>
+                </View>
+                
+                <View style={styles.agreementTermCard}>
+                  <View style={styles.agreementTermHeader}>
+                    <Ionicons name="time" size={20} color={Colors.warning} />
+                    <Text style={styles.agreementTermTitle}>Service Duration</Text>
+                  </View>
+                  <Text style={styles.agreementTermDescription}>
+                    Each appointment has an estimated wait time of 1 hour per client.
+                  </Text>
+                </View>
+                
+                <View style={styles.agreementTermCard}>
+                  <View style={styles.agreementTermHeader}>
+                    <Ionicons name="calendar" size={20} color={Colors.success} />
+                    <Text style={styles.agreementTermTitle}>Priority System</Text>
+                  </View>
+                  <Text style={styles.agreementTermDescription}>
+                    Reserved customers have priority. Walk-ins are accommodated if reserved customers are late.
+                  </Text>
+                </View>
+                
+                <View style={styles.agreementTermCard}>
+                  <View style={styles.agreementTermHeader}>
+                    <Ionicons name="checkmark-circle" size={20} color={Colors.info} />
+                    <Text style={styles.agreementTermTitle}>Service Availability</Text>
+                  </View>
+                  <Text style={styles.agreementTermDescription}>
+                    Both reserved customers and walk-ins can be served simultaneously when there are no customers waiting in line.
+                  </Text>
+                </View>
+              </View>
+              
+              <View style={styles.agreementFooter}>
+                <Ionicons name="information-circle" size={18} color={Colors.warning} />
+                <Text style={styles.agreementFooterText}>
+                  Please arrive on time for your appointment to ensure smooth service.
+                </Text>
+              </View>
+            </View>
+          </ScrollView>
+
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={() => setShowPolicyModal(false)}
+            >
+              <Text style={styles.saveButtonText}>Got It</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -1208,6 +1225,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  policyButtonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f0f9ff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#014D40',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  policyButtonText: {
+    color: '#014D40',
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+    marginLeft: 8,
   },
   headerContent: {
     flexDirection: 'row',
@@ -1570,15 +1607,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelModalButton: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: Colors.background.light,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: Colors.border.light,
   },
   confirmModalButton: {
     backgroundColor: '#014D40',
   },
   cancelModalButtonText: {
-    color: '#666',
+    color: Colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -1803,7 +1840,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   cancelButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: Colors.background.light,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
@@ -1812,6 +1851,11 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cancelButtonText: {
+    color: Colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -1833,6 +1877,309 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 16,
     fontWeight: '500',
+  },
+  // Policy Modal Styles
+  agreementIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  agreementSubtitle: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+  },
+  agreementTermsContainer: {
+    marginTop: 20,
+  },
+  agreementTermCard: {
+    backgroundColor: Colors.background.light,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  agreementTermHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  agreementTermTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginLeft: 8,
+  },
+  agreementTermDescription: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    lineHeight: 20,
+  },
+  agreementFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border.light,
+  },
+  agreementFooterText: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 20,
+  },
+  saveButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  saveButtonText: {
+    color: Colors.text.inverse,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Enhanced Schedule Modal Styles
+  scheduleModalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background.light,
+  },
+  scheduleModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  scheduleModalHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 16,
+  },
+  scheduleModalIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  scheduleModalTitleContainer: {
+    flex: 1,
+    minWidth: 0,
+  },
+  scheduleModalTitle: {
+    fontSize: 19,
+    fontWeight: 'bold',
+    color: Colors.primary,
+  },
+  scheduleModalSubtitle: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    lineHeight: 20,
+  },
+  scheduleModalCloseButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.background.card,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  scheduleModalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  scheduleModalCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  scheduleModalCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  scheduleModalCardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginLeft: 12,
+  },
+  scheduleModalCardSubtitle: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  scheduleModalInput: {
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: Colors.text.primary,
+    backgroundColor: Colors.background.light,
+  },
+  scheduleModalTextArea: {
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: Colors.text.primary,
+    backgroundColor: Colors.background.light,
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  scheduleModalTimeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'space-between',
+  },
+  scheduleModalTimeSlot: {
+    backgroundColor: Colors.background.light,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    width: '30%',
+    alignItems: 'center',
+    minHeight: 44,
+  },
+  scheduleModalSelectedTimeSlot: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  scheduleModalDisabledTimeSlot: {
+    backgroundColor: Colors.background.disabled,
+    borderColor: Colors.border.disabled,
+  },
+  scheduleModalTimeSlotText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: Colors.text.primary,
+    textAlign: 'center',
+  },
+  scheduleModalSelectedTimeSlotText: {
+    color: Colors.text.inverse,
+  },
+  scheduleModalDisabledTimeSlotText: {
+    color: Colors.text.disabled,
+  },
+  scheduleModalFooter: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 40,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
+    gap: 12,
+  },
+  scheduleModalCancelButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.background.light,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    borderRadius: 12,
+    paddingVertical: 16,
+    gap: 8,
+  },
+  scheduleModalCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  scheduleModalConfirmButton: {
+    flex: 1,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  scheduleModalConfirmButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.inverse,
+  },
+
+  // Time Picker Styles
+  timePickerButton: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    marginVertical: 8,
+  },
+  timePickerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  timePickerTextContainer: {
+    flex: 1,
+  },
+  timePickerLabel: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginBottom: 4,
+  },
+  timePickerValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  timeValidationError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.error + '10',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+    gap: 8,
+  },
+  timeValidationText: {
+    fontSize: 14,
+    color: Colors.error,
+    flex: 1,
   },
 });
 

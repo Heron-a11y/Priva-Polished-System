@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -116,6 +116,7 @@ export default function PurchaseOrderFlow() {
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [showCounterOfferModal, setShowCounterOfferModal] = useState(false);
   const [counterOfferAmount, setCounterOfferAmount] = useState('');
   const [counterOfferNotes, setCounterOfferNotes] = useState('');
@@ -269,17 +270,36 @@ export default function PurchaseOrderFlow() {
     setStep(0);
   };
 
-  useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        const res = await apiService.getPurchases();
-        setOrders(Array.isArray(res) ? res : res.data || []);
-      } catch (e: any) {
-        setOrders([]);
+  const fetchPurchaseOrders = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    try {
+      const res = await apiService.getPurchases();
+      setOrders(Array.isArray(res) ? res : res.data || []);
+    } catch (e: any) {
+      if (__DEV__) {
+        console.error('Error fetching purchase orders:', e);
       }
-    };
-    fetchOrders();
+      setOrders([]);
+    } finally {
+      if (showLoading) setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchPurchaseOrders();
+  }, [fetchPurchaseOrders]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchPurchaseOrders(false);
+  }, [fetchPurchaseOrders]);
+
+  // Memoize filtered orders to avoid re-filtering on every render
+  const filteredOrders = useMemo(() => 
+    orders.filter(order => order.customer_email === user?.email),
+    [orders, user?.email]
+  );
 
 
 
@@ -442,7 +462,7 @@ export default function PurchaseOrderFlow() {
       {/* Orders List */}
       {orders.length > 0 ? (
         <FlatList
-          data={orders.filter(order => order.customer_email === user?.email)}
+          data={filteredOrders}
           renderItem={({ item }) => (
             <TouchableOpacity
               key={item.id}
@@ -529,6 +549,17 @@ export default function PurchaseOrderFlow() {
           keyExtractor={(item) => item.id.toString()}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.ordersList}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          initialNumToRender={5}
+          getItemLayout={(data, index) => ({
+            length: 200, // Approximate height of each item
+            offset: 200 * index,
+            index,
+          })}
         />
       ) : (
         <View style={styles.emptyState}>
@@ -547,179 +578,242 @@ export default function PurchaseOrderFlow() {
         </View>
       )}
 
-      {/* Quotation Modal */}
+      {/* Enhanced Quotation Modal */}
       {showQuotationModal && selectedOrder && (
         <Modal
           visible={true}
           animationType="slide"
-          transparent={true}
+          presentationStyle="pageSheet"
           onRequestClose={() => { setShowQuotationModal(false); clearOrderReview(); }}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.quotationModalContent}>
-              {/* Header */}
-              <View style={styles.modalHeader}>
-                <View style={styles.modalTitleContainer}>
-                  <Ionicons name="document-text-outline" size={24} color="#014D40" />
-                  <Text style={styles.modalTitle}>Review Quotation</Text>
+          <View style={styles.enhancedModalContainer}>
+            {/* Enhanced Header */}
+            <View style={styles.enhancedModalHeader}>
+              <View style={styles.enhancedModalHeaderContent}>
+                <View style={styles.enhancedModalIconContainer}>
+                  <Ionicons name="document-text" size={24} color={Colors.primary} />
                 </View>
-                <TouchableOpacity 
-                  style={styles.closeButton}
-                  onPress={() => { setShowQuotationModal(false); clearOrderReview(); }}
-                >
-                  <Ionicons name="close" size={20} color="#666" />
-                </TouchableOpacity>
+                <View style={styles.enhancedModalTitleContainer}>
+                  <Text style={styles.enhancedModalTitle}>Review Quotation</Text>
+                </View>
               </View>
-
-              {/* Quotation Details Content */}
-              <ScrollView 
-                style={styles.modalBody}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }}
+              <TouchableOpacity 
+                style={styles.enhancedCloseButton}
+                onPress={() => { setShowQuotationModal(false); clearOrderReview(); }}
               >
-                {/* Quotation Information */}
-                <View style={styles.quotationInfoSection}>
-                  <View style={styles.quotationInfoHeader}>
-                    <Ionicons name="information-circle" size={24} color="#014D40" style={{ marginRight: 8 }} />
-                    <Text style={styles.quotationInfoTitle}>Quotation Information</Text>
-                  </View>
-                  
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Quotation Amount:</Text>
-                    <Text style={styles.detailValue}>
-                      ₱{(selectedOrder?.quotation_amount ?? selectedOrder?.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Order ID:</Text>
-                    <Text style={styles.detailValue}>#{selectedOrder?.id}</Text>
-                  </View>
-                  
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Notes:</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedOrder?.quotation_notes || 'No additional notes provided'}
-                    </Text>
-                  </View>
+                <Ionicons name="close" size={24} color={Colors.text.primary} />
+              </TouchableOpacity>
+            </View>
 
-                  {/* Counter Offer Button inside Quotation Information */}
-                  <TouchableOpacity 
-                    style={styles.counterOfferButton}
-                    onPress={() => {
-                      setShowCounterOfferModal(true);
-                    }}
-                  >
-                    <Ionicons name="swap-horizontal" size={18} color="#fff" />
-                    <Text style={styles.counterOfferButtonText}>Counter Offer</Text>
-                  </TouchableOpacity>
+            {/* Enhanced Content */}
+            <ScrollView style={styles.enhancedModalContent} showsVerticalScrollIndicator={false}>
+              {/* Quotation Summary Card */}
+              <View style={styles.quotationSummaryCard}>
+                <View style={styles.quotationSummaryHeader}>
+                  <Ionicons name="cash" size={20} color={Colors.primary} />
+                  <Text style={styles.quotationSummaryTitle}>Quotation Summary</Text>
                 </View>
-              </ScrollView>
+                <View style={styles.quotationAmountContainer}>
+                  <Text style={styles.quotationAmountLabel}>Total Amount</Text>
+                  <Text style={styles.quotationAmountValue}>
+                    ₱{(selectedOrder?.quotation_amount ?? selectedOrder?.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </Text>
+                </View>
+                <View style={styles.quotationStatusContainer}>
+                  <View style={styles.quotationStatusBadge}>
+                    <Ionicons name="time" size={16} color={Colors.warning} />
+                    <Text style={styles.quotationStatusText}>Pending Your Response</Text>
+                  </View>
+                </View>
+              </View>
 
-              {/* Action Buttons */}
-              <View style={styles.modalActions}>
-                <TouchableOpacity 
-                  style={styles.sendQuotationButton}
-                  onPress={async () => { 
-                    try {
-                      await apiService.request(`/purchases/${selectedOrder?.id}/accept-quotation`, { method: 'POST' }); 
-                      setShowQuotationModal(false);
-                      // Refresh orders after accepting
-                      const res = await apiService.getPurchases();
-                      setOrders(Array.isArray(res) ? res : res.data || []);
-                    } catch (error) {
-                      Alert.alert('Error', 'Failed to accept quotation');
-                    }
-                  }}
-                >
-                  <Ionicons name="checkmark-circle" size={18} color="#FFD700" />
-                  <Text style={styles.sendQuotationText}>Accept</Text>
-                </TouchableOpacity>
+              {/* Order Details Card */}
+              <View style={styles.orderDetailsCard}>
+                <View style={styles.orderDetailsHeader}>
+                  <Ionicons name="information-circle" size={20} color={Colors.primary} />
+                  <Text style={styles.orderDetailsTitle}>Order Details</Text>
+                </View>
                 
-                <TouchableOpacity 
-                  style={styles.cancelButton}
-                  onPress={async () => { 
-                    try {
-                      await apiService.request(`/purchases/${selectedOrder?.id}/reject-quotation`, { method: 'POST' }); 
-                      setShowQuotationModal(false);
-                      // Refresh orders after rejecting
-                      const res = await apiService.getPurchases();
-                      setOrders(Array.isArray(res) ? res : res.data || []);
-                    } catch (error) {
-                      Alert.alert('Error', 'Failed to reject quotation');
+                <View style={styles.enhancedDetailRow}>
+                  <Text style={styles.enhancedDetailLabel}>Order ID</Text>
+                  <Text style={styles.enhancedDetailValue}>#{selectedOrder?.id}</Text>
+                </View>
+                
+                <View style={styles.enhancedDetailRow}>
+                  <Text style={styles.enhancedDetailLabel}>Clothing Type</Text>
+                  <Text style={styles.enhancedDetailValue}>{selectedOrder?.clothing_type || 'N/A'}</Text>
+                </View>
+                
+                <View style={styles.enhancedDetailRow}>
+                  <Text style={styles.enhancedDetailLabel}>Purchase Date</Text>
+                  <Text style={styles.enhancedDetailValue}>
+                    {selectedOrder?.purchase_date ? new Date(selectedOrder.purchase_date).toLocaleDateString() : 'N/A'}
+                  </Text>
+                </View>
+                
+                <View style={styles.enhancedDetailRow}>
+                  <Text style={styles.enhancedDetailLabel}>Notes</Text>
+                  <Text style={styles.enhancedDetailValue}>
+                    {selectedOrder?.notes && selectedOrder.notes.trim() !== '' ? 
+                      selectedOrder.notes : 
+                      'No notes provided'
                     }
+                  </Text>
+                </View>
+              </View>
+
+              {/* Quotation Notes Card */}
+              {selectedOrder?.quotation_notes && (
+                <View style={styles.quotationNotesCard}>
+                  <View style={styles.quotationNotesHeader}>
+                    <Ionicons name="document-text" size={20} color={Colors.primary} />
+                    <Text style={styles.quotationNotesTitle}>Additional Notes</Text>
+                  </View>
+                  <Text style={styles.quotationNotesText}>{selectedOrder?.quotation_notes}</Text>
+                </View>
+              )}
+
+              {/* Counter Offer Card */}
+              <View style={styles.counterOfferCard}>
+                <View style={styles.counterOfferCardHeader}>
+                  <Ionicons name="swap-horizontal" size={20} color={Colors.warning} />
+                  <Text style={styles.counterOfferCardTitle}>Not Satisfied with the Price?</Text>
+                </View>
+                <Text style={styles.counterOfferCardDescription}>
+                  You can make a counter offer to negotiate the price with our team.
+                </Text>
+                <TouchableOpacity 
+                  style={styles.enhancedCounterOfferButton}
+                  onPress={() => {
+                    setShowCounterOfferModal(true);
                   }}
                 >
-                  <Ionicons name="close" size={18} color="#fff" />
-                  <Text style={styles.cancelButtonText}>Reject</Text>
+                  <Ionicons name="swap-horizontal" size={20} color={Colors.text.primary} />
+                  <Text style={styles.enhancedCounterOfferButtonText}>Make Counter Offer</Text>
                 </TouchableOpacity>
               </View>
+            </ScrollView>
+
+            {/* Enhanced Action Buttons */}
+            <View style={styles.enhancedModalFooter}>
+              <TouchableOpacity 
+                style={styles.enhancedRejectButton}
+                onPress={async () => { 
+                  try {
+                    await apiService.request(`/purchases/${selectedOrder?.id}/reject-quotation`, { method: 'POST' }); 
+                    setShowQuotationModal(false);
+                    // Optimize: Update local state instead of full refresh
+                    setOrders(prevOrders => 
+                      prevOrders.map(order => 
+                        order.id === selectedOrder?.id 
+                          ? { ...order, status: 'quotation_rejected', quotation_status: 'rejected' }
+                          : order
+                      )
+                    );
+                  } catch (error) {
+                    Alert.alert('Error', 'Failed to reject quotation');
+                  }
+                }}
+              >
+                <Ionicons name="close-circle" size={20} color={Colors.text.primary} />
+                <Text style={styles.enhancedRejectButtonText}>Reject</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.enhancedAcceptButton}
+                onPress={async () => { 
+                  try {
+                    await apiService.request(`/purchases/${selectedOrder?.id}/accept-quotation`, { method: 'POST' }); 
+                    setShowQuotationModal(false);
+                    // Optimize: Update local state instead of full refresh
+                    setOrders(prevOrders => 
+                      prevOrders.map(order => 
+                        order.id === selectedOrder?.id 
+                          ? { ...order, status: 'quotation_accepted', quotation_status: 'accepted' }
+                          : order
+                      )
+                    );
+                  } catch (error) {
+                    Alert.alert('Error', 'Failed to accept quotation');
+                  }
+                }}
+              >
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={styles.enhancedAcceptButtonText}>Accept</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
       )}
 
-      {/* Counter Offer Modal */}
+      {/* Enhanced Counter Offer Modal */}
       {showCounterOfferModal && selectedOrder && (
         <Modal
           visible={true}
           animationType="slide"
-          transparent={true}
+          presentationStyle="pageSheet"
           onRequestClose={() => { 
             setShowCounterOfferModal(false); 
             setCounterOfferAmount('');
             setCounterOfferNotes('');
           }}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.counterOfferModalContent}>
-              {/* Header */}
-              <View style={styles.modalHeader}>
-                <View style={styles.modalTitleContainer}>
-                  <Ionicons name="swap-horizontal" size={24} color="#014D40" />
-                  <Text style={styles.modalTitle}>Make Counter Offer</Text>
+          <View style={styles.enhancedModalContainer}>
+            {/* Enhanced Header */}
+            <View style={styles.enhancedModalHeader}>
+              <View style={styles.enhancedModalHeaderContent}>
+                <View style={styles.enhancedModalIconContainer}>
+                  <Ionicons name="swap-horizontal" size={24} color={Colors.warning} />
                 </View>
-                <TouchableOpacity 
-                  style={styles.closeButton}
-                  onPress={() => { 
-                    setShowCounterOfferModal(false); 
-                    setCounterOfferAmount('');
-                    setCounterOfferNotes('');
-                  }}
-                >
-                  <Ionicons name="close" size={20} color="#666" />
-                </TouchableOpacity>
+                <View style={styles.enhancedModalTitleContainer}>
+                  <Text style={styles.enhancedModalTitle}>Make Counter Offer</Text>
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={styles.enhancedCloseButton}
+                onPress={() => { 
+                  setShowCounterOfferModal(false); 
+                  setCounterOfferAmount('');
+                  setCounterOfferNotes('');
+                }}
+              >
+                <Ionicons name="close" size={24} color={Colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Enhanced Content */}
+            <ScrollView style={styles.enhancedModalContent} showsVerticalScrollIndicator={false}>
+              {/* Original Quotation Card */}
+              <View style={styles.originalQuotationCard}>
+                <View style={styles.originalQuotationHeader}>
+                  <Ionicons name="document-text" size={20} color={Colors.primary} />
+                  <Text style={styles.originalQuotationTitle}>Original Quotation</Text>
+                </View>
+                <View style={styles.originalQuotationAmount}>
+                  <Text style={styles.originalQuotationLabel}>Quoted Amount</Text>
+                  <Text style={styles.originalQuotationValue}>
+                    ₱{(selectedOrder?.quotation_amount ?? selectedOrder?.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </Text>
+                </View>
+                <View style={styles.originalQuotationDetails}>
+                  <Text style={styles.originalQuotationDetail}>Order ID: #{selectedOrder?.id}</Text>
+                  <Text style={styles.originalQuotationDetail}>Clothing: {selectedOrder?.clothing_type || 'N/A'}</Text>
+                </View>
               </View>
 
-              {/* Counter Offer Details Content */}
-              <ScrollView 
-                style={styles.modalBody}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }}
-              >
-                {/* Counter Offer Information */}
-                <View style={styles.counterOfferInfoSection}>
-                  <View style={styles.counterOfferInfoHeader}>
-                    <Ionicons name="information-circle" size={24} color="#014D40" style={{ marginRight: 8 }} />
-                    <Text style={styles.counterOfferInfoTitle}>Counter Offer Information</Text>
-                  </View>
-                  
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Original Quotation:</Text>
-                    <Text style={styles.detailValue}>
-                      ₱{(selectedOrder?.quotation_amount ?? selectedOrder?.quotation_price)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Order ID:</Text>
-                    <Text style={styles.detailValue}>#{selectedOrder?.id}</Text>
-                  </View>
-                  
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Your Counter Offer Amount (₱)</Text>
+              {/* Counter Offer Form Card */}
+              <View style={styles.counterOfferFormCard}>
+                <View style={styles.counterOfferFormHeader}>
+                  <Ionicons name="create" size={20} color={Colors.warning} />
+                  <Text style={styles.counterOfferFormTitle}>Your Counter Offer</Text>
+                </View>
+                
+                <View style={styles.enhancedInputGroup}>
+                  <Text style={styles.enhancedInputLabel}>Counter Offer Amount (₱)</Text>
+                  <View style={styles.enhancedInputContainer}>
+                    <Text style={styles.currencySymbol}>₱</Text>
                     <TextInput
-                      style={styles.textInput}
+                      style={styles.enhancedTextInput}
                       placeholder="Enter your counter offer amount"
                       value={counterOfferAmount}
                       onChangeText={setCounterOfferAmount}
@@ -727,45 +821,110 @@ export default function PurchaseOrderFlow() {
                       placeholderTextColor={Colors.text.secondary}
                     />
                   </View>
-                  
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Additional Notes (Optional)</Text>
-                    <TextInput
-                      style={[styles.textInput, styles.notesInput]}
-                      placeholder="Explain your counter offer or any special requests..."
-                      value={counterOfferNotes}
-                      onChangeText={setCounterOfferNotes}
-                      multiline={true}
-                      numberOfLines={4}
-                      textAlignVertical="top"
-                      placeholderTextColor={Colors.text.secondary}
-                    />
+                  <Text style={styles.inputHelperText}>
+                    Suggested: 10-20% less than original quotation
+                  </Text>
+                </View>
+                
+                <View style={styles.enhancedInputGroup}>
+                  <Text style={styles.enhancedInputLabel}>Reason for Counter Offer (Optional)</Text>
+                  <TextInput
+                    style={styles.enhancedNotesInput}
+                    placeholder="Explain why you're making a counter offer or any special requests..."
+                    value={counterOfferNotes}
+                    onChangeText={setCounterOfferNotes}
+                    multiline={true}
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                    placeholderTextColor={Colors.text.secondary}
+                  />
+                </View>
+              </View>
+
+              {/* Negotiation Tips Card */}
+              <View style={styles.negotiationTipsCard}>
+                <View style={styles.negotiationTipsHeader}>
+                  <Ionicons name="bulb" size={20} color={Colors.info} />
+                  <Text style={styles.negotiationTipsTitle}>Negotiation Tips</Text>
+                </View>
+                <View style={styles.negotiationTipsList}>
+                  <View style={styles.negotiationTipItem}>
+                    <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+                    <Text style={styles.negotiationTipText}>Be reasonable with your counter offer</Text>
+                  </View>
+                  <View style={styles.negotiationTipItem}>
+                    <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+                    <Text style={styles.negotiationTipText}>Explain your reasoning clearly</Text>
+                  </View>
+                  <View style={styles.negotiationTipItem}>
+                    <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+                    <Text style={styles.negotiationTipText}>Consider the quality and complexity of your order</Text>
                   </View>
                 </View>
-              </ScrollView>
+              </View>
+            </ScrollView>
 
-              {/* Action Buttons */}
-              <View style={styles.modalActions}>
-                <TouchableOpacity 
-                  style={styles.cancelButton}
-                  onPress={() => {
+            {/* Enhanced Action Buttons */}
+            <View style={styles.enhancedModalFooter}>
+              <TouchableOpacity 
+                style={styles.enhancedCancelButton}
+                onPress={() => { 
+                  setShowCounterOfferModal(false); 
+                  setCounterOfferAmount('');
+                  setCounterOfferNotes('');
+                }}
+              >
+                <Ionicons name="close-circle" size={20} color={Colors.text.primary} />
+                <Text style={styles.enhancedCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.enhancedSubmitButton}
+                onPress={async () => {
+                  if (!counterOfferAmount || isNaN(Number(counterOfferAmount))) {
+                    Alert.alert('Error', 'Please enter a valid counter offer amount');
+                    return;
+                  }
+                  
+                  const counterAmount = parseFloat(counterOfferAmount);
+                  const originalAmount = selectedOrder?.quotation_amount ?? selectedOrder?.quotation_price;
+                  
+                  if (counterAmount >= originalAmount) {
+                    Alert.alert('Warning', 'Your counter offer should be less than the original quotation to be effective.');
+                    return;
+                  }
+                  
+                  try {
+                    await apiService.request(`/purchases/${selectedOrder?.id}/counter-offer`, {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        counter_offer_amount: counterAmount,
+                        counter_offer_notes: counterOfferNotes
+                      })
+                    });
+                    
                     setShowCounterOfferModal(false);
                     setCounterOfferAmount('');
                     setCounterOfferNotes('');
-                  }}
-                >
-                  <Ionicons name="close" size={18} color="#fff" />
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.sendQuotationButton}
-                  onPress={submitCounterOffer}
-                >
-                  <Ionicons name="paper-plane" size={18} color="#FFD700" />
-                  <Text style={styles.sendQuotationText}>Submit</Text>
-                </TouchableOpacity>
-              </View>
+                    
+                    // Optimize: Update local state instead of full refresh
+                    setOrders(prevOrders => 
+                      prevOrders.map(order => 
+                        order.id === selectedOrder?.id 
+                          ? { ...order, status: 'counter_offer_pending', counter_offer_status: 'pending' }
+                          : order
+                      )
+                    );
+                    
+                    Alert.alert('Success', 'Counter offer submitted successfully! Our team will review it and respond soon.');
+                  } catch (error) {
+                    Alert.alert('Error', 'Failed to submit counter offer');
+                  }
+                }}
+              >
+                <Ionicons name="send" size={20} color="#fff" />
+                <Text style={styles.enhancedSubmitButtonText}>Submit</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -843,18 +1002,12 @@ export default function PurchaseOrderFlow() {
               <View style={styles.formSection}>
                 <View style={styles.sectionHeader}>
                   <Ionicons name="resize" size={24} color={Colors.primary} />
-                  <Text style={styles.label}>Body Measurements (cm)</Text>
+                  <Text style={styles.measurementsTitle}>Body Measurements (cm)</Text>
                 </View>
-          <Text style={styles.subtitle}>
-            Required measurements for {clothingType === 'other' ? otherClothing : CLOTHING_TYPES.find(t => t.id === clothingType)?.label}
-          </Text>
           
           {/* Measurement Method Selection */}
           <View style={styles.measurementMethodSection}>
-            <Text style={styles.measurementMethodTitle}>Choose Measurement Method</Text>
-            <Text style={styles.measurementMethodSubtitle}>
-              Select how you'd like to provide your measurements
-            </Text>
+            <Text style={styles.measurementMethodSubtitle}>Choose Measurement Method</Text>
             
             <View style={styles.measurementMethodContainer}>
               <TouchableOpacity
@@ -987,7 +1140,7 @@ export default function PurchaseOrderFlow() {
                 <Text style={styles.subtitle}>Tell us about your desired style and preferences</Text>
                 
                 <View style={styles.designField}>
-                  <Text style={styles.inputLabel}>Style Description</Text>
+                  <Text style={styles.designInputLabel}>Style Description</Text>
                   <Text style={styles.inputDescription}>Describe the style you want (e.g., modern, classic, vintage)</Text>
                   <TextInput 
                     style={styles.input} 
@@ -999,7 +1152,7 @@ export default function PurchaseOrderFlow() {
                 </View>
 
                 <View style={styles.designField}>
-                  <Text style={styles.inputLabel}>Color Preference</Text>
+                  <Text style={styles.designInputLabel}>Color Preference</Text>
                   <Text style={styles.inputDescription}>Specify your preferred color or color scheme</Text>
                   <TextInput 
                     style={styles.input} 
@@ -1011,7 +1164,7 @@ export default function PurchaseOrderFlow() {
                 </View>
 
                 <View style={styles.designField}>
-                  <Text style={styles.inputLabel}>Additional Notes</Text>
+                  <Text style={styles.designInputLabel}>Additional Notes</Text>
                   <Text style={styles.inputDescription}>Any special requests or specific details</Text>
                   <TextInput 
                     style={[styles.input, styles.textArea]} 
@@ -1293,6 +1446,12 @@ const styles = StyleSheet.create({
     marginBottom: 8, 
     marginLeft: 8,
     color: Colors.text.primary 
+  },
+  measurementsTitle: {
+    fontSize: Platform.OS === 'ios' ? 22 : 20,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginLeft: 8,
   },
   subtitle: {
     fontSize: Platform.OS === 'ios' ? 15 : 14,
@@ -1687,6 +1846,12 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: Platform.OS === 'ios' ? 17 : 16,
     fontWeight: '600',
+    color: Colors.text.primary,
+    marginBottom: 8,
+  },
+  designInputLabel: {
+    fontSize: Platform.OS === 'ios' ? 17 : 16,
+    fontWeight: '700',
     color: Colors.text.primary,
     marginBottom: 8,
   },
@@ -2302,5 +2467,493 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.text.primary,
     textAlign: 'center',
+  },
+
+  // Enhanced Modal Styles
+  enhancedModalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background.light,
+  },
+  enhancedModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: Colors.background.card,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light,
+  },
+  enhancedModalHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  enhancedModalIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  enhancedModalTitleContainer: {
+    flex: 1,
+  },
+  enhancedModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginTop: 16,
+    marginBottom: 2,
+  },
+  enhancedModalSubtitle: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+  },
+  enhancedCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.background.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.border.light + '30',
+  },
+  enhancedModalContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  enhancedModalFooter: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: Colors.background.card,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border.light,
+    gap: 12,
+  },
+
+  // Quotation Summary Card
+  quotationSummaryCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 20,
+    marginBottom: 16,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: Colors.primary + '20',
+  },
+  quotationSummaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  quotationSummaryTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginLeft: 8,
+  },
+  quotationAmountContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingVertical: 16,
+    backgroundColor: Colors.primary + '10',
+    borderRadius: 12,
+  },
+  quotationAmountLabel: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginBottom: 4,
+  },
+  quotationAmountValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  quotationStatusContainer: {
+    alignItems: 'center',
+  },
+  quotationStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.warning + '15',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  quotationStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.warning,
+    marginLeft: 4,
+  },
+
+  // Order Details Card
+  orderDetailsCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  orderDetailsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  orderDetailsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginLeft: 8,
+  },
+  enhancedDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light,
+  },
+  enhancedDetailLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.secondary,
+    flex: 1,
+  },
+  enhancedDetailValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: Colors.text.primary,
+    textAlign: 'right',
+    flex: 1,
+  },
+
+  // Quotation Notes Card
+  quotationNotesCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  quotationNotesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  quotationNotesTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginLeft: 8,
+  },
+  quotationNotesText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: Colors.text.primary,
+  },
+
+  // Counter Offer Card
+  counterOfferCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: Colors.warning + '20',
+  },
+  counterOfferCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  counterOfferCardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.warning,
+    marginLeft: 8,
+  },
+  counterOfferCardDescription: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  enhancedCounterOfferButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.background.light,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  enhancedCounterOfferButtonText: {
+    color: Colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+
+  // Enhanced Action Buttons
+  enhancedAcceptButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  enhancedAcceptButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  enhancedRejectButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.background.light,
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  enhancedRejectButtonText: {
+    color: Colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+
+  // Counter Offer Modal Styles
+  originalQuotationCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 20,
+    marginBottom: 16,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: Colors.primary + '20',
+  },
+  originalQuotationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  originalQuotationTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginLeft: 8,
+  },
+  originalQuotationAmount: {
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingVertical: 16,
+    backgroundColor: Colors.primary + '10',
+    borderRadius: 12,
+  },
+  originalQuotationLabel: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginBottom: 4,
+  },
+  originalQuotationValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  originalQuotationDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  originalQuotationDetail: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+  },
+
+  // Counter Offer Form Card
+  counterOfferFormCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: Colors.warning + '20',
+  },
+  counterOfferFormHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  counterOfferFormTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.warning,
+    marginLeft: 8,
+  },
+  enhancedInputGroup: {
+    marginBottom: 20,
+  },
+  enhancedInputLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginBottom: 8,
+  },
+  enhancedInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background.light,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+  },
+  currencySymbol: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginRight: 8,
+  },
+  enhancedTextInput: {
+    flex: 1,
+    paddingVertical: 16,
+    fontSize: 16,
+    color: Colors.text.primary,
+  },
+  inputHelperText: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  enhancedNotesInput: {
+    backgroundColor: Colors.background.light,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    fontSize: 16,
+    color: Colors.text.primary,
+    minHeight: 100,
+  },
+
+  // Negotiation Tips Card
+  negotiationTipsCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: Colors.info + '20',
+  },
+  negotiationTipsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  negotiationTipsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.info,
+    marginLeft: 8,
+  },
+  negotiationTipsList: {
+    gap: 12,
+  },
+  negotiationTipItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  negotiationTipText: {
+    fontSize: 14,
+    color: Colors.text.primary,
+    marginLeft: 8,
+    flex: 1,
+  },
+
+  // Enhanced Footer Buttons
+  enhancedCancelButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.background.light,
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  enhancedCancelButtonText: {
+    color: Colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  enhancedSubmitButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  enhancedSubmitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 8,
   },
 }); 

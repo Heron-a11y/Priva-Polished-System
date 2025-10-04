@@ -9,11 +9,18 @@ import {
   Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Dimensions,
+  Image
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../constants/Colors';
+import networkConfig from '../services/network-config';
+
+const { width: screenWidth } = Dimensions.get('window');
+const isTablet = screenWidth > 768;
 
 export default function PreferencesScreen() {
   const { user } = useAuth();
@@ -35,10 +42,34 @@ export default function PreferencesScreen() {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [imageLoadError, setImageLoadError] = useState(false);
+
+  // Convert profile image URL to use current API base URL
+  const getCorrectProfileImageUrl = (profileImageUrl: string | null) => {
+    if (!profileImageUrl) return null;
+    
+    // If the URL contains ngrok or different domain, convert it to current API base
+    if (profileImageUrl.includes('ngrok.io') || profileImageUrl.includes('fitform-api')) {
+      // Extract the path from the original URL
+      const urlParts = profileImageUrl.split('/storage/');
+      if (urlParts.length > 1) {
+        // Use current API base URL from network config
+        const currentApiBase = networkConfig.getBackendUrl().replace('/api', '');
+        return `${currentApiBase}/storage/${urlParts[1]}`;
+      }
+    }
+    
+    // If it's already a relative path or correct domain, return as is
+    return profileImageUrl;
+  };
 
   useEffect(() => {
     fetchPreferences();
-  }, []);
+    console.log('User data in preferences:', user);
+    console.log('Profile image URL:', user?.profile_image);
+    // Reset image error state when user changes
+    setImageLoadError(false);
+  }, [user]);
 
   const fetchPreferences = async () => {
     try {
@@ -157,34 +188,75 @@ export default function PreferencesScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <Ionicons name="settings-outline" size={28} color="#014D40" />
-      <Text style={styles.title}>My Preferences</Text>
+        {/* Enhanced Header */}
+        <View style={styles.enhancedHeader}>
+          <View style={styles.headerCard}>
+            <View style={styles.headerContent}>
+              <View style={styles.headerIconContainer}>
+                {user?.profile_image && user.profile_image.trim() !== '' && !imageLoadError ? (
+                  <Image 
+                    source={{ 
+                      uri: getCorrectProfileImageUrl(user.profile_image),
+                      cache: 'force-cache'
+                    }} 
+                    style={styles.profileImage}
+                    resizeMode="cover"
+                    onError={(error) => {
+                      console.log('Profile image load error - falling back to default icon');
+                      console.log('Original URL:', user.profile_image);
+                      console.log('Corrected URL:', getCorrectProfileImageUrl(user.profile_image));
+                      console.log('Error details:', error.nativeEvent?.error);
+                      setImageLoadError(true);
+                    }}
+                    onLoad={() => {
+                      console.log('Profile image loaded successfully');
+                      setImageLoadError(false);
+                    }}
+                  />
+                ) : (
+                  <Ionicons name="person-circle" size={48} color={Colors.primary} />
+                )}
+              </View>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.enhancedTitle}>My Preferences</Text>
+              </View>
+            </View>
+            <View style={styles.headerStats}>
+              <View style={styles.statItem}>
+                <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+                <Text style={styles.statText}>Personalized</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Ionicons name="trending-up" size={16} color={Colors.info} />
+                <Text style={styles.statText}>Smart Matching</Text>
+              </View>
+            </View>
           </View>
-          <Text style={styles.subtitle}>Customize your clothing preferences to get better recommendations</Text>
         </View>
 
-        {/* Feedback Message */}
-      {feedback && (
+        {/* Enhanced Feedback Message */}
+        {feedback && (
           <View style={[
-            styles.feedbackContainer, 
-            feedback.type === 'success' ? styles.successContainer : styles.errorContainer
+            styles.enhancedFeedbackContainer, 
+            feedback.type === 'success' ? styles.enhancedSuccessContainer : styles.enhancedErrorContainer
           ]}>
-            <Ionicons 
-              name={feedback.type === 'success' ? 'checkmark-circle' : 'alert-circle'} 
-              size={20} 
-              color={feedback.type === 'success' ? '#4CAF50' : '#F44336'} 
-            />
-            <Text style={[
-              styles.feedbackText, 
-              feedback.type === 'success' ? styles.successText : styles.errorText
-            ]}>
-          {feedback.message}
-        </Text>
+            <View style={styles.feedbackIconContainer}>
+              <Ionicons 
+                name={feedback.type === 'success' ? 'checkmark-circle' : 'alert-circle'} 
+                size={24} 
+                color={feedback.type === 'success' ? Colors.success : Colors.error} 
+              />
+            </View>
+            <View style={styles.feedbackTextContainer}>
+              <Text style={[
+                styles.enhancedFeedbackText, 
+                feedback.type === 'success' ? styles.enhancedSuccessText : styles.enhancedErrorText
+              ]}>
+                {feedback.message}
+              </Text>
+            </View>
           </View>
-      )}
+        )}
 
         {/* General Error */}
         {errors.general && (
@@ -194,197 +266,272 @@ export default function PreferencesScreen() {
           </View>
         )}
 
-        {/* Preferences Form */}
-        <View style={styles.formContainer}>
-          {/* Style & Color Row */}
-          <View style={styles.row}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                <Ionicons name="shirt-outline" size={16} color="#014D40" /> Preferred Style
-              </Text>
-              {errors.preferred_style && <Text style={styles.fieldError}>{errors.preferred_style}</Text>}
-      <TextInput
-                style={[styles.input, errors.preferred_style && styles.inputError]}
-        value={preferences.preferred_style}
-        onChangeText={text => setPreferences({ ...preferences, preferred_style: text })}
-                placeholder="e.g. Casual, Sporty, Formal"
-        maxLength={30}
-      />
+        {/* Enhanced Preferences Form */}
+        <View style={styles.enhancedFormContainer}>
+          {/* Basic Preferences Section */}
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="star" size={20} color={Colors.primary} />
+              <Text style={styles.sectionTitle}>Basic Preferences</Text>
             </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                <Ionicons name="color-palette-outline" size={16} color="#014D40" /> Preferred Color
-              </Text>
-              {errors.preferred_color && <Text style={styles.fieldError}>{errors.preferred_color}</Text>}
-      <TextInput
-                style={[styles.input, errors.preferred_color && styles.inputError]}
-        value={preferences.preferred_color}
-        onChangeText={text => setPreferences({ ...preferences, preferred_color: text })}
-                placeholder="e.g. Blue, Red, Black"
-        maxLength={30}
-      />
-            </View>
-          </View>
-
-          {/* Size & Material Row */}
-          <View style={styles.row}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                <Ionicons name="resize-outline" size={16} color="#014D40" /> Preferred Size
-              </Text>
-              {errors.preferred_size && <Text style={styles.fieldError}>{errors.preferred_size}</Text>}
-      <TextInput
-                style={[styles.input, errors.preferred_size && styles.inputError]}
-        value={preferences.preferred_size}
-        onChangeText={text => setPreferences({ ...preferences, preferred_size: text })}
-                placeholder="e.g. S, M, L, XL"
-        maxLength={30}
-      />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                <Ionicons name="leaf-outline" size={16} color="#014D40" /> Preferred Material
-              </Text>
-      <TextInput
-        style={styles.input}
-        value={preferences.preferred_material}
-        onChangeText={text => setPreferences({ ...preferences, preferred_material: text })}
-        placeholder="e.g. Cotton, Polyester"
-        maxLength={30}
-      />
-            </View>
-          </View>
-
-          {/* Fit & Pattern Row */}
-          <View style={styles.row}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                <Ionicons name="body-outline" size={16} color="#014D40" /> Preferred Fit
-              </Text>
-      <TextInput
-        style={styles.input}
-        value={preferences.preferred_fit}
-        onChangeText={text => setPreferences({ ...preferences, preferred_fit: text })}
-        placeholder="e.g. Slim, Regular, Loose"
-        maxLength={30}
-      />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                <Ionicons name="grid-outline" size={16} color="#014D40" /> Preferred Pattern
-              </Text>
-      <TextInput
-        style={styles.input}
-        value={preferences.preferred_pattern}
-        onChangeText={text => setPreferences({ ...preferences, preferred_pattern: text })}
-                placeholder="e.g. Solid, Striped, Checked"
-        maxLength={30}
-      />
+            <View style={styles.sectionContent}>
+              {/* Style & Color Row */}
+              <View style={styles.enhancedRow}>
+                <View style={styles.enhancedInputGroup}>
+                  <View style={styles.inputLabelContainer}>
+                    <Ionicons name="shirt-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.enhancedLabel}>Preferred Style</Text>
+                  </View>
+                  {errors.preferred_style && <Text style={styles.enhancedFieldError}>{errors.preferred_style}</Text>}
+                  <TextInput
+                    style={[styles.enhancedInput, errors.preferred_style && styles.enhancedInputError]}
+                    value={preferences.preferred_style}
+                    onChangeText={text => setPreferences({ ...preferences, preferred_style: text })}
+                    placeholder="e.g. Casual, Sporty, Formal"
+                    maxLength={30}
+                    placeholderTextColor={Colors.text.secondary}
+                  />
+                </View>
+                <View style={styles.enhancedInputGroup}>
+                  <View style={styles.inputLabelContainer}>
+                    <Ionicons name="color-palette-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.enhancedLabel}>Preferred Color</Text>
+                  </View>
+                  {errors.preferred_color && <Text style={styles.enhancedFieldError}>{errors.preferred_color}</Text>}
+                  <TextInput
+                    style={[styles.enhancedInput, errors.preferred_color && styles.enhancedInputError]}
+                    value={preferences.preferred_color}
+                    onChangeText={text => setPreferences({ ...preferences, preferred_color: text })}
+                    placeholder="e.g. Blue, Red, Black"
+                    maxLength={30}
+                    placeholderTextColor={Colors.text.secondary}
+                  />
+                </View>
+              </View>
+              {/* Size & Material Row */}
+              <View style={styles.enhancedRow}>
+                <View style={styles.enhancedInputGroup}>
+                  <View style={styles.inputLabelContainer}>
+                    <Ionicons name="resize-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.enhancedLabel}>Preferred Size</Text>
+                  </View>
+                  {errors.preferred_size && <Text style={styles.enhancedFieldError}>{errors.preferred_size}</Text>}
+                  <TextInput
+                    style={[styles.enhancedInput, errors.preferred_size && styles.enhancedInputError]}
+                    value={preferences.preferred_size}
+                    onChangeText={text => setPreferences({ ...preferences, preferred_size: text })}
+                    placeholder="e.g. S, M, L, XL"
+                    maxLength={30}
+                    placeholderTextColor={Colors.text.secondary}
+                  />
+                </View>
+                <View style={styles.enhancedInputGroup}>
+                  <View style={styles.inputLabelContainer}>
+                    <Ionicons name="leaf-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.enhancedLabel}>Preferred Material</Text>
+                  </View>
+                  <TextInput
+                    style={styles.enhancedInput}
+                    value={preferences.preferred_material}
+                    onChangeText={text => setPreferences({ ...preferences, preferred_material: text })}
+                    placeholder="e.g. Cotton, Polyester"
+                    maxLength={30}
+                    placeholderTextColor={Colors.text.secondary}
+                  />
+                </View>
+              </View>
             </View>
           </View>
 
-          {/* Budget & Season Row */}
-          <View style={styles.row}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                <Ionicons name="wallet-outline" size={16} color="#014D40" /> Preferred Budget (₱)
-              </Text>
-      <TextInput
-        style={styles.input}
-        value={preferences.preferred_budget}
-        onChangeText={text => setPreferences({ ...preferences, preferred_budget: text })}
-                placeholder="e.g. Below ₱1000, ₱1000-₱3000"
-        maxLength={30}
-      />
+          {/* Style Details Section */}
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="shirt" size={20} color={Colors.primary} />
+              <Text style={styles.sectionTitle}>Style Details</Text>
             </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                <Ionicons name="sunny-outline" size={16} color="#014D40" /> Preferred Season
-              </Text>
-      <TextInput
-        style={styles.input}
-        value={preferences.preferred_season}
-        onChangeText={text => setPreferences({ ...preferences, preferred_season: text })}
-        placeholder="e.g. Dry, Wet, All-season"
-        maxLength={30}
-      />
+            <View style={styles.sectionContent}>
+
+              {/* Fit & Pattern Row */}
+              <View style={styles.enhancedRow}>
+                <View style={styles.enhancedInputGroup}>
+                  <View style={styles.inputLabelContainer}>
+                    <Ionicons name="body-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.enhancedLabel}>Preferred Fit</Text>
+                  </View>
+                  <TextInput
+                    style={styles.enhancedInput}
+                    value={preferences.preferred_fit}
+                    onChangeText={text => setPreferences({ ...preferences, preferred_fit: text })}
+                    placeholder="e.g. Slim, Regular, Loose"
+                    maxLength={30}
+                    placeholderTextColor={Colors.text.secondary}
+                  />
+                </View>
+                <View style={styles.enhancedInputGroup}>
+                  <View style={styles.inputLabelContainer}>
+                    <Ionicons name="grid-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.enhancedLabel}>Preferred Pattern</Text>
+                  </View>
+                  <TextInput
+                    style={styles.enhancedInput}
+                    value={preferences.preferred_pattern}
+                    onChangeText={text => setPreferences({ ...preferences, preferred_pattern: text })}
+                    placeholder="e.g. Solid, Striped, Checked"
+                    maxLength={30}
+                    placeholderTextColor={Colors.text.secondary}
+                  />
+                </View>
+              </View>
             </View>
           </View>
 
-          {/* Length & Sleeve Row */}
-          <View style={styles.row}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                <Ionicons name="resize-outline" size={16} color="#014D40" /> Preferred Length
-              </Text>
-      <TextInput
-        style={styles.input}
-        value={preferences.preferred_length}
-        onChangeText={text => setPreferences({ ...preferences, preferred_length: text })}
-        placeholder="e.g. Short, Medium, Long"
-        maxLength={30}
-      />
+          {/* Budget & Season Section */}
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="wallet" size={20} color={Colors.primary} />
+              <Text style={styles.sectionTitle}>Budget & Season</Text>
             </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                <Ionicons name="shirt-outline" size={16} color="#014D40" /> Preferred Sleeve
-              </Text>
-      <TextInput
-        style={styles.input}
-        value={preferences.preferred_sleeve}
-        onChangeText={text => setPreferences({ ...preferences, preferred_sleeve: text })}
-        placeholder="e.g. Sleeveless, Short, Long"
-        maxLength={30}
-      />
+            <View style={styles.sectionContent}>
+
+              {/* Budget & Season Row */}
+              <View style={styles.enhancedRow}>
+                <View style={styles.enhancedInputGroup}>
+                  <View style={styles.inputLabelContainer}>
+                    <Ionicons name="wallet-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.enhancedLabel}>Preferred Budget</Text>
+                  </View>
+                  <TextInput
+                    style={styles.enhancedInput}
+                    value={preferences.preferred_budget}
+                    onChangeText={text => setPreferences({ ...preferences, preferred_budget: text })}
+                    placeholder="e.g. Below ₱1000, ₱1000-₱3000"
+                    maxLength={30}
+                    placeholderTextColor={Colors.text.secondary}
+                  />
+                </View>
+                <View style={styles.enhancedInputGroup}>
+                  <View style={styles.inputLabelContainer}>
+                    <Ionicons name="sunny-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.enhancedLabel}>Preferred Season</Text>
+                  </View>
+                  <TextInput
+                    style={styles.enhancedInput}
+                    value={preferences.preferred_season}
+                    onChangeText={text => setPreferences({ ...preferences, preferred_season: text })}
+                    placeholder="e.g. Dry, Wet, All-season"
+                    maxLength={30}
+                    placeholderTextColor={Colors.text.secondary}
+                  />
+                </View>
+              </View>
             </View>
           </View>
 
-          {/* Notes */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              <Ionicons name="document-text-outline" size={16} color="#014D40" /> Additional Notes
-            </Text>
-            {errors.notes && <Text style={styles.fieldError}>{errors.notes}</Text>}
-      <TextInput
-              style={[styles.input, styles.textArea, errors.notes && styles.inputError]}
-        value={preferences.notes}
-        onChangeText={text => setPreferences({ ...preferences, notes: text })}
-              placeholder="Any additional preferences or special requirements..."
-        multiline
-              numberOfLines={4}
-        maxLength={300}
-      />
-            <Text style={styles.charCount}>{preferences.notes.length}/300</Text>
+          {/* Length & Sleeve Section */}
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="resize" size={20} color={Colors.primary} />
+              <Text style={styles.sectionTitle}>Length & Sleeve</Text>
+            </View>
+            <View style={styles.sectionContent}>
+
+              {/* Length & Sleeve Row */}
+              <View style={styles.enhancedRow}>
+                <View style={styles.enhancedInputGroup}>
+                  <View style={styles.inputLabelContainer}>
+                    <Ionicons name="resize-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.enhancedLabel}>Preferred Length</Text>
+                  </View>
+                  <TextInput
+                    style={styles.enhancedInput}
+                    value={preferences.preferred_length}
+                    onChangeText={text => setPreferences({ ...preferences, preferred_length: text })}
+                    placeholder="e.g. Short, Medium, Long"
+                    maxLength={30}
+                    placeholderTextColor={Colors.text.secondary}
+                  />
+                </View>
+                <View style={styles.enhancedInputGroup}>
+                  <View style={styles.inputLabelContainer}>
+                    <Ionicons name="shirt-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.enhancedLabel}>Preferred Sleeve</Text>
+                  </View>
+                  <TextInput
+                    style={styles.enhancedInput}
+                    value={preferences.preferred_sleeve}
+                    onChangeText={text => setPreferences({ ...preferences, preferred_sleeve: text })}
+                    placeholder="e.g. Sleeveless, Short, Long"
+                    maxLength={30}
+                    placeholderTextColor={Colors.text.secondary}
+                  />
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Additional Notes Section */}
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="document-text" size={20} color={Colors.primary} />
+              <Text style={styles.sectionTitle}>Additional Notes</Text>
+            </View>
+            <View style={styles.sectionContent}>
+              <View style={styles.enhancedInputGroup}>
+                <View style={styles.inputLabelContainer}>
+                  <Ionicons name="document-text-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.enhancedLabel}>Special Requirements</Text>
+                </View>
+                {errors.notes && <Text style={styles.enhancedFieldError}>{errors.notes}</Text>}
+                <TextInput
+                  style={[styles.enhancedTextArea, errors.notes && styles.enhancedInputError]}
+                  value={preferences.notes}
+                  onChangeText={text => setPreferences({ ...preferences, notes: text })}
+                  placeholder="Any additional preferences or special requirements..."
+                  multiline
+                  numberOfLines={4}
+                  maxLength={300}
+                  placeholderTextColor={Colors.text.secondary}
+                />
+                <View style={styles.charCountContainer}>
+                  <Text style={styles.enhancedCharCount}>{preferences.notes.length}/300</Text>
+                </View>
+              </View>
+            </View>
           </View>
         </View>
 
-        {/* Action Buttons */}
-        <View style={styles.buttonContainer}>
+        {/* Enhanced Action Buttons */}
+        <View style={styles.enhancedButtonContainer}>
           <TouchableOpacity 
-            style={styles.clearButton} 
+            style={styles.enhancedClearButton} 
             onPress={() => {
               console.log('TouchableOpacity pressed'); // Debug log
               clearPreferences();
             }}
             activeOpacity={0.7}
           >
-            <Ionicons name="trash-outline" size={20} color="#F44336" />
-            <Text style={styles.clearButtonText}>Clear All</Text>
+            <View style={styles.buttonContent}>
+              <Ionicons name="trash-outline" size={20} color={Colors.error} />
+              <Text style={styles.enhancedClearButtonText} numberOfLines={1}>Clear All</Text>
+            </View>
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={[styles.saveButton, saving && styles.saveButtonDisabled]} 
+            style={[styles.enhancedSaveButton, saving && styles.enhancedSaveButtonDisabled]} 
             onPress={savePreferences}
             disabled={saving}
+            activeOpacity={0.8}
           >
-            {saving ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="save-outline" size={20} color="#fff" />
-                <Text style={styles.saveButtonText}>Save Preferences</Text>
-              </>
-            )}
+            <View style={styles.buttonContent}>
+              {saving ? (
+                <ActivityIndicator size="small" color={Colors.text.inverse} />
+              ) : (
+                <>
+                  <Ionicons name="save-outline" size={20} color={Colors.text.inverse} />
+                  <Text style={styles.enhancedSaveButtonText}>Save</Text>
+                </>
+              )}
+            </View>
           </TouchableOpacity>
         </View>
     </ScrollView>
@@ -395,22 +542,295 @@ export default function PreferencesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#FFFFFF',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#FFFFFF',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#014D40',
+    color: Colors.primary,
   },
   scrollContainer: {
     padding: 20,
   },
+
+  // Enhanced Header Styles
+  enhancedHeader: {
+    marginBottom: 24,
+  },
+  headerCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  headerIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    overflow: 'hidden',
+  },
+  profileImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
+  enhancedTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginBottom: 4,
+  },
+  enhancedSubtitle: {
+    fontSize: 16,
+    color: Colors.text.secondary,
+    lineHeight: 22,
+  },
+  headerStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background.light,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  statText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginLeft: 6,
+  },
+
+  // Enhanced Feedback Styles
+  enhancedFeedbackContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  enhancedSuccessContainer: {
+    backgroundColor: Colors.success + '15',
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.success,
+  },
+  enhancedErrorContainer: {
+    backgroundColor: Colors.error + '15',
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.error,
+  },
+  feedbackIconContainer: {
+    marginRight: 12,
+  },
+  feedbackTextContainer: {
+    flex: 1,
+  },
+  enhancedFeedbackText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  enhancedSuccessText: {
+    color: Colors.success,
+  },
+  enhancedErrorText: {
+    color: Colors.error,
+  },
+
+  // Enhanced Form Styles
+  enhancedFormContainer: {
+    marginBottom: 24,
+  },
+  sectionContainer: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    marginBottom: 16,
+    padding: 20,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary + '10',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    marginBottom: 16,
+    borderRadius: 12,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginLeft: 12,
+  },
+  sectionContent: {
+    paddingTop: 16,
+  },
+  enhancedRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  enhancedInputGroup: {
+    flex: 1,
+    marginRight: 6,
+    marginLeft: 6,
+  },
+  inputLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    marginLeft: 0,
+    marginRight: 0,
+  },
+  enhancedLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginLeft: 8,
+  },
+  enhancedInput: {
+    borderWidth: 2,
+    borderColor: Colors.border.light,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    backgroundColor: '#FFFFFF',
+    color: Colors.text.primary,
+    marginLeft: 0,
+    marginRight: 0,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  enhancedInputError: {
+    borderColor: Colors.error,
+    borderWidth: 2,
+  },
+  enhancedTextArea: {
+    borderWidth: 2,
+    borderColor: Colors.border.light,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    backgroundColor: '#FFFFFF',
+    color: Colors.text.primary,
+    height: 100,
+    textAlignVertical: 'top',
+    marginLeft: 0,
+    marginRight: 0,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  enhancedFieldError: {
+    color: Colors.error,
+    fontSize: 14,
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  charCountContainer: {
+    alignItems: 'flex-end',
+    marginTop: 8,
+  },
+  enhancedCharCount: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    fontWeight: '600',
+  },
+
+  // Enhanced Button Styles
+  enhancedButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    gap: 12,
+  },
+  enhancedClearButton: {
+    flex: 1,
+    backgroundColor: Colors.background.card,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: Colors.error,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  enhancedClearButtonText: {
+    color: Colors.error,
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 8,
+    flexShrink: 1,
+  },
+  enhancedSaveButton: {
+    flex: 1,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  enhancedSaveButtonDisabled: {
+    backgroundColor: Colors.text.secondary,
+  },
+  enhancedSaveButtonText: {
+    color: Colors.text.inverse,
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+
+  // Legacy styles for compatibility
   header: {
     marginBottom: 24,
   },

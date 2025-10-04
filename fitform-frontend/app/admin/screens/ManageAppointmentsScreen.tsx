@@ -320,8 +320,8 @@ const ManageAppointmentsScreen = () => {
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <>
-                    <Ionicons name="close" size={18} color="#fff" />
-                    <Text style={styles.actionButtonText}>Cancel</Text>
+                    <Ionicons name="close" size={18} color={Colors.text.primary} />
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -623,8 +623,8 @@ const ManageAppointmentsScreen = () => {
                       setShowAppointmentModal(false);
                     }}
                   >
-                    <Ionicons name="close" size={20} color="#fff" />
-                    <Text style={styles.actionButtonText}>Cancel</Text>
+                    <Ionicons name="close" size={20} color={Colors.text.primary} />
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -637,8 +637,8 @@ const ManageAppointmentsScreen = () => {
                     setShowAppointmentModal(false);
                   }}
                 >
-                  <Ionicons name="close" size={20} color="#fff" />
-                  <Text style={styles.actionButtonText}>Cancel</Text>
+                  <Ionicons name="close" size={20} color={Colors.text.primary} />
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
               )}
               
@@ -1149,7 +1149,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   cancelButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: Colors.background.light,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
@@ -1158,6 +1160,11 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cancelButtonText: {
+    color: Colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
   },

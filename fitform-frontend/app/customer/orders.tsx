@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import RentalOrderFlow from '../../Customer/components/RentalOrderFlow';
@@ -14,6 +14,11 @@ const TABS = [
 
 export default function CustomerOrders() {
   const [activeTab, setActiveTab] = useState('rentals');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleTabChange = useCallback((tab: string) => {
+    setActiveTab(tab);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -30,7 +35,7 @@ export default function CustomerOrders() {
             <TouchableOpacity
               key={tab.key}
               style={[styles.tab, activeTab === tab.key && styles.activeTab]}
-              onPress={() => setActiveTab(tab.key)}
+              onPress={() => handleTabChange(tab.key)}
               activeOpacity={0.7}
             >
               <Text style={styles.tabIcon}>{tab.icon}</Text>
