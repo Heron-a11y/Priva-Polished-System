@@ -199,3 +199,5 @@ class PerformanceOptimizer {
 export const performanceOptimizer = PerformanceOptimizer.getInstance();
 export default PerformanceOptimizer;
 
+
+

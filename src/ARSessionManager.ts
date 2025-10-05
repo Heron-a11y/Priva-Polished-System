@@ -18,6 +18,9 @@ interface ARSessionManagerNative {
   markScanCompleted(scanType: string): Promise<boolean>;
 }
 
+// Get the native module
+const { ARSessionManager: ARSessionManagerNative } = NativeModules;
+
 // Define the event emitter interface
 interface ARMeasurementUpdateEvent {
   shoulderWidthCm: number;
@@ -64,9 +67,9 @@ class ARSessionManager {
   constructor() {
     // Get the native module based on platform
     if (Platform.OS === 'android') {
-      this.nativeModule = NativeModules.ARSessionManager;
+      this.nativeModule = ARSessionManagerNative;
     } else if (Platform.OS === 'ios') {
-      this.nativeModule = NativeModules.ARSessionManager;
+      this.nativeModule = ARSessionManagerNative;
     } else {
       throw new Error('AR Session Manager is not supported on this platform');
     }

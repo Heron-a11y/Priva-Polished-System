@@ -95,3 +95,5 @@ echo   - minSdkVersion: 24
 echo   - expo-camera: ~13.0.0
 
 echo [INFO] Ready to build with: gradlew :app:assembleRelease
+
+

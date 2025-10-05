@@ -73,3 +73,5 @@ echo   - Advanced error handling
 echo   - Machine learning validation
 
 echo [INFO] Ready to build with: npx eas build --platform android --profile development
+
+

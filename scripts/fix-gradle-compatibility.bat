@@ -89,3 +89,5 @@ echo   - compileSdkVersion: 34
 echo   - targetSdkVersion: 34
 
 echo [INFO] Ready to build with: gradlew :app:assembleDebug
+
+

@@ -17,9 +17,16 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.reedewree.arbodymeasurements",
+      "buildNumber": "1",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app uses the camera for AR body measurements",
-        "NSMicrophoneUsageDescription": "This app may use the microphone for AR functionality"
+        "NSCameraUsageDescription": "This app uses the camera for AR body measurements and pose detection.",
+        "NSMicrophoneUsageDescription": "This app may use the microphone for enhanced AR functionality.",
+        "NSLocationWhenInUseUsageDescription": "This app uses location services for AR body tracking accuracy.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "associatedDomains": [],
+      "entitlements": {
+        "com.apple.developer.arkit": true
       }
     },
     "android": {

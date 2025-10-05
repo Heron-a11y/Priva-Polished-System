@@ -86,10 +86,13 @@ class DeviceCapabilitiesManager {
     const memoryGB = await this.getAndroidMemoryGB();
     const processorCores = await this.getAndroidProcessorCores();
     
+    // Check ARCore support
+    const arCoreSupport = await this.checkARCoreSupport();
+    
     // Determine performance tier based on hardware specs
     let performanceTier: 'high-end' | 'mid-range' | 'low-end';
     let hasHighPerformanceGPU = false;
-    let supportsAdvancedAR = true;
+    let supportsAdvancedAR = arCoreSupport.supported;
 
     if (memoryGB >= 6 && processorCores >= 8) {
       performanceTier = 'high-end';
@@ -100,7 +103,7 @@ class DeviceCapabilitiesManager {
     } else {
       performanceTier = 'low-end';
       hasHighPerformanceGPU = false;
-      supportsAdvancedAR = memoryGB >= 3; // Minimum for basic AR
+      supportsAdvancedAR = arCoreSupport.supported && memoryGB >= 3; // Minimum for basic AR
     }
 
     const recommendedFrameInterval = arConfig.performance.frameProcessingInterval[
@@ -515,6 +518,30 @@ class DeviceCapabilitiesManager {
     this.capabilities = null;
     this.performanceHistory = [];
     logger.info('DeviceCapabilities', 'resetCapabilities', 'Device capabilities reset');
+  }
+
+  /**
+   * Check ARCore support on Android
+   */
+  private async checkARCoreSupport(): Promise<{supported: boolean, version?: string}> {
+    try {
+      // Import ARSessionManager dynamically to avoid circular dependencies
+      const { default: ARSessionManager } = await import('../ARSessionManager');
+      const arSessionManager = new ARSessionManager();
+      
+      if (Platform.OS === 'android') {
+        const supportInfo = await arSessionManager.isARCoreBodyTrackingSupported();
+        return {
+          supported: supportInfo.supported,
+          version: supportInfo.arCoreVersion
+        };
+      }
+      
+      return { supported: false };
+    } catch (error) {
+      console.warn('Failed to check ARCore support:', error);
+      return { supported: false };
+    }
   }
 
   /**

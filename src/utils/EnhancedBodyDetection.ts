@@ -539,3 +539,5 @@ class EnhancedBodyDetection {
 export const enhancedBodyDetection = EnhancedBodyDetection.getInstance();
 export default EnhancedBodyDetection;
 
+
+

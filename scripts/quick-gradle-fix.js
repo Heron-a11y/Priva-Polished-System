@@ -49,3 +49,5 @@ if (fs.existsSync(expoPath)) {
 
 console.log('✅ Quick fix completed!');
 console.log('💡 For comprehensive fixes, run: npm run postinstall');
+
+
