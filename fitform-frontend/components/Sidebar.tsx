@@ -198,7 +198,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
             {user.profile_image ? (
               <Image 
                 source={{ 
-                  uri: user.profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.104:8000'),
+                  uri: user.profile_image,
                   cache: 'force-cache'
                 }} 
                 style={styles.logoImage}

@@ -11,8 +11,8 @@ const NETWORK_CONFIG = {
     },
     // LAN access (auto-detect local IP)
     lan: {
-        backendUrl: 'http://192.168.1.104:8000/api', // Will be auto-detected
-        expoUrl: 'exp://192.168.1.104:8081', // Will be auto-detected
+        backendUrl: 'http://192.168.1.55:8000/api', // Will be auto-detected
+        expoUrl: 'exp://192.168.1.55:8081', // Will be auto-detected
         description: 'LAN access (accessible from same network)',
         priority: 2
     }
@@ -89,7 +89,7 @@ class NetworkConfig {
             
             // Create AbortController for timeout
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased timeout
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // Reduced timeout for faster fallback
             
             const response = await fetch(`${config.backendUrl}/test`, {
                 method: 'GET',
@@ -244,11 +244,11 @@ class NetworkConfig {
             
             // Fallback: Use the configured LAN IP even if detection failed
             console.log('⚠️ Could not auto-detect LAN IP, using configured IP');
-            return currentLanIp || '192.168.1.104';
+            return currentLanIp || '192.168.1.55';
         } catch (error) {
             console.log('⚠️ Could not detect LAN IP:', error.message);
             // Return configured IP as fallback
-            return this.getCurrentLanIp() || '192.168.1.104';
+            return this.getCurrentLanIp() || '192.168.1.55';
         }
     }
 

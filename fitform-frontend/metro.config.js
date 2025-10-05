@@ -2,14 +2,13 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
-// Configure Metro for tunnel mode (remove server.host to avoid validation warning)
+// Configure Metro for better stability
 config.server = {
   ...config.server,
   port: 8081,
-  // Remove host configuration - let Expo handle tunnel mode
 };
 
-// Configure resolver for tunnel mode
+// Configure resolver
 config.resolver = {
   ...config.resolver,
   platforms: ['ios', 'android', 'native', 'web'],

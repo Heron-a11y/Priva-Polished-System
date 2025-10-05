@@ -1,7 +1,24 @@
-# Ignore backend directory and all parent directories
+# Ignore all parent directories completely
 ../fitform-backend/
 ../fitform-AR/
 ../*
+../**/
+
+# Ignore any Laravel storage symlinks
+storage/
+public/storage/
+storage/app/
+storage/app/public/
+storage/app/private/
+storage/logs/
+storage/framework/
+
+# Ignore any symlinks anywhere in the project
+**/storage/
+**/public/storage/
+**/storage/app/
+**/storage/app/public/
+**/storage/app/private/
 
 # Ignore node_modules
 node_modules/
@@ -11,6 +28,7 @@ android/build/
 ios/build/
 .expo/
 dist/
+.expo/web/
 
 # Ignore logs
 *.log
@@ -27,11 +45,7 @@ yarn-error.log*
 ehthumbs.db
 Thumbs.db
 
-# Ignore any symlinks
-storage/
-public/storage/
-
-# Ignore documentation files that reference backend
+# Ignore documentation files
 *.md
 debug-connection.bat
 test-backend-simple.js
@@ -46,3 +60,12 @@ clear-metro-cache.bat
 clear-cache-and-restart.bat
 clear-all-cache.bat
 clear-all-cache-v2.bat
+fix-metro-transformer.bat
+fix-metro-bytecode-error.bat
+quick-fix-metro.bat
+
+# Ignore any parent directory content completely
+../fitform-backend/**
+../fitform-AR/**
+../**/storage/**
+../**/public/storage/**

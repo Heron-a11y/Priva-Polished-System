@@ -132,7 +132,7 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
             {user?.profile_image ? (
               <Image 
                 source={{ 
-                  uri: user.profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.104:8000'),
+                  uri: user.profile_image,
                   cache: 'force-cache' // Force cache for persistence
                 }} 
                 style={styles.profileImage}

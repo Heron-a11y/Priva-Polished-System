@@ -5,9 +5,9 @@ import { getConfig } from './config/ARConfig';
 interface ARSessionManagerNative {
   isARCoreSupported(): Promise<boolean>;
   isARKitSupported(): Promise<boolean>;
-  startSession(): Promise<boolean>;
-  stopSession(): Promise<boolean>;
-  getMeasurements(): Promise<ARMeasurements>;
+  startARSession(): Promise<boolean>;
+  stopARSession(): Promise<boolean>;
+  getBodyMeasurements(): Promise<ARMeasurements>;
   getSessionStatus(): Promise<SessionStatus>;
   markScanCompleted(scanType: string): Promise<boolean>;
   // ✅ PHASE 1: New methods for enhanced functionality
@@ -15,6 +15,10 @@ interface ARSessionManagerNative {
   stopRealTimeProcessing(): Promise<boolean>;
   // ✅ PHASE 2: Configuration management
   loadConfiguration(config: any): Promise<boolean>;
+  // ✅ TensorFlow Lite ML Model methods
+  initializeMLModel(modelPath: string): Promise<boolean>;
+  isMLModelLoaded(): Promise<boolean>;
+  processFrameWithML(imageData: number[], width: number, height: number): Promise<any>;
 }
 
 // Define the event emitter interface
@@ -61,24 +65,34 @@ class ARSessionManager {
   private measurementUpdateListener: any = null;
 
   constructor() {
-    // Get the native module based on platform
-    if (Platform.OS === 'android') {
-      this.nativeModule = NativeModules.ARSessionManager;
-    } else if (Platform.OS === 'ios') {
-      this.nativeModule = NativeModules.ARSessionManager;
-    } else {
-      this.nativeModule = null as any; // Set to null for unsupported platforms
-    }
+    try {
+      // Get the native module based on platform
+      if (Platform.OS === 'android') {
+        this.nativeModule = NativeModules.ARSessionManager;
+      } else if (Platform.OS === 'ios') {
+        this.nativeModule = NativeModules.ARSessionManager;
+      } else {
+        this.nativeModule = null as any; // Set to null for unsupported platforms
+      }
 
-    // Check if native module is available
-    if (!this.nativeModule) {
-      console.log('⚠️ ARSessionManager native module not available (expected in development mode)');
-      // Don't throw error, just set to null and continue
-    }
+      // Check if native module is available
+      if (!this.nativeModule) {
+        console.log('⚠️ ARSessionManager native module not available');
+        console.log('Available native modules:', Object.keys(NativeModules));
+        console.log('Platform:', Platform.OS);
+        // Don't throw error, just set to null and continue
+      } else {
+        console.log('✅ ARSessionManager native module found and connected');
+      }
 
-    // Initialize event emitter only if native module exists
-    if (this.nativeModule) {
-      this.eventEmitter = new NativeEventEmitter(this.nativeModule as any);
+      // Initialize event emitter only if native module exists
+      if (this.nativeModule) {
+        this.eventEmitter = new NativeEventEmitter(this.nativeModule as any);
+        console.log('✅ ARSessionManager event emitter initialized');
+      }
+    } catch (error) {
+      console.error('Error initializing ARSessionManager:', error);
+      this.nativeModule = null as any;
     }
   }
 
@@ -151,7 +165,9 @@ class ARSessionManager {
         throw new Error('AR is not supported on this device');
       }
 
-      const result = await this.nativeModule.startSession();
+      console.log('🚀 Starting AR session...');
+      const result = await this.nativeModule.startARSession();
+      console.log('AR session start result:', result);
       
       if (result) {
         // Set up measurement update listener
@@ -187,7 +203,20 @@ class ARSessionManager {
    */
   async getMeasurements(): Promise<ARMeasurements> {
     try {
-      const result = await this.nativeModule.getMeasurements();
+      if (!this.nativeModule) {
+        console.log('⚠️ ARSessionManager native module not available - cannot get measurements');
+        return {
+          valid: false,
+          shoulderWidthCm: 0,
+          heightCm: 0,
+          confidence: 0,
+          timestamp: Date.now().toString(),
+          reason: 'Native module not available'
+        };
+      }
+      console.log('🔍 Getting body measurements from ARCore...');
+      const result = await this.nativeModule.getBodyMeasurements();
+      console.log('ARCore measurements result:', result);
       return result;
     } catch (error) {
       console.error('Error getting measurements:', error);

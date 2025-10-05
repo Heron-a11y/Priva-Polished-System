@@ -37,3 +37,11 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
+
+# Ignore parent directories
+../fitform-backend/
+../fitform-AR/
+
+# Ignore any symlinks
+storage/
+public/storage/

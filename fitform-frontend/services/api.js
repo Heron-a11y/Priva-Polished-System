@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import networkConfig from './network-config';
 
 // Base API configuration - will be dynamically set based on network mode
-let API_BASE_URL = 'http://192.168.1.104:8000/api'; // Default LAN URL
+let API_BASE_URL = 'http://192.168.1.55:8000/api'; // Default LAN URL
 
 class ApiService {
     constructor() {
@@ -566,7 +566,7 @@ class ApiService {
             
             // Create AbortController for timeout
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout for faster response
             
             const response = await fetch(`${this.baseURL}/test`, {
                 method: 'GET',
