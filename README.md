@@ -1,262 +1,243 @@
-# FitForm - AR Body Measurement Mobile App
+# AR Body Measurements 📏
 
-## 📱 **Project Overview**
+A React Native application that uses Augmented Reality (AR) technology to provide accurate body measurements using your smartphone's camera.
 
-FitForm is a comprehensive mobile application that provides AR (Augmented Reality) body measurement capabilities for the fashion industry. The app allows customers to get accurate body measurements using their smartphone camera and AR technology, making online clothing purchases more precise and reducing returns.
+## 🌟 Features
 
-## 🎯 **Key Features**
+- **Real AR Body Tracking**: Uses ARCore (Android) and ARKit (iOS) for authentic body measurement
+- **Accurate Measurements**: Provides precise measurements for chest, waist, hips, shoulders, and more
+- **Cross-Platform**: Works on both Android and iOS devices
+- **User-Friendly Interface**: Intuitive design with step-by-step measurement guidance
+- **Measurement History**: Save and track your measurements over time
+- **Multiple Units**: Support for centimeters, inches, and feet/inches
+- **Real-Time Feedback**: Live confidence scoring and tracking quality indicators
 
-### **Customer Features**
-- **AR Body Measurements**: Real-time body scanning using smartphone camera
-- **Manual Measurements**: Alternative input method for body measurements
-- **Appointment Booking**: Schedule fitting appointments with professionals
-- **Order Management**: Track rental and purchase orders
-- **Profile Management**: User profiles with measurement history
-- **Measurement History**: Track body changes over time
+## 📱 Supported Devices
 
-### **Admin Features**
-- **Appointment Management**: Manage customer appointments
-- **Order Processing**: Handle rental and purchase orders
-- **Customer Management**: View customer profiles and measurements
-- **Analytics Dashboard**: Business insights and statistics
-- **Sizing Management**: Configure clothing sizes and measurements
+### Android
+- Devices with ARCore 1.40.0+ support
+- Android 7.0 (API level 24) or higher
+- Camera with autofocus
+- Gyroscope and accelerometer
 
-## 🏗️ **Project Structure**
+### iOS
+- iPhone 6s or newer
+- iPad Pro (all models)
+- iPad 5th generation or newer
+- iOS 13.0 or higher
+- ARKit 4.0+ support
 
-```
-FitForm-Project/
-├── fitform-frontend/          # React Native/Expo mobile app
-├── fitform-backend/           # Laravel API backend
-├── fitform-AR/               # AR measurement module
-├── DEPENDENCIES.md           # Detailed dependencies documentation
-├── README.md                 # This file
-└── [startup scripts]         # Development startup scripts
-```
+## 🚀 Quick Start
 
-## 🚀 **Quick Start**
-
-### **Prerequisites**
-- Node.js (^18.0.0)
-- PHP (^8.1)
-- MySQL (^8.0)
-- Expo CLI
+### Prerequisites
+- Node.js (v18 or higher)
+- npm or yarn
 - Android Studio (for Android development)
+- Xcode (for iOS development, macOS only)
 
-### **Installation**
+### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/Heron-a11y/Updated-Fitform-Project.git
-   cd Updated-Fitform-Project
+   git clone https://github.com/your-username/ar-body-measurements.git
+   cd ar-body-measurements
    ```
 
-2. **Setup Backend**
+2. **Install dependencies**
    ```bash
-   cd fitform-backend
-   composer install
-   cp .env.example .env
-   php artisan key:generate
-   php artisan migrate
-   php artisan serve
-   ```
-
-3. **Setup Frontend**
-   ```bash
-   cd fitform-frontend
-   npm install
-   npx expo start
-   ```
-
-4. **Setup AR Module**
-   ```bash
-   cd fitform-AR
    npm install
    ```
 
-### **Development Startup**
-```bash
-# Start the entire system
-./start-fitform-lan.bat
+3. **Verify setup**
+   ```bash
+   npm run verify-build
+   ```
 
-# Or start components individually
-./start-backend-lan.bat    # Backend only
-./start-frontend-lan.bat   # Frontend only
+4. **Start development server**
+   ```bash
+   npm start
+   ```
+
+5. **Run on device/emulator**
+   ```bash
+   # Android
+   npm run android
+   
+   # iOS
+   npm run ios
+   
+   # Web (for testing)
+   npm run web
+   ```
+
+## 📖 Detailed Setup
+
+For comprehensive setup instructions, see [SETUP.md](SETUP.md).
+
+## 🏗️ Architecture
+
+### AR Implementation
+- **Android**: ARCore 1.40.0 with `AugmentedBody` APIs
+- **iOS**: ARKit 4.0 with `ARBodyAnchor` and `ARSkeleton`
+- **React Native**: Custom native modules for AR session management
+
+### Key Components
+- `ARSessionManagerModule.kt` - Android ARCore implementation
+- `ARSessionManager.swift` - iOS ARKit implementation
+- `ARSessionManager.ts` - TypeScript interface
+- `App.tsx` - Main React Native application
+
+## 🔧 Configuration
+
+### Environment Variables
+Create a `.env` file in the root directory:
+```env
+EXPO_PUBLIC_API_URL=https://your-api-url.com
+EXPO_PUBLIC_DEBUG_MODE=false
 ```
 
-## 📱 **Mobile App Features**
+### Build Configuration
+- **Android**: Gradle with ARCore dependencies
+- **iOS**: Xcode project with ARKit framework
+- **EAS Build**: Cloud building configuration included
 
-### **AR Body Measurements**
-- Real-time body scanning using smartphone camera
-- 8 key measurements: Height, Chest, Waist, Hips, Shoulders, Inseam, Arm Length, Neck
-- Manual measurement input as alternative
-- Measurement validation and accuracy checks
+## 📦 Building for Production
 
-### **User Interface**
-- Modern, intuitive design
-- Role-based navigation (Customer/Admin)
-- Profile management with image upload
-- Order tracking and history
-- Appointment scheduling
-
-### **Order Management**
-- **Rental Orders**: Clothing rental with measurement requirements
-- **Purchase Orders**: Direct clothing purchases
-- **Order Tracking**: Real-time order status updates
-- **Payment Integration**: Secure payment processing
-
-## 🖥️ **Backend API**
-
-### **Authentication**
-- Laravel Sanctum for API authentication
-- JWT token-based authentication
-- Role-based access control (Customer/Admin)
-
-### **Core Endpoints**
-- `/api/login` - User authentication
-- `/api/register` - User registration
-- `/api/profile` - Profile management
-- `/api/appointments` - Appointment management
-- `/api/orders` - Order processing
-- `/api/measurements` - Body measurement storage
-
-### **File Management**
-- Profile image upload and storage
-- Secure file serving
-- Image optimization and resizing
-
-## 🔧 **Development Tools**
-
-### **Frontend Development**
-- **Expo Dev Client**: Development builds
-- **Metro Bundler**: JavaScript bundling
-- **TypeScript**: Type safety
-- **ESLint**: Code quality
-
-### **Backend Development**
-- **Laravel Artisan**: Command-line tools
-- **PHPUnit**: Testing framework
-- **Laravel Tinker**: Interactive shell
-
-### **Build & Deployment**
-- **EAS Build**: Expo Application Services
-- **Android APK**: Production-ready builds
-- **Version Control**: Git with GitHub integration
-
-## 📊 **Database Schema**
-
-### **Core Tables**
-- `users` - User accounts and profiles
-- `appointments` - Appointment scheduling
-- `orders` - Rental and purchase orders
-- `measurements` - Body measurement data
-- `clothing_items` - Product catalog
-
-### **Relationships**
-- Users have many appointments and orders
-- Orders belong to users and have measurements
-- Appointments are linked to users and orders
-
-## 🔒 **Security Features**
-
-- **API Authentication**: Secure token-based authentication
-- **CORS Protection**: Cross-origin request security
-- **Input Validation**: Data sanitization and validation
-- **File Upload Security**: Secure image handling
-- **Role-based Access**: Admin and customer permissions
-
-## 📱 **Platform Support**
-
-- **Android**: API Level 21+ (Android 5.0+)
-- **iOS**: iOS 13.0+ (planned)
-- **Web**: Progressive Web App (planned)
-
-## 🚀 **Deployment**
-
-### **Mobile App**
+### Using EAS Build (Recommended)
 ```bash
-# Development build
-eas build --platform android --profile development
+# Install EAS CLI
+npm install -g eas-cli
 
-# Production build
+# Login to Expo
+eas login
+
+# Build for Android
 eas build --platform android --profile production
+
+# Build for iOS
+eas build --platform ios --profile production
 ```
 
-### **Backend API**
-- Deploy to cloud hosting (AWS, DigitalOcean, etc.)
-- Configure database and file storage
-- Set up SSL certificates
-- Configure CORS for mobile app
+### Local Building
+```bash
+# Android APK
+cd android && ./gradlew assembleRelease
 
-## 📈 **Performance Optimization**
-
-- **Image Optimization**: Compressed profile images
-- **Lazy Loading**: Efficient component loading
-- **Caching**: API response caching
-- **Bundle Optimization**: Minimized JavaScript bundles
-
-## 🧪 **Testing**
-
-### **Frontend Testing**
-- Component testing with Jest
-- Integration testing
-- E2E testing with Detox
-
-### **Backend Testing**
-- Unit tests with PHPUnit
-- API endpoint testing
-- Database testing
-
-## 📋 **API Documentation**
-
-### **Authentication Endpoints**
-```
-POST /api/login
-POST /api/register
-POST /api/logout
-GET  /api/user
+# iOS (requires Xcode)
+open ios/ar-body-measurements.xcworkspace
 ```
 
-### **Appointment Endpoints**
-```
-GET    /api/appointments
-POST   /api/appointments
-PUT    /api/appointments/{id}
-DELETE /api/appointments/{id}
-```
+## 🧪 Testing
 
-### **Order Endpoints**
-```
-GET    /api/orders
-POST   /api/orders
-GET    /api/orders/{id}
-PUT    /api/orders/{id}
+```bash
+# TypeScript compilation
+npx tsc --noEmit
+
+# Build verification
+npm run verify-build
+
+# Asset validation
+npm run validate-assets
 ```
 
-## 🔧 **Configuration**
+## 🔍 Troubleshooting
 
-### **Environment Variables**
-- `APP_URL` - Application URL
-- `DB_CONNECTION` - Database connection
-- `JWT_SECRET` - JWT signing key
-- `CORS_ALLOWED_ORIGINS` - CORS configuration
+### Common Issues
 
-### **Mobile App Configuration**
-- Network configuration for API endpoints
-- Camera permissions for AR features
-- Storage permissions for profile images
+1. **AR Not Working**
+   - Ensure device supports ARCore/ARKit
+   - Check camera permissions
+   - Verify sufficient lighting
+   - Ensure device is not in restricted environment
 
-## 📞 **Support & Contact**
+2. **Build Issues**
+   ```bash
+   # Clear caches
+   npx expo start --clear
+   cd android && ./gradlew clean
+   cd ios && rm -rf build/ && pod install
+   ```
 
-- **Developer**: Heron-a11y
-- **Repository**: https://github.com/Heron-a11y/Updated-Fitform-Project
-- **Documentation**: See DEPENDENCIES.md for detailed setup
+3. **Dependencies Issues**
+   ```bash
+   rm -rf node_modules package-lock.json
+   npm install
+   ```
 
-## 📄 **License**
+For more troubleshooting, see [SETUP.md](SETUP.md#troubleshooting).
 
-This project is proprietary software developed for academic purposes.
+## 📊 Technical Specifications
+
+### Dependencies
+- **React**: 19.1.0
+- **React Native**: 0.81.4
+- **Expo**: 54.0.9
+- **TypeScript**: 5.9.2
+- **ARCore**: 1.40.0 (Android)
+- **ARKit**: 4.0+ (iOS)
+
+### Performance
+- **Memory**: Optimized for mobile devices
+- **Battery**: Efficient AR session management
+- **Accuracy**: Real-time measurement validation
+- **Smoothing**: Jitter reduction algorithms
+
+## 🔐 Security & Privacy
+
+- **No Data Collection**: All measurements stay on your device
+- **Camera Access**: Only used for AR body tracking
+- **Permissions**: Minimal required permissions
+- **Local Storage**: Measurements saved locally only
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Guidelines
+- Follow TypeScript best practices
+- Maintain AR accuracy standards
+- Test on both Android and iOS
+- Update documentation for new features
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **Google ARCore** for Android AR capabilities
+- **Apple ARKit** for iOS AR capabilities
+- **Expo** for React Native development platform
+- **React Native** for cross-platform mobile development
+
+## 📞 Support
+
+- **Documentation**: [SETUP.md](SETUP.md)
+- **Issues**: [GitHub Issues](https://github.com/your-username/ar-body-measurements/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-username/ar-body-measurements/discussions)
+
+## 📈 Roadmap
+
+- [ ] Measurement export functionality
+- [ ] 3D body visualization
+- [ ] Measurement comparison over time
+- [ ] Custom measurement points
+- [ ] Batch measurement processing
+- [ ] Cloud sync (optional)
+
+## 🏷️ Version History
+
+See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ---
 
-**Version**: 1.0.0  
-**Last Updated**: October 2, 2025  
-**Status**: Production Ready
+**Made with ❤️ using React Native and AR technology**
+
+[![React Native](https://img.shields.io/badge/React%20Native-0.81.4-blue.svg)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-54.0.9-black.svg)](https://expo.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9.2-blue.svg)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)

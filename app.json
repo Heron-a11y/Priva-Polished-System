@@ -1,0 +1,64 @@
+{
+  "expo": {
+    "name": "AR Body Measurements",
+    "slug": "ar-body-measurements",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.reedewree.arbodymeasurements",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera for AR body measurements and pose detection.",
+        "NSMicrophoneUsageDescription": "This app may use the microphone for enhanced AR functionality.",
+        "NSLocationWhenInUseUsageDescription": "This app uses location services for AR body tracking accuracy.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "associatedDomains": [],
+      "entitlements": {
+        "com.apple.developer.arkit": true
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.reedewree.arbodymeasurements",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "owner": "cocband",
+    "plugins": [
+      "expo-camera",
+      "expo-media-library",
+      "expo-sensors"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5b5dc778-19a5-4f44-9258-1b1f9a138921"
+      }
+    }
+  }
+}

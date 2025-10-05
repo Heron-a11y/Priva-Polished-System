@@ -1,121 +1,99 @@
-# Dependencies
-node_modules/
-vendor/
-composer.lock
-
-# Environment files
-.env
-.env.local
-.env.production
-.env.staging
-
-# Build outputs
-dist/
-build/
-.expo/
-.expo-shared/
-
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS generated files
+# OSX
+#
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
 
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-laravel.log
+# Xcode
+#
+build/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.xcuserstate
+project.xcworkspace
 
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
+# Android/IntelliJ
+#
+build/
+android/build/
+android/app/build/
+.idea
+.gradle
+local.properties
+*.iml
+*.hprof
+.cxx/
+*.keystore
+!debug.keystore
+# Debug keystore should not be committed
+android/app/debug.keystore
 
-# Coverage directory used by tools like istanbul
-coverage/
+# node.js
+#
+node_modules/
+npm-debug.log
+yarn-error.log
 
-# Laravel specific
-storage/logs/
-storage/framework/cache/
-storage/framework/sessions/
-storage/framework/views/
-bootstrap/cache/
+# BUCK
+buck-out/
+\.buckd/
+*.keystore
+!debug.keystore
 
-# Database
-*.sqlite
-*.db
+# fastlane
+#
+# It is recommended to not store the screenshots in the git repo. Instead, use fastlane to re-generate the
+# screenshots whenever they are needed.
+# For more information about the recommended setup visit:
+# https://docs.fastlane.tools/best-practices/source-control/
 
-# Temporary files
-*.tmp
-*.temp
-.cache/
+*/fastlane/report.xml
+*/fastlane/Preview.html
+*/fastlane/screenshots
+
+# Bundle artifacts
+*.jsbundle
+
+# CocoaPods
+/ios/Pods/
 
 # Expo
 .expo/
 dist/
 web-build/
 
-# React Native
+# Native
+*.orig.*
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
-*.orig.*
 
 # Metro
 .metro-health-check*
 
-# Flipper
-ios/Pods/
+# Debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
 
-# Android
-android/app/build/
-android/build/
-android/gradle/
-android/local.properties
-android/.gradle/
-android/captures/
-android/gradlew
-android/gradlew.bat
-android/key.properties
-android/app/release/
+# macOS
+.DS_Store
+*.pem
 
-# iOS
-ios/build/
-ios/Pods/
-ios/Podfile.lock
-ios/*.xcworkspace
-ios/*.xcodeproj
-ios/DerivedData/
-ios/build/
+# local env files
+.env*.local
 
-# Testing
-coverage/
-.nyc_output/
-
-# Production builds
-build/
-dist/
-web-build/
-
-# Misc
-*.tgz
-*.tar.gz
-
-# Large executable files
-cloudflared.exe
-*.exe
+# typescript
+*.tsbuildinfo 

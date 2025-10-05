@@ -1,0 +1,526 @@
+diff --git a/node_modules/expo-constants/android/.project b/node_modules/expo-constants/android/.project
+new file mode 100644
+index 0000000..5e5d036
+--- /dev/null
++++ b/node_modules/expo-constants/android/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>expo-constants</name>
++	<comment>Project expo-constants created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1759581207259</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/expo-constants/android/bin/.project b/node_modules/expo-constants/android/bin/.project
+new file mode 100644
+index 0000000..5e5d036
+--- /dev/null
++++ b/node_modules/expo-constants/android/bin/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>expo-constants</name>
++	<comment>Project expo-constants created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1759581207259</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/expo-constants/android/bin/build.gradle b/node_modules/expo-constants/android/bin/build.gradle
+new file mode 100644
+index 0000000..076ae02
+--- /dev/null
++++ b/node_modules/expo-constants/android/bin/build.gradle
+@@ -0,0 +1,98 @@
++apply plugin: 'com.android.library'
++apply plugin: 'kotlin-android'
++apply plugin: 'maven-publish'
++
++group = 'host.exp.exponent'
++version = '14.0.2'
++
++apply from: "../scripts/get-app-config-android.gradle"
++
++buildscript {
++  def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
++  if (expoModulesCorePlugin.exists()) {
++    apply from: expoModulesCorePlugin
++    applyKotlinExpoModulesCorePlugin()
++  }
++
++  // Simple helper that allows the root project to override versions declared by this library.
++  ext.safeExtGet = { prop, fallback ->
++    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
++  }
++
++  // Ensures backward compatibility
++  ext.getKotlinVersion = {
++    if (ext.has("kotlinVersion")) {
++      ext.kotlinVersion()
++    } else {
++      ext.safeExtGet("kotlinVersion", "1.6.10")
++    }
++  }
++
++  repositories {
++    mavenCentral()
++  }
++
++  dependencies {
++    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${getKotlinVersion()}")
++  }
++}
++
++// Creating sources with comments
++task androidSourcesJar(type: Jar) {
++  archiveClassifier.set('sources')
++  from android.sourceSets.main.java.srcDirs
++}
++
++afterEvaluate {
++  publishing {
++    publications {
++      release(MavenPublication) {
++        from components.release
++        // Add additional sourcesJar to artifacts
++        artifact(androidSourcesJar)
++      }
++    }
++    repositories {
++      maven {
++        url = mavenLocal().url
++      }
++    }
++  }
++}
++
++android {
++  compileSdkVersion safeExtGet("compileSdkVersion", 31)
++
++  compileOptions {
++    sourceCompatibility JavaVersion.VERSION_11
++    targetCompatibility JavaVersion.VERSION_11
++  }
++
++  kotlinOptions {
++    jvmTarget = JavaVersion.VERSION_11.majorVersion
++  }
++
++  defaultConfig {
++    minSdkVersion safeExtGet("minSdkVersion", 21)
++    targetSdkVersion safeExtGet("targetSdkVersion", 31)
++    versionCode 33
++    versionName "14.0.2"
++  }
++  lintOptions {
++    abortOnError false
++  }
++}
++
++repositories {
++  mavenCentral()
++}
++
++dependencies {
++  implementation project(':expo-modules-core')
++
++  api 'com.facebook.device.yearclass:yearclass:2.1.0'
++  api "androidx.annotation:annotation:1.0.0"
++  implementation "commons-io:commons-io:2.6"
++
++  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${getKotlinVersion()}"
++}
+diff --git a/node_modules/expo-constants/android/bin/src/main/AndroidManifest.xml b/node_modules/expo-constants/android/bin/src/main/AndroidManifest.xml
+new file mode 100644
+index 0000000..b5b338c
+--- /dev/null
++++ b/node_modules/expo-constants/android/bin/src/main/AndroidManifest.xml
+@@ -0,0 +1,5 @@
++
++<manifest package="expo.modules.constants">
++
++</manifest>
++  
+diff --git a/node_modules/expo-constants/android/bin/src/main/java/expo/modules/constants/ConstantsModule.kt b/node_modules/expo-constants/android/bin/src/main/java/expo/modules/constants/ConstantsModule.kt
+new file mode 100644
+index 0000000..c882506
+--- /dev/null
++++ b/node_modules/expo-constants/android/bin/src/main/java/expo/modules/constants/ConstantsModule.kt
+@@ -0,0 +1,35 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.constants
++
++import android.content.Context
++
++import expo.modules.core.ExportedModule
++import expo.modules.core.ModuleRegistry
++import expo.modules.core.ModuleRegistryDelegate
++import expo.modules.core.Promise
++import expo.modules.interfaces.constants.ConstantsInterface
++import expo.modules.core.interfaces.ExpoMethod
++
++class ConstantsModule(
++  context: Context,
++  private val moduleRegistryDelegate: ModuleRegistryDelegate = ModuleRegistryDelegate()
++) : ExportedModule(context) {
++
++  private inline fun <reified T> moduleRegistry() = moduleRegistryDelegate.getFromModuleRegistry<T>()
++
++  private val constantsService: ConstantsInterface by moduleRegistry()
++
++  override fun getConstants(): Map<String, Any> = constantsService.constants
++
++  override fun getName() = "ExponentConstants"
++
++  override fun onCreate(moduleRegistry: ModuleRegistry) {
++    moduleRegistryDelegate.onCreate(moduleRegistry)
++  }
++
++  @ExpoMethod
++  fun getWebViewUserAgentAsync(promise: Promise) {
++    val userAgent = System.getProperty("http.agent")
++    promise.resolve(userAgent)
++  }
++}
+diff --git a/node_modules/expo-constants/android/bin/src/main/java/expo/modules/constants/ConstantsPackage.kt b/node_modules/expo-constants/android/bin/src/main/java/expo/modules/constants/ConstantsPackage.kt
+new file mode 100644
+index 0000000..f784288
+--- /dev/null
++++ b/node_modules/expo-constants/android/bin/src/main/java/expo/modules/constants/ConstantsPackage.kt
+@@ -0,0 +1,15 @@
++package expo.modules.constants
++
++import android.content.Context
++
++import expo.modules.core.BasePackage
++import expo.modules.core.interfaces.InternalModule
++import expo.modules.core.ExportedModule
++
++class ConstantsPackage : BasePackage() {
++  override fun createInternalModules(context: Context): List<InternalModule> =
++    listOf(ConstantsService(context))
++
++  override fun createExportedModules(context: Context): List<ExportedModule> =
++    listOf(ConstantsModule(context))
++}
+diff --git a/node_modules/expo-constants/android/bin/src/main/java/expo/modules/constants/ConstantsService.kt b/node_modules/expo-constants/android/bin/src/main/java/expo/modules/constants/ConstantsService.kt
+new file mode 100644
+index 0000000..d4c6ac5
+--- /dev/null
++++ b/node_modules/expo-constants/android/bin/src/main/java/expo/modules/constants/ConstantsService.kt
+@@ -0,0 +1,132 @@
++package expo.modules.constants
++
++import org.apache.commons.io.IOUtils
++
++import com.facebook.device.yearclass.YearClass
++
++import expo.modules.core.interfaces.InternalModule
++import expo.modules.core.utilities.EmulatorUtilities
++import expo.modules.interfaces.constants.ConstantsInterface
++
++import android.os.Build
++import android.util.Log
++import android.content.Context
++import android.content.pm.PackageInfo
++import android.content.pm.PackageManager
++
++import java.io.FileNotFoundException
++import java.lang.Exception
++import java.nio.charset.StandardCharsets
++import java.util.*
++
++private val TAG = ConstantsService::class.java.simpleName
++private const val CONFIG_FILE_NAME = "app.config"
++
++open class ConstantsService(private val context: Context) : InternalModule, ConstantsInterface {
++  var statusBarHeightInternal = context.resources.getIdentifier("status_bar_height", "dimen", "android")
++    .takeIf { it > 0 }
++    ?.let { (context.resources::getDimensionPixelSize)(it) }
++    ?.let { pixels -> convertPixelsToDp(pixels.toFloat(), context) }
++    ?: 0
++
++  private val sessionId = UUID.randomUUID().toString()
++  private val exponentInstallationId: ExponentInstallationId = ExponentInstallationId(context)
++
++  enum class ExecutionEnvironment(val string: String) {
++    BARE("bare"),
++    STANDALONE("standalone"),
++    STORE_CLIENT("storeClient");
++  }
++
++  override fun getExportedInterfaces(): List<Class<*>> = listOf(ConstantsInterface::class.java)
++
++  override fun getConstants(): Map<String, Any?> {
++    val constants = mutableMapOf(
++      "sessionId" to sessionId,
++      "executionEnvironment" to ExecutionEnvironment.BARE.string,
++      "statusBarHeight" to statusBarHeightInternal,
++      "deviceYearClass" to deviceYearClass,
++      "deviceName" to deviceName,
++      "isDevice" to isDevice,
++      "systemFonts" to systemFonts,
++      "systemVersion" to systemVersion,
++      "installationId" to getOrCreateInstallationId(),
++      "manifest" to appConfig,
++      "platform" to mapOf("android" to emptyMap<String, Any>())
++    )
++
++    try {
++      val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
++      constants["nativeAppVersion"] = pInfo.versionName
++
++      val versionCode = getLongVersionCode(pInfo).toInt()
++      constants["nativeBuildVersion"] = versionCode.toString()
++    } catch (e: PackageManager.NameNotFoundException) {
++      Log.e(TAG, "Exception: ", e)
++    }
++
++    return constants
++  }
++
++  // Just use package name in vanilla React Native apps.
++  override fun getAppScopeKey(): String? = context.packageName
++
++  override fun getAppOwnership() = "guest"
++
++  override fun getDeviceName(): String = Build.MODEL
++
++  override fun getDeviceYearClass() = YearClass.get(context)
++
++  override fun getIsDevice() = !EmulatorUtilities.isRunningOnEmulator()
++
++  override fun getStatusBarHeight() = statusBarHeightInternal
++
++  override fun getSystemVersion(): String = Build.VERSION.RELEASE
++
++  open fun getOrCreateInstallationId(): String = exponentInstallationId.getOrCreateUUID()
++
++  // From https://github.com/dabit3/react-native-fonts
++  override fun getSystemFonts() = listOf(
++    "normal",
++    "notoserif",
++    "sans-serif",
++    "sans-serif-light",
++    "sans-serif-thin",
++    "sans-serif-condensed",
++    "sans-serif-medium",
++    "serif",
++    "Roboto",
++    "monospace"
++  )
++
++  private val appConfig: String?
++    get() {
++      try {
++        context.assets.open(CONFIG_FILE_NAME).use {
++          stream ->
++          return IOUtils.toString(stream, StandardCharsets.UTF_8)
++        }
++      } catch (e: FileNotFoundException) {
++        // do nothing, expected in managed apps
++      } catch (e: Exception) {
++        Log.e(TAG, "Error reading embedded app config", e)
++      }
++      return null
++    }
++
++  companion object {
++    private fun convertPixelsToDp(px: Float, context: Context): Int {
++      val resources = context.resources
++      val metrics = resources.displayMetrics
++      val dp = px / (metrics.densityDpi / 160f)
++      return dp.toInt()
++    }
++
++    private val isRunningOnEmulator: Boolean
++      get() = EmulatorUtilities.isRunningOnEmulator()
++
++    private fun getLongVersionCode(info: PackageInfo) =
++      if (Build.VERSION.SDK_INT >= 28) info.longVersionCode
++      else info.versionCode.toLong()
++  }
++}
+diff --git a/node_modules/expo-constants/android/bin/src/main/java/expo/modules/constants/ExponentInstallationId.kt b/node_modules/expo-constants/android/bin/src/main/java/expo/modules/constants/ExponentInstallationId.kt
+new file mode 100644
+index 0000000..5c2cc06
+--- /dev/null
++++ b/node_modules/expo-constants/android/bin/src/main/java/expo/modules/constants/ExponentInstallationId.kt
+@@ -0,0 +1,112 @@
++package expo.modules.constants
++
++import android.util.Log
++import android.content.Context
++import android.content.SharedPreferences
++
++import java.util.UUID
++import java.io.File
++import java.io.FileReader
++import java.io.FileWriter
++import java.io.IOException
++import java.io.BufferedReader
++import kotlin.IllegalArgumentException
++
++private val TAG = ExponentInstallationId::class.java.simpleName
++private const val PREFERENCES_FILE_NAME = "host.exp.exponent.SharedPreferences"
++
++/**
++ * An installation ID provider - it solves two purposes:
++ * - in installations that have a legacy UUID persisted
++ * in shared-across-expo-modules SharedPreferences,
++ * migrates the UUID from there to a non-backed-up file,
++ * - provides/creates a UUID unique per an installation.
++ *
++ * Similar class exists in expoview and expo-notifications.
++ */
++class ExponentInstallationId internal constructor(private val context: Context) {
++  private var uuid: String? = null
++
++  private val mSharedPreferences: SharedPreferences = context.getSharedPreferences(PREFERENCES_FILE_NAME, Context.MODE_PRIVATE)
++
++  fun getUUID(): String? {
++    // If it has already been cached, return the value.
++    if (uuid != null) {
++      return uuid
++    }
++
++    // Read from non-backed-up storage
++    val uuidFile = nonBackedUpUuidFile
++    try {
++      FileReader(uuidFile).use { fileReader ->
++        BufferedReader(fileReader).use { bufferedReader ->
++          // Cache for future calls
++          uuid = UUID.fromString(bufferedReader.readLine()).toString()
++        }
++      }
++    } catch (e: Exception) {
++      when (e) {
++        is IOException, is IllegalArgumentException -> { /* do nothing, try other sources */ }
++        else -> throw e
++      }
++    }
++
++    // We could have returned inside try clause,
++    // but putting it like this here makes it immediately
++    // visible.
++    if (uuid != null) {
++      return uuid
++    }
++
++    // In November 2020 we decided to move installationID (backed by LEGACY_UUID_KEY value) from
++    // backed-up SharedPreferences to a non-backed-up text file to fix issues where devices restored
++    // from backups have the same installation IDs as the devices where the backup was created.
++    val legacyUuid = mSharedPreferences.getString(LEGACY_UUID_KEY, null)
++    if (legacyUuid != null) {
++      uuid = legacyUuid
++
++      val uuidHasBeenSuccessfullyMigrated = try {
++        FileWriter(uuidFile).use { writer -> writer.write(legacyUuid) }
++        true
++      } catch (e: IOException) {
++        Log.e(TAG, "Error while migrating UUID from legacy storage. $e")
++        false
++      }
++
++      // We only remove the value from old storage once it's set and saved in the new storage.
++      if (uuidHasBeenSuccessfullyMigrated) {
++        mSharedPreferences.edit().remove(LEGACY_UUID_KEY).apply()
++      }
++    }
++
++    // Return either value from legacy storage or null
++    return uuid
++  }
++
++  fun getOrCreateUUID(): String {
++    val uuid = getUUID()
++    if (uuid != null) {
++      return uuid
++    }
++
++    // We persist the new UUID in "session storage"
++    // so that if writing to persistent storage
++    // fails subsequent calls to get(orCreate)UUID
++    // return the same value.
++    this.uuid = UUID.randomUUID().toString()
++    try {
++      FileWriter(nonBackedUpUuidFile).use { writer -> writer.write(this.uuid) }
++    } catch (e: IOException) {
++      Log.e(TAG, "Error while writing new UUID. $e")
++    }
++    return this.uuid!!
++  }
++
++  private val nonBackedUpUuidFile: File
++    get() = File(context.noBackupFilesDir, UUID_FILE_NAME)
++
++  companion object {
++    const val LEGACY_UUID_KEY = "uuid"
++    const val UUID_FILE_NAME = "expo_installation_uuid.txt"
++  }
++}
+diff --git a/node_modules/expo-constants/android/build.gradle b/node_modules/expo-constants/android/build.gradle
+index a813a80..076ae02 100644
+--- a/node_modules/expo-constants/android/build.gradle
++++ b/node_modules/expo-constants/android/build.gradle
+@@ -39,7 +39,7 @@ buildscript {
+ 
+ // Creating sources with comments
+ task androidSourcesJar(type: Jar) {
+-  classifier = 'sources'
++  archiveClassifier.set('sources')
+   from android.sourceSets.main.java.srcDirs
+ }
+ 

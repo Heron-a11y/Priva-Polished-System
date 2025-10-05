@@ -1,0 +1,288 @@
+diff --git a/node_modules/expo-json-utils/android/.project b/node_modules/expo-json-utils/android/.project
+new file mode 100644
+index 0000000..5a47628
+--- /dev/null
++++ b/node_modules/expo-json-utils/android/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>expo-json-utils</name>
++	<comment>Project expo-json-utils created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1759581207287</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/expo-json-utils/android/bin/.project b/node_modules/expo-json-utils/android/bin/.project
+new file mode 100644
+index 0000000..5a47628
+--- /dev/null
++++ b/node_modules/expo-json-utils/android/bin/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>expo-json-utils</name>
++	<comment>Project expo-json-utils created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1759581207287</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/expo-json-utils/android/bin/build.gradle b/node_modules/expo-json-utils/android/bin/build.gradle
+new file mode 100644
+index 0000000..1e17a73
+--- /dev/null
++++ b/node_modules/expo-json-utils/android/bin/build.gradle
+@@ -0,0 +1,105 @@
++apply plugin: 'com.android.library'
++apply plugin: 'kotlin-android'
++apply plugin: 'maven-publish'
++
++group = 'host.exp.exponent'
++version = '0.4.0'
++
++buildscript {
++  def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
++  if (expoModulesCorePlugin.exists()) {
++    apply from: expoModulesCorePlugin
++    applyKotlinExpoModulesCorePlugin()
++  }
++
++  // Simple helper that allows the root project to override versions declared by this library.
++  ext.safeExtGet = { prop, fallback ->
++    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
++  }
++
++  // Ensures backward compatibility
++  ext.getKotlinVersion = {
++    if (ext.has("kotlinVersion")) {
++      ext.kotlinVersion()
++    } else {
++      ext.safeExtGet("kotlinVersion", "1.6.10")
++    }
++  }
++
++  repositories {
++    mavenCentral()
++  }
++
++  dependencies {
++    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${getKotlinVersion()}")
++  }
++}
++
++// Creating sources with comments
++task androidSourcesJar(type: Jar) {
++  classifier = 'sources'
++  from android.sourceSets.main.java.srcDirs
++}
++
++afterEvaluate {
++  publishing {
++    publications {
++      release(MavenPublication) {
++        from components.release
++        // Add additional sourcesJar to artifacts
++        artifact(androidSourcesJar)
++      }
++    }
++    repositories {
++      maven {
++        url = mavenLocal().url
++      }
++    }
++  }
++}
++
++android {
++  compileSdkVersion safeExtGet("compileSdkVersion", 31)
++
++  compileOptions {
++    sourceCompatibility JavaVersion.VERSION_11
++    targetCompatibility JavaVersion.VERSION_11
++  }
++
++  kotlinOptions {
++    jvmTarget = JavaVersion.VERSION_11.majorVersion
++  }
++
++  defaultConfig {
++    minSdkVersion safeExtGet("minSdkVersion", 21)
++    targetSdkVersion safeExtGet("targetSdkVersion", 31)
++    versionCode 31
++    versionName '0.4.0'
++    testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
++  }
++  lintOptions {
++    abortOnError false
++  }
++  testOptions {
++    unitTests.includeAndroidResources = true
++  }
++}
++
++dependencies {
++  testImplementation 'junit:junit:4.12'
++  testImplementation 'androidx.test:core:1.4.0'
++  testImplementation 'org.mockito:mockito-core:1.10.19'
++  testImplementation 'io.mockk:mockk:1.12.3'
++
++  androidTestImplementation 'org.amshove.kluent:kluent-android:1.68'
++  androidTestImplementation 'androidx.test:runner:1.4.0'
++  androidTestImplementation 'androidx.test:core:1.4.0'
++  androidTestImplementation 'androidx.test:rules:1.4.0'
++  androidTestImplementation 'org.mockito:mockito-android:3.7.7'
++  androidTestImplementation 'io.mockk:mockk-android:1.12.3'
++
++  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${getKotlinVersion()}"
++}
++repositories {
++  mavenCentral()
++}
+diff --git a/node_modules/expo-json-utils/android/bin/src/androidTest/java/expo/modules/jsonutils/JSONObjectUtilsTest.kt b/node_modules/expo-json-utils/android/bin/src/androidTest/java/expo/modules/jsonutils/JSONObjectUtilsTest.kt
+new file mode 100644
+index 0000000..ead0cf5
+--- /dev/null
++++ b/node_modules/expo-json-utils/android/bin/src/androidTest/java/expo/modules/jsonutils/JSONObjectUtilsTest.kt
+@@ -0,0 +1,51 @@
++package expo.modules.jsonutils
++
++import androidx.test.internal.runner.junit4.AndroidJUnit4ClassRunner
++import org.json.JSONArray
++import org.json.JSONObject
++import org.junit.Test
++import org.junit.runner.RunWith
++import org.amshove.kluent.*
++import org.json.JSONException
++
++@RunWith(AndroidJUnit4ClassRunner::class)
++class JSONObjectUtilsTest {
++  @Test
++  fun testObjectJsonOf() {
++  }
++
++  @Test
++  @Throws(Exception::class)
++  fun testGetOrNull() {
++    val randomObject = "stringobject" as Any
++    val innerJSONArray = JSONArray()
++    val innerJSONObject = JSONObject()
++
++    val jsonObject = JSONObject(
++      mapOf(
++        "string" to "test",
++        "double" to 1.0,
++        "int" to 1,
++        "long" to 1L,
++        "boolean" to false,
++        "object" to randomObject,
++        "jsonarray" to innerJSONArray,
++        "jsonobject" to innerJSONObject
++      )
++    )
++
++    jsonObject.getNullable<Any>("non-existent-key") shouldBe null
++
++    val func = { jsonObject.require<Any>("non-existent-key") }
++    func shouldThrow JSONException::class withMessage "No value for non-existent-key"
++
++    jsonObject.getNullable<String>("string") shouldBeEqualTo "test"
++    jsonObject.getNullable<Double>("double") shouldBeEqualTo 1.0
++    jsonObject.getNullable<Int>("int") shouldBeEqualTo 1
++    jsonObject.getNullable<Long>("long") shouldBeEqualTo 1L
++    jsonObject.getNullable<Boolean>("boolean") shouldBeEqualTo false
++    jsonObject.getNullable<Any>("object") shouldBeEqualTo randomObject
++    jsonObject.getNullable<JSONArray>("jsonarray") shouldBeEqualTo innerJSONArray
++    jsonObject.getNullable<JSONObject>("jsonobject") shouldBeEqualTo innerJSONObject
++  }
++}
+diff --git a/node_modules/expo-json-utils/android/bin/src/main/AndroidManifest.xml b/node_modules/expo-json-utils/android/bin/src/main/AndroidManifest.xml
+new file mode 100644
+index 0000000..73e6158
+--- /dev/null
++++ b/node_modules/expo-json-utils/android/bin/src/main/AndroidManifest.xml
+@@ -0,0 +1,3 @@
++<manifest package="expo.modules.jsonutils"
++    xmlns:android="http://schemas.android.com/apk/res/android">
++</manifest>
+diff --git a/node_modules/expo-json-utils/android/bin/src/main/java/expo/modules/jsonutils/JSONObjectUtils.kt b/node_modules/expo-json-utils/android/bin/src/main/java/expo/modules/jsonutils/JSONObjectUtils.kt
+new file mode 100644
+index 0000000..13fc7ae
+--- /dev/null
++++ b/node_modules/expo-json-utils/android/bin/src/main/java/expo/modules/jsonutils/JSONObjectUtils.kt
+@@ -0,0 +1,25 @@
++package expo.modules.jsonutils
++
++import org.json.JSONArray
++import org.json.JSONException
++import org.json.JSONObject
++
++@Throws(JSONException::class)
++inline fun <reified T : Any> JSONObject.require(key: String): T {
++  return when (T::class) {
++    String::class -> this.getString(key) as T
++    Double::class -> this.getDouble(key) as T
++    Int::class -> this.getInt(key) as T
++    Long::class -> this.getLong(key) as T
++    Boolean::class -> this.getBoolean(key) as T
++    JSONArray::class -> this.getJSONArray(key) as T
++    JSONObject::class -> this.getJSONObject(key) as T
++    else -> this.get(key) as T
++  }
++}
++
++inline fun <reified T : Any> JSONObject.getNullable(key: String): T? {
++  return if (!this.has(key)) {
++    null
++  } else this.require(key)
++}

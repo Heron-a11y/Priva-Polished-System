@@ -1,0 +1,1355 @@
+diff --git a/node_modules/expo-sensors/android/.project b/node_modules/expo-sensors/android/.project
+new file mode 100644
+index 0000000..47f289a
+--- /dev/null
++++ b/node_modules/expo-sensors/android/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>expo-sensors</name>
++	<comment>Project expo-sensors created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1759581207302</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/expo-sensors/android/bin/.project b/node_modules/expo-sensors/android/bin/.project
+new file mode 100644
+index 0000000..47f289a
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>expo-sensors</name>
++	<comment>Project expo-sensors created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1759581207302</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/expo-sensors/android/bin/build.gradle b/node_modules/expo-sensors/android/bin/build.gradle
+new file mode 100644
+index 0000000..9bfe20a
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/build.gradle
+@@ -0,0 +1,71 @@
++apply plugin: 'com.android.library'
++apply plugin: 'kotlin-android'
++apply plugin: 'maven'
++
++group = 'host.exp.exponent'
++version = '11.0.3'
++
++buildscript {
++  // Simple helper that allows the root project to override versions declared by this library.
++  ext.safeExtGet = { prop, fallback ->
++    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
++  }
++
++  repositories {
++    mavenCentral()
++  }
++
++  dependencies {
++    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${safeExtGet('kotlinVersion', '1.4.21')}")
++  }
++}
++
++//Upload android library to maven with javadoc and android sources
++configurations {
++  deployerJars
++}
++
++//Creating sources with comments
++task androidSourcesJar(type: Jar) {
++  classifier = 'sources'
++  from android.sourceSets.main.java.srcDirs
++}
++
++//Put the androidSources and javadoc to the artifacts
++artifacts {
++  archives androidSourcesJar
++}
++
++uploadArchives {
++  repositories {
++    mavenDeployer {
++      configuration = configurations.deployerJars
++      repository(url: mavenLocal().url)
++    }
++  }
++}
++
++android {
++  compileSdkVersion safeExtGet("compileSdkVersion", 30)
++
++  compileOptions {
++    sourceCompatibility JavaVersion.VERSION_1_8
++    targetCompatibility JavaVersion.VERSION_1_8
++  }
++
++  defaultConfig {
++    minSdkVersion safeExtGet("minSdkVersion", 21)
++    targetSdkVersion safeExtGet("targetSdkVersion", 30)
++    versionCode 27
++    versionName "11.0.3"
++  }
++  lintOptions {
++    abortOnError false
++  }
++}
++
++dependencies {
++  implementation project(':expo-modules-core')
++
++  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${safeExtGet('kotlinVersion', '1.4.21')}"
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/AndroidManifest.xml b/node_modules/expo-sensors/android/bin/src/main/AndroidManifest.xml
+new file mode 100644
+index 0000000..f9c331c
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/AndroidManifest.xml
+@@ -0,0 +1,5 @@
++
++<manifest package="expo.modules.sensors">
++
++</manifest>
++  
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/SensorsPackage.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/SensorsPackage.kt
+new file mode 100644
+index 0000000..6962b18
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/SensorsPackage.kt
+@@ -0,0 +1,50 @@
++package expo.modules.sensors
++
++import android.content.Context
++import expo.modules.sensors.modules.AccelerometerModule
++import expo.modules.sensors.modules.BarometerModule
++import expo.modules.sensors.modules.DeviceMotionModule
++import expo.modules.sensors.modules.GyroscopeModule
++import expo.modules.sensors.modules.MagnetometerModule
++import expo.modules.sensors.modules.MagnetometerUncalibratedModule
++import expo.modules.sensors.modules.PedometerModule
++import expo.modules.sensors.services.AccelerometerService
++import expo.modules.sensors.services.BarometerService
++import expo.modules.sensors.services.GravitySensorService
++import expo.modules.sensors.services.GyroscopeService
++import expo.modules.sensors.services.LinearAccelerationSensorService
++import expo.modules.sensors.services.MagnetometerService
++import expo.modules.sensors.services.MagnetometerUncalibratedService
++import expo.modules.sensors.services.PedometerService
++import expo.modules.sensors.services.RotationVectorSensorService
++import expo.modules.core.BasePackage
++import expo.modules.core.ExportedModule
++import expo.modules.core.interfaces.InternalModule
++
++class SensorsPackage : BasePackage() {
++  override fun createInternalModules(context: Context): List<InternalModule> {
++    return listOf<InternalModule>(
++      AccelerometerService(context),
++      BarometerService(context),
++      GravitySensorService(context),
++      GyroscopeService(context),
++      LinearAccelerationSensorService(context),
++      MagnetometerService(context),
++      MagnetometerUncalibratedService(context),
++      RotationVectorSensorService(context),
++      PedometerService(context)
++    )
++  }
++
++  override fun createExportedModules(context: Context): List<ExportedModule> {
++    return listOf<ExportedModule>(
++      AccelerometerModule(context),
++      BarometerModule(context),
++      GyroscopeModule(context),
++      DeviceMotionModule(context),
++      MagnetometerModule(context),
++      MagnetometerUncalibratedModule(context),
++      PedometerModule(context)
++    )
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/AccelerometerModule.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/AccelerometerModule.kt
+new file mode 100644
+index 0000000..dc851df
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/AccelerometerModule.kt
+@@ -0,0 +1,55 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.modules
++
++import android.content.Context
++import android.hardware.Sensor
++import android.hardware.SensorEvent
++import android.hardware.SensorManager
++import android.os.Bundle
++import expo.modules.interfaces.sensors.SensorServiceInterface
++import expo.modules.interfaces.sensors.services.AccelerometerServiceInterface
++import expo.modules.core.Promise
++import expo.modules.core.interfaces.ExpoMethod
++
++class AccelerometerModule(reactContext: Context?) : BaseSensorModule(reactContext) {
++  override val eventName: String = "accelerometerDidUpdate"
++
++  override fun getName(): String = "ExponentAccelerometer"
++
++  override fun getSensorService(): SensorServiceInterface {
++    return moduleRegistry.getModule(AccelerometerServiceInterface::class.java)
++  }
++
++  override fun eventToMap(sensorEvent: SensorEvent): Bundle {
++    return Bundle().apply {
++      putDouble("x", (sensorEvent.values[0] / SensorManager.GRAVITY_EARTH).toDouble())
++      putDouble("y", (sensorEvent.values[1] / SensorManager.GRAVITY_EARTH).toDouble())
++      putDouble("z", (sensorEvent.values[2] / SensorManager.GRAVITY_EARTH).toDouble())
++    }
++  }
++
++  @ExpoMethod
++  fun startObserving(promise: Promise) {
++    super.startObserving()
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun stopObserving(promise: Promise) {
++    super.stopObserving()
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun setUpdateInterval(updateInterval: Int, promise: Promise) {
++    super.setUpdateInterval(updateInterval)
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun isAvailableAsync(promise: Promise) {
++    val mSensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
++    val isAvailable = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null
++    promise.resolve(isAvailable)
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/BarometerModule.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/BarometerModule.kt
+new file mode 100644
+index 0000000..bb7f82d
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/BarometerModule.kt
+@@ -0,0 +1,54 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.modules
++
++import android.content.Context
++import android.hardware.Sensor
++import android.hardware.SensorEvent
++import android.hardware.SensorManager
++import android.os.Bundle
++import expo.modules.interfaces.sensors.SensorServiceInterface
++import expo.modules.interfaces.sensors.services.BarometerServiceInterface
++import expo.modules.core.Promise
++import expo.modules.core.interfaces.ExpoMethod
++
++class BarometerModule(reactContext: Context?) : BaseSensorModule(reactContext) {
++  override val eventName: String = "barometerDidUpdate"
++
++  override fun getName(): String = "ExpoBarometer"
++
++  override fun getSensorService(): SensorServiceInterface {
++    return moduleRegistry.getModule(BarometerServiceInterface::class.java)
++  }
++
++  override fun eventToMap(sensorEvent: SensorEvent): Bundle {
++    return Bundle().apply {
++      // TODO: Bacon: Can we get relative altitude?
++      putDouble("pressure", sensorEvent.values[0].toDouble())
++    }
++  }
++
++  @ExpoMethod
++  fun startObserving(promise: Promise) {
++    super.startObserving()
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun stopObserving(promise: Promise) {
++    super.stopObserving()
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun setUpdateInterval(updateInterval: Int, promise: Promise) {
++    super.setUpdateInterval(updateInterval)
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun isAvailableAsync(promise: Promise) {
++    val mSensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
++    val isAvailable = mSensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE) != null
++    promise.resolve(isAvailable)
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/BaseSensorModule.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/BaseSensorModule.kt
+new file mode 100644
+index 0000000..a2457ae
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/BaseSensorModule.kt
+@@ -0,0 +1,80 @@
++package expo.modules.sensors.modules
++
++import android.content.Context
++import android.hardware.Sensor
++import android.hardware.SensorEvent
++import android.hardware.SensorEventListener2
++import android.os.Bundle
++import android.util.Log
++import expo.modules.interfaces.sensors.SensorServiceInterface
++import expo.modules.interfaces.sensors.SensorServiceSubscriptionInterface
++import expo.modules.core.ExportedModule
++import expo.modules.core.ModuleRegistry
++import expo.modules.core.interfaces.LifecycleEventListener
++import expo.modules.core.interfaces.services.EventEmitter
++import expo.modules.core.interfaces.services.UIManager
++
++abstract class BaseSensorModule internal constructor(context: Context?) : ExportedModule(context), SensorEventListener2, LifecycleEventListener {
++  lateinit var moduleRegistry: ModuleRegistry
++    private set
++  private val sensorKernelServiceSubscription: SensorServiceSubscriptionInterface by lazy {
++    getSensorService().createSubscriptionForListener(this)
++  }
++  private var mIsObserving = false
++
++  protected abstract val eventName: String
++  protected abstract fun getSensorService(): SensorServiceInterface
++  protected abstract fun eventToMap(sensorEvent: SensorEvent): Bundle
++
++  override fun onCreate(moduleRegistry: ModuleRegistry) {
++    this.moduleRegistry = moduleRegistry
++
++    // Unregister from old UIManager
++    moduleRegistry.getModule(UIManager::class.java)?.unregisterLifecycleEventListener(this)
++
++    // Register to new UIManager
++    moduleRegistry.getModule(UIManager::class.java)?.registerLifecycleEventListener(this)
++  }
++
++  override fun onSensorChanged(sensorEvent: SensorEvent) {
++    val eventEmitter = moduleRegistry.getModule(EventEmitter::class.java)
++    eventEmitter?.emit(eventName, eventToMap(sensorEvent))
++      ?: Log.e("E_SENSOR_MODULE", "Could not emit $eventName event, no event emitter present.")
++  }
++
++  override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit
++
++  override fun onFlushCompleted(sensor: Sensor) = Unit
++
++  fun setUpdateInterval(updateInterval: Int) {
++    sensorKernelServiceSubscription.updateInterval = updateInterval.toLong()
++  }
++
++  fun startObserving() {
++    mIsObserving = true
++    sensorKernelServiceSubscription.start()
++  }
++
++  fun stopObserving() {
++    if (mIsObserving) {
++      mIsObserving = false
++      sensorKernelServiceSubscription.stop()
++    }
++  }
++
++  override fun onHostResume() {
++    if (mIsObserving) {
++      sensorKernelServiceSubscription.start()
++    }
++  }
++
++  override fun onHostPause() {
++    if (mIsObserving) {
++      sensorKernelServiceSubscription.stop()
++    }
++  }
++
++  override fun onHostDestroy() {
++    sensorKernelServiceSubscription.release()
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/DeviceMotionModule.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/DeviceMotionModule.kt
+new file mode 100644
+index 0000000..8b284bf
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/DeviceMotionModule.kt
+@@ -0,0 +1,242 @@
++package expo.modules.sensors.modules
++
++import android.content.Context
++import android.hardware.Sensor
++import android.hardware.SensorEvent
++import android.hardware.SensorEventListener2
++import android.hardware.SensorManager
++import android.os.Bundle
++import android.view.Choreographer
++import android.view.Surface
++import android.view.WindowManager
++import expo.modules.interfaces.sensors.SensorServiceInterface
++import expo.modules.interfaces.sensors.SensorServiceSubscriptionInterface
++import expo.modules.interfaces.sensors.services.AccelerometerServiceInterface
++import expo.modules.interfaces.sensors.services.GravitySensorServiceInterface
++import expo.modules.interfaces.sensors.services.GyroscopeServiceInterface
++import expo.modules.interfaces.sensors.services.LinearAccelerationSensorServiceInterface
++import expo.modules.interfaces.sensors.services.RotationVectorSensorServiceInterface
++import expo.modules.core.ExportedModule
++import expo.modules.core.ModuleRegistry
++import expo.modules.core.Promise
++import expo.modules.core.interfaces.ExpoMethod
++import expo.modules.core.interfaces.services.EventEmitter
++import expo.modules.core.interfaces.services.UIManager
++
++class DeviceMotionModule(context: Context?) : ExportedModule(context), SensorEventListener2 {
++  private var mLastUpdate: Long = 0
++  private var mUpdateInterval = 1.0f / 60.0f
++  private val mRotationMatrix = FloatArray(9)
++  private val mRotationResult = FloatArray(3)
++  private var mAccelerationEvent: SensorEvent? = null
++  private var mAccelerationIncludingGravityEvent: SensorEvent? = null
++  private var mRotationEvent: SensorEvent? = null
++  private var mRotationRateEvent: SensorEvent? = null
++  private var mGravityEvent: SensorEvent? = null
++  private lateinit var mServiceSubscriptions: MutableList<SensorServiceSubscriptionInterface>
++  private lateinit var mUIManager: UIManager
++  private lateinit var mModuleRegistry: ModuleRegistry
++
++  private val mCurrentFrameCallback: ScheduleDispatchFrameCallback = ScheduleDispatchFrameCallback()
++  private val mDispatchEventRunnable = DispatchEventRunnable()
++  private lateinit var mEventEmitter: EventEmitter
++
++  override fun getName(): String = "ExponentDeviceMotion"
++
++  override fun getConstants(): Map<String, Any> {
++    // Gravity on the planet this module supports (currently just Earth) represented as m/s^2.
++    return mapOf(Pair("Gravity", 9.80665))
++  }
++
++  @ExpoMethod
++  fun setUpdateInterval(updateInterval: Int, promise: Promise) {
++    mUpdateInterval = updateInterval.toFloat()
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun startObserving(promise: Promise) {
++    if (!this::mServiceSubscriptions.isInitialized) {
++      mServiceSubscriptions = ArrayList()
++      for (kernelService in getSensorKernelServices()) {
++        val subscription = kernelService.createSubscriptionForListener(this)
++        // We want handle update interval on our own,
++        // because we need to coordinate updates from multiple sensor services.
++        subscription.updateInterval = 0
++        mServiceSubscriptions.add(subscription)
++      }
++    }
++    mServiceSubscriptions.forEach { it.start() }
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun stopObserving(promise: Promise) {
++    mUIManager.runOnUiQueueThread {
++      mServiceSubscriptions.forEach { it.stop() }
++      mCurrentFrameCallback.stop()
++      promise.resolve(null)
++    }
++  }
++
++  @ExpoMethod
++  fun isAvailableAsync(promise: Promise) {
++    val mSensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
++    val sensorTypes = arrayListOf(Sensor.TYPE_GYROSCOPE, Sensor.TYPE_ACCELEROMETER, Sensor.TYPE_LINEAR_ACCELERATION, Sensor.TYPE_ROTATION_VECTOR, Sensor.TYPE_GRAVITY)
++    for (type in sensorTypes) {
++      if (mSensorManager.getDefaultSensor(type!!) == null) {
++        promise.resolve(false)
++        return
++      }
++    }
++    promise.resolve(true)
++  }
++
++  override fun onCreate(moduleRegistry: ModuleRegistry) {
++    mEventEmitter = moduleRegistry.getModule(EventEmitter::class.java)
++    mUIManager = moduleRegistry.getModule(UIManager::class.java)
++    mModuleRegistry = moduleRegistry
++  }
++
++  private fun getSensorKernelServices(): List<SensorServiceInterface> {
++    return arrayListOf(
++      mModuleRegistry.getModule(GyroscopeServiceInterface::class.java),
++      mModuleRegistry.getModule(LinearAccelerationSensorServiceInterface::class.java),
++      mModuleRegistry.getModule(AccelerometerServiceInterface::class.java),
++      mModuleRegistry.getModule(RotationVectorSensorServiceInterface::class.java),
++      mModuleRegistry.getModule(GravitySensorServiceInterface::class.java)
++    )
++  }
++
++  override fun onSensorChanged(sensorEvent: SensorEvent) {
++    val sensor = sensorEvent.sensor
++    when (sensor.type) {
++      Sensor.TYPE_GYROSCOPE -> mRotationRateEvent = sensorEvent
++      Sensor.TYPE_ACCELEROMETER -> mAccelerationIncludingGravityEvent = sensorEvent
++      Sensor.TYPE_LINEAR_ACCELERATION -> mAccelerationEvent = sensorEvent
++      Sensor.TYPE_ROTATION_VECTOR -> mRotationEvent = sensorEvent
++      Sensor.TYPE_GRAVITY -> mGravityEvent = sensorEvent
++    }
++    mCurrentFrameCallback.maybePostFromNonUI()
++  }
++
++  override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit
++
++  override fun onFlushCompleted(sensor: Sensor) = Unit
++
++  private inner class ScheduleDispatchFrameCallback : Choreographer.FrameCallback {
++    @Volatile
++    private var mIsPosted = false
++    private var mShouldStop = false
++
++    override fun doFrame(frameTimeNanos: Long) {
++      if (mShouldStop) {
++        mIsPosted = false
++      } else {
++        post()
++      }
++      val curTime = System.currentTimeMillis()
++      if (curTime - mLastUpdate > mUpdateInterval) {
++        mUIManager.runOnClientCodeQueueThread(mDispatchEventRunnable)
++        mLastUpdate = curTime
++      }
++    }
++
++    fun stop() {
++      mShouldStop = true
++    }
++
++    fun maybePost() {
++      if (!mIsPosted) {
++        mIsPosted = true
++        post()
++      }
++    }
++
++    private fun post() {
++      Choreographer.getInstance().postFrameCallback(mCurrentFrameCallback)
++    }
++
++    fun maybePostFromNonUI() {
++      if (mIsPosted) {
++        return
++      }
++      mUIManager.runOnUiQueueThread { maybePost() }
++    }
++  }
++
++  private inner class DispatchEventRunnable : Runnable {
++    override fun run() {
++      mEventEmitter.emit("deviceMotionDidUpdate", eventsToMap())
++    }
++  }
++
++  private fun eventsToMap(): Bundle {
++    val map = Bundle()
++    var interval = 0.0
++    if (mAccelerationEvent != null) {
++      map.putBundle(
++        "acceleration",
++        Bundle().apply {
++          putDouble("x", mAccelerationEvent!!.values[0].toDouble())
++          putDouble("y", mAccelerationEvent!!.values[1].toDouble())
++          putDouble("z", mAccelerationEvent!!.values[2].toDouble())
++        }
++      )
++      interval = mAccelerationEvent!!.timestamp.toDouble()
++    }
++    if (mAccelerationIncludingGravityEvent != null && mGravityEvent != null) {
++      map.putBundle(
++        "accelerationIncludingGravity",
++        Bundle().apply {
++          putDouble("x", (mAccelerationIncludingGravityEvent!!.values[0] - 2 * mGravityEvent!!.values[0]).toDouble())
++          putDouble("y", (mAccelerationIncludingGravityEvent!!.values[1] - 2 * mGravityEvent!!.values[1]).toDouble())
++          putDouble("z", (mAccelerationIncludingGravityEvent!!.values[2] - 2 * mGravityEvent!!.values[2]).toDouble())
++        }
++      )
++      interval = mAccelerationIncludingGravityEvent!!.timestamp.toDouble()
++    }
++    if (mRotationRateEvent != null) {
++      map.putBundle(
++        "rotationRate",
++        Bundle().apply {
++          putDouble("alpha", Math.toDegrees(mRotationRateEvent!!.values[0].toDouble()))
++          putDouble("beta", Math.toDegrees(mRotationRateEvent!!.values[1].toDouble()))
++          putDouble("gamma", Math.toDegrees(mRotationRateEvent!!.values[2].toDouble()))
++        }
++      )
++      interval = mRotationRateEvent!!.timestamp.toDouble()
++    }
++    if (mRotationEvent != null) {
++      SensorManager.getRotationMatrixFromVector(mRotationMatrix, mRotationEvent!!.values)
++      SensorManager.getOrientation(mRotationMatrix, mRotationResult)
++      map.putBundle(
++        "rotation",
++        Bundle().apply {
++          putDouble("alpha", (-mRotationResult[0]).toDouble())
++          putDouble("beta", (-mRotationResult[1]).toDouble())
++          putDouble("gamma", mRotationResult[2].toDouble())
++        }
++      )
++      interval = mRotationEvent!!.timestamp.toDouble()
++    }
++    map.putDouble("interval", interval)
++    map.putInt("orientation", getOrientation())
++    return map
++  }
++
++  private fun getOrientation(): Int {
++    val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager?
++    if (windowManager != null) {
++      when (windowManager.defaultDisplay.rotation) {
++        Surface.ROTATION_0 -> return 0
++        Surface.ROTATION_90 -> return 90
++        Surface.ROTATION_180 -> return 180
++        Surface.ROTATION_270 -> return -90
++        else -> {
++        }
++      }
++    }
++    return 0
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/GyroscopeModule.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/GyroscopeModule.kt
+new file mode 100644
+index 0000000..dbaa83f
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/GyroscopeModule.kt
+@@ -0,0 +1,55 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.modules
++
++import android.content.Context
++import android.hardware.Sensor
++import android.hardware.SensorEvent
++import android.hardware.SensorManager
++import android.os.Bundle
++import expo.modules.interfaces.sensors.SensorServiceInterface
++import expo.modules.interfaces.sensors.services.GyroscopeServiceInterface
++import expo.modules.core.Promise
++import expo.modules.core.interfaces.ExpoMethod
++
++class GyroscopeModule(reactContext: Context?) : BaseSensorModule(reactContext) {
++  override val eventName: String = "gyroscopeDidUpdate"
++
++  override fun getName(): String = "ExponentGyroscope"
++
++  override fun getSensorService(): SensorServiceInterface {
++    return moduleRegistry.getModule(GyroscopeServiceInterface::class.java)
++  }
++
++  override fun eventToMap(sensorEvent: SensorEvent): Bundle {
++    return Bundle().apply {
++      putDouble("x", sensorEvent.values[0].toDouble())
++      putDouble("y", sensorEvent.values[1].toDouble())
++      putDouble("z", sensorEvent.values[2].toDouble())
++    }
++  }
++
++  @ExpoMethod
++  fun startObserving(promise: Promise) {
++    super.startObserving()
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun stopObserving(promise: Promise) {
++    super.stopObserving()
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun setUpdateInterval(updateInterval: Int, promise: Promise) {
++    super.setUpdateInterval(updateInterval)
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun isAvailableAsync(promise: Promise) {
++    val mSensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
++    val isAvailable = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE) != null
++    promise.resolve(isAvailable)
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/MagnetometerModule.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/MagnetometerModule.kt
+new file mode 100644
+index 0000000..631c2f3
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/MagnetometerModule.kt
+@@ -0,0 +1,55 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.modules
++
++import android.content.Context
++import android.hardware.Sensor
++import android.hardware.SensorEvent
++import android.hardware.SensorManager
++import android.os.Bundle
++import expo.modules.interfaces.sensors.SensorServiceInterface
++import expo.modules.interfaces.sensors.services.MagnetometerServiceInterface
++import expo.modules.core.Promise
++import expo.modules.core.interfaces.ExpoMethod
++
++class MagnetometerModule(reactContext: Context?) : BaseSensorModule(reactContext) {
++  override val eventName: String = "magnetometerDidUpdate"
++
++  override fun getName(): String = "ExponentMagnetometer"
++
++  override fun getSensorService(): SensorServiceInterface {
++    return moduleRegistry.getModule(MagnetometerServiceInterface::class.java)
++  }
++
++  override fun eventToMap(sensorEvent: SensorEvent): Bundle {
++    return Bundle().apply {
++      putDouble("x", sensorEvent.values[0].toDouble())
++      putDouble("y", sensorEvent.values[1].toDouble())
++      putDouble("z", sensorEvent.values[2].toDouble())
++    }
++  }
++
++  @ExpoMethod
++  fun startObserving(promise: Promise) {
++    super.startObserving()
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun stopObserving(promise: Promise) {
++    super.stopObserving()
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun setUpdateInterval(updateInterval: Int, promise: Promise) {
++    super.setUpdateInterval(updateInterval)
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun isAvailableAsync(promise: Promise) {
++    val mSensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
++    val isAvailable = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD) != null
++    promise.resolve(isAvailable)
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/MagnetometerUncalibratedModule.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/MagnetometerUncalibratedModule.kt
+new file mode 100644
+index 0000000..f222f0e
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/MagnetometerUncalibratedModule.kt
+@@ -0,0 +1,55 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.modules
++
++import android.content.Context
++import android.hardware.Sensor
++import android.hardware.SensorEvent
++import android.hardware.SensorManager
++import android.os.Bundle
++import expo.modules.interfaces.sensors.SensorServiceInterface
++import expo.modules.interfaces.sensors.services.MagnetometerUncalibratedServiceInterface
++import expo.modules.core.Promise
++import expo.modules.core.interfaces.ExpoMethod
++
++class MagnetometerUncalibratedModule(reactContext: Context?) : BaseSensorModule(reactContext) {
++  override val eventName: String = "magnetometerUncalibratedDidUpdate"
++
++  override fun getName(): String = "ExponentMagnetometerUncalibrated"
++
++  override fun getSensorService(): SensorServiceInterface {
++    return moduleRegistry.getModule(MagnetometerUncalibratedServiceInterface::class.java)
++  }
++
++  override fun eventToMap(sensorEvent: SensorEvent): Bundle {
++    return Bundle().apply {
++      putDouble("x", sensorEvent.values[0].toDouble())
++      putDouble("y", sensorEvent.values[1].toDouble())
++      putDouble("z", sensorEvent.values[2].toDouble())
++    }
++  }
++
++  @ExpoMethod
++  fun startObserving(promise: Promise) {
++    super.startObserving()
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun stopObserving(promise: Promise) {
++    super.stopObserving()
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun setUpdateInterval(updateInterval: Int, promise: Promise) {
++    super.setUpdateInterval(updateInterval)
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun isAvailableAsync(promise: Promise) {
++    val mSensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
++    val isAvailable = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD_UNCALIBRATED) != null
++    promise.resolve(isAvailable)
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/PedometerModule.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/PedometerModule.kt
+new file mode 100644
+index 0000000..1fc8f0e
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/modules/PedometerModule.kt
+@@ -0,0 +1,63 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.modules
++
++import android.content.Context
++import android.content.pm.PackageManager
++import android.hardware.SensorEvent
++import android.os.Bundle
++import expo.modules.interfaces.sensors.SensorServiceInterface
++import expo.modules.interfaces.sensors.services.PedometerServiceInterface
++import expo.modules.core.Promise
++import expo.modules.core.interfaces.ExpoMethod
++
++class PedometerModule(reactContext: Context?) : BaseSensorModule(reactContext) {
++  private var stepsAtTheBeginning: Int? = null
++  override val eventName: String = "Exponent.pedometerUpdate"
++
++  override fun getName(): String {
++    return "ExponentPedometer"
++  }
++
++  override fun getSensorService(): SensorServiceInterface {
++    return moduleRegistry.getModule(PedometerServiceInterface::class.java)
++  }
++
++  override fun eventToMap(sensorEvent: SensorEvent): Bundle {
++    if (stepsAtTheBeginning == null) {
++      stepsAtTheBeginning = sensorEvent.values[0].toInt() - 1
++    }
++    return Bundle().apply {
++      putDouble("steps", (sensorEvent.values[0] - stepsAtTheBeginning!!).toDouble())
++    }
++  }
++
++  @ExpoMethod
++  fun startObserving(promise: Promise) {
++    super.startObserving()
++    stepsAtTheBeginning = null
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun stopObserving(promise: Promise) {
++    super.stopObserving()
++    stepsAtTheBeginning = null
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun setUpdateInterval(updateInterval: Int, promise: Promise) {
++    super.setUpdateInterval(updateInterval)
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun isAvailableAsync(promise: Promise) {
++    promise.resolve(context.packageManager.hasSystemFeature(PackageManager.FEATURE_SENSOR_STEP_COUNTER))
++  }
++
++  @ExpoMethod
++  fun getStepCountAsync(startDate: Int?, endDate: Int?, promise: Promise) {
++    promise.reject("E_NOT_AVAILABLE", "Getting step count for date range is not supported on Android yet.")
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/AccelerometerService.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/AccelerometerService.kt
+new file mode 100644
+index 0000000..c5242d8
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/AccelerometerService.kt
+@@ -0,0 +1,15 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.services
++
++import android.content.Context
++import android.hardware.Sensor
++import expo.modules.interfaces.sensors.services.AccelerometerServiceInterface
++import expo.modules.core.interfaces.InternalModule
++
++class AccelerometerService(reactContext: Context?) : SubscribableSensorService(reactContext), InternalModule, AccelerometerServiceInterface {
++  override val sensorType: Int = Sensor.TYPE_ACCELEROMETER
++
++  override fun getExportedInterfaces(): List<Class<*>> {
++    return listOf<Class<*>>(AccelerometerServiceInterface::class.java)
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/BarometerService.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/BarometerService.kt
+new file mode 100644
+index 0000000..b39d1ec
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/BarometerService.kt
+@@ -0,0 +1,15 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.services
++
++import android.content.Context
++import android.hardware.Sensor
++import expo.modules.interfaces.sensors.services.BarometerServiceInterface
++import expo.modules.core.interfaces.InternalModule
++
++class BarometerService(reactContext: Context?) : SubscribableSensorService(reactContext), InternalModule, BarometerServiceInterface {
++  override val sensorType: Int = Sensor.TYPE_PRESSURE
++
++  override fun getExportedInterfaces(): List<Class<*>> {
++    return listOf<Class<*>>(BarometerServiceInterface::class.java)
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/BaseSensorService.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/BaseSensorService.kt
+new file mode 100644
+index 0000000..999a03b
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/BaseSensorService.kt
+@@ -0,0 +1,26 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.services
++
++import android.content.Context
++import android.hardware.Sensor
++import android.hardware.SensorEventListener2
++import android.hardware.SensorManager
++
++abstract class BaseSensorService internal constructor(reactContext: Context?) : BaseService(reactContext!!), SensorEventListener2 {
++  private var mSensor: Sensor? = null
++  private val mSensorManager: SensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
++
++  // Abstract methods that subclasses should implement
++  abstract val sensorType: Int
++
++  // Public API
++  protected fun startObserving() {
++    if (mSensorManager.getDefaultSensor(sensorType).also { mSensor = it } != null) {
++      mSensorManager.registerListener(this, mSensor, SensorManager.SENSOR_DELAY_FASTEST)
++    }
++  }
++
++  protected fun stopObserving() {
++    mSensorManager.unregisterListener(this)
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/BaseService.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/BaseService.kt
+new file mode 100644
+index 0000000..f441ba0
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/BaseService.kt
+@@ -0,0 +1,44 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.services
++
++import android.content.Context
++import expo.modules.core.ModuleRegistry
++import expo.modules.core.interfaces.LifecycleEventListener
++import expo.modules.core.interfaces.RegistryLifecycleListener
++import expo.modules.core.interfaces.services.UIManager
++
++/* internal */
++abstract class BaseService(protected val context: Context) : LifecycleEventListener, RegistryLifecycleListener {
++  private lateinit var mModuleRegistry: ModuleRegistry
++  var experienceIsForegrounded = false
++    private set
++
++  override fun onCreate(moduleRegistry: ModuleRegistry) {
++    mModuleRegistry = moduleRegistry
++
++    // Register to new UIManager
++    mModuleRegistry.getModule(UIManager::class.java)?.registerLifecycleEventListener(this)
++  }
++
++  override fun onDestroy() {
++    // Unregister from old UIManager
++    if (this::mModuleRegistry.isInitialized) {
++      mModuleRegistry.getModule(UIManager::class.java)?.unregisterLifecycleEventListener(this)
++    }
++  }
++
++  override fun onHostResume() {
++    experienceIsForegrounded = true
++    onExperienceForegrounded()
++  }
++
++  override fun onHostDestroy() = Unit
++
++  override fun onHostPause() {
++    experienceIsForegrounded = false
++    onExperienceBackgrounded()
++  }
++
++  abstract fun onExperienceForegrounded()
++  abstract fun onExperienceBackgrounded()
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/GravitySensorService.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/GravitySensorService.kt
+new file mode 100644
+index 0000000..2877f3d
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/GravitySensorService.kt
+@@ -0,0 +1,15 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.services
++
++import android.content.Context
++import android.hardware.Sensor
++import expo.modules.interfaces.sensors.services.GravitySensorServiceInterface
++import expo.modules.core.interfaces.InternalModule
++
++class GravitySensorService(reactContext: Context?) : SubscribableSensorService(reactContext), InternalModule, GravitySensorServiceInterface {
++  override val sensorType: Int = Sensor.TYPE_GRAVITY
++
++  override fun getExportedInterfaces(): List<Class<*>> {
++    return listOf<Class<*>>(GravitySensorServiceInterface::class.java)
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/GyroscopeService.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/GyroscopeService.kt
+new file mode 100644
+index 0000000..347c515
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/GyroscopeService.kt
+@@ -0,0 +1,15 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.services
++
++import android.content.Context
++import android.hardware.Sensor
++import expo.modules.interfaces.sensors.services.GyroscopeServiceInterface
++import expo.modules.core.interfaces.InternalModule
++
++class GyroscopeService(context: Context?) : SubscribableSensorService(context), InternalModule, GyroscopeServiceInterface {
++  override val sensorType: Int = Sensor.TYPE_GYROSCOPE
++
++  override fun getExportedInterfaces(): List<Class<*>> {
++    return listOf<Class<*>>(GyroscopeServiceInterface::class.java)
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/LinearAccelerationSensorService.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/LinearAccelerationSensorService.kt
+new file mode 100644
+index 0000000..3a41d3e
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/LinearAccelerationSensorService.kt
+@@ -0,0 +1,15 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.services
++
++import android.content.Context
++import android.hardware.Sensor
++import expo.modules.interfaces.sensors.services.LinearAccelerationSensorServiceInterface
++import expo.modules.core.interfaces.InternalModule
++
++class LinearAccelerationSensorService(reactContext: Context?) : SubscribableSensorService(reactContext), InternalModule, LinearAccelerationSensorServiceInterface {
++  override val sensorType: Int = Sensor.TYPE_LINEAR_ACCELERATION
++
++  override fun getExportedInterfaces(): List<Class<*>> {
++    return listOf<Class<*>>(LinearAccelerationSensorServiceInterface::class.java)
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/MagnetometerService.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/MagnetometerService.kt
+new file mode 100644
+index 0000000..caee660
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/MagnetometerService.kt
+@@ -0,0 +1,15 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.services
++
++import android.content.Context
++import android.hardware.Sensor
++import expo.modules.interfaces.sensors.services.MagnetometerServiceInterface
++import expo.modules.core.interfaces.InternalModule
++
++class MagnetometerService(reactContext: Context?) : SubscribableSensorService(reactContext), InternalModule, MagnetometerServiceInterface {
++  override val sensorType: Int = Sensor.TYPE_MAGNETIC_FIELD
++
++  override fun getExportedInterfaces(): List<Class<*>> {
++    return listOf<Class<*>>(MagnetometerServiceInterface::class.java)
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/MagnetometerUncalibratedService.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/MagnetometerUncalibratedService.kt
+new file mode 100644
+index 0000000..e128a51
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/MagnetometerUncalibratedService.kt
+@@ -0,0 +1,15 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.services
++
++import android.content.Context
++import android.hardware.Sensor
++import expo.modules.interfaces.sensors.services.MagnetometerUncalibratedServiceInterface
++import expo.modules.core.interfaces.InternalModule
++
++class MagnetometerUncalibratedService(reactContext: Context?) : SubscribableSensorService(reactContext), InternalModule, MagnetometerUncalibratedServiceInterface {
++  override val sensorType: Int = Sensor.TYPE_MAGNETIC_FIELD_UNCALIBRATED
++
++  override fun getExportedInterfaces(): List<Class<*>> {
++    return listOf<Class<*>>(MagnetometerUncalibratedServiceInterface::class.java)
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/PedometerService.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/PedometerService.kt
+new file mode 100644
+index 0000000..81c8e86
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/PedometerService.kt
+@@ -0,0 +1,15 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.services
++
++import android.content.Context
++import android.hardware.Sensor
++import expo.modules.interfaces.sensors.services.PedometerServiceInterface
++import expo.modules.core.interfaces.InternalModule
++
++class PedometerService(reactContext: Context?) : SubscribableSensorService(reactContext), InternalModule, PedometerServiceInterface {
++  override val sensorType: Int = Sensor.TYPE_STEP_COUNTER
++
++  override fun getExportedInterfaces(): List<Class<*>> {
++    return listOf<Class<*>>(PedometerServiceInterface::class.java)
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/RotationVectorSensorService.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/RotationVectorSensorService.kt
+new file mode 100644
+index 0000000..c1ef767
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/RotationVectorSensorService.kt
+@@ -0,0 +1,15 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.services
++
++import android.content.Context
++import android.hardware.Sensor
++import expo.modules.interfaces.sensors.services.RotationVectorSensorServiceInterface
++import expo.modules.core.interfaces.InternalModule
++
++class RotationVectorSensorService(context: Context?) : SubscribableSensorService(context), InternalModule, RotationVectorSensorServiceInterface {
++  override val sensorType: Int = Sensor.TYPE_ROTATION_VECTOR
++
++  override fun getExportedInterfaces(): List<Class<*>> {
++    return listOf<Class<*>>(RotationVectorSensorServiceInterface::class.java)
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/SensorServiceSubscription.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/SensorServiceSubscription.kt
+new file mode 100644
+index 0000000..cb12559
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/SensorServiceSubscription.kt
+@@ -0,0 +1,49 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.services
++
++import android.hardware.SensorEventListener2
++import expo.modules.interfaces.sensors.SensorServiceSubscriptionInterface
++
++class SensorServiceSubscription internal constructor(private val mSubscribableSensorService: SubscribableSensorService, val sensorEventListener: SensorEventListener2) : SensorServiceSubscriptionInterface {
++  private var mIsEnabled = false
++  private var mUpdateInterval: Long = 100L
++  private var mHasBeenReleased = false
++  override fun start() {
++    assertSubscriptionIsAlive()
++    if (!mIsEnabled) {
++      mIsEnabled = true
++      mSubscribableSensorService.onSubscriptionEnabledChanged(this)
++    }
++  }
++
++  override fun isEnabled(): Boolean {
++    return mIsEnabled
++  }
++
++  override fun getUpdateInterval(): Long {
++    return mUpdateInterval
++  }
++
++  override fun setUpdateInterval(updateInterval: Long) {
++    assertSubscriptionIsAlive()
++    mUpdateInterval = updateInterval
++  }
++
++  override fun stop() {
++    if (mIsEnabled) {
++      mIsEnabled = false
++      mSubscribableSensorService.onSubscriptionEnabledChanged(this)
++    }
++  }
++
++  override fun release() {
++    if (!mHasBeenReleased) {
++      mSubscribableSensorService.removeSubscription(this)
++      mHasBeenReleased = true
++    }
++  }
++
++  private fun assertSubscriptionIsAlive() {
++    check(!mHasBeenReleased) { "Subscription has been released, cannot call methods on a released subscription." }
++  }
++}
+diff --git a/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/SubscribableSensorService.kt b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/SubscribableSensorService.kt
+new file mode 100644
+index 0000000..49bcfcf
+--- /dev/null
++++ b/node_modules/expo-sensors/android/bin/src/main/java/expo/modules/sensors/services/SubscribableSensorService.kt
+@@ -0,0 +1,92 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++package expo.modules.sensors.services
++
++import android.content.Context
++import android.hardware.Sensor
++import android.hardware.SensorEvent
++import android.hardware.SensorEventListener2
++import expo.modules.interfaces.sensors.SensorServiceInterface
++import expo.modules.interfaces.sensors.SensorServiceSubscriptionInterface
++import java.util.*
++
++abstract class SubscribableSensorService internal constructor(reactContext: Context?) : BaseSensorService(reactContext), SensorServiceInterface {
++  private var mListenersCount = 0
++  private val mSensorEventListenerLastUpdateMap: MutableMap<SensorServiceSubscription, Long> = WeakHashMap()
++
++  // BaseService
++  override fun onExperienceForegrounded() {
++    updateObserving()
++  }
++
++  override fun onExperienceBackgrounded() {
++    updateObserving()
++  }
++
++  // Modules API
++  override fun createSubscriptionForListener(listener: SensorEventListener2): SensorServiceSubscriptionInterface {
++    val sensorServiceSubscription = SensorServiceSubscription(this, listener)
++    mSensorEventListenerLastUpdateMap[sensorServiceSubscription] = 0L
++    return sensorServiceSubscription
++  }
++
++  // SensorServiceSubscription API
++  fun onSubscriptionEnabledChanged(sensorServiceSubscription: SensorServiceSubscription) {
++    if (sensorServiceSubscription.isEnabled) {
++      mListenersCount += 1
++    } else {
++      mListenersCount -= 1
++    }
++    updateObserving()
++  }
++
++  fun removeSubscription(sensorServiceSubscription: SensorServiceSubscription) {
++    mSensorEventListenerLastUpdateMap.remove(sensorServiceSubscription)
++  }
++
++  // android.hardware.SensorEventListener2
++  override fun onSensorChanged(sensorEvent: SensorEvent) {
++    if (sensorEvent.sensor.type == sensorType) {
++      val currentTime = System.currentTimeMillis()
++      val listeners: Set<SensorServiceSubscription> = mSensorEventListenerLastUpdateMap.keys
++      for (sensorServiceSubscription in listeners) {
++        if (sensorServiceSubscription.isEnabled) {
++          val lastUpdate = mSensorEventListenerLastUpdateMap[sensorServiceSubscription] ?: 0L
++          if (currentTime - lastUpdate > sensorServiceSubscription.updateInterval) {
++            sensorServiceSubscription.sensorEventListener.onSensorChanged(sensorEvent)
++            mSensorEventListenerLastUpdateMap[sensorServiceSubscription] = currentTime
++          }
++        }
++      }
++    }
++  }
++
++  override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {
++    if (sensor.type == sensorType) {
++      for (subscription in mSensorEventListenerLastUpdateMap.keys) {
++        if (subscription.isEnabled) {
++          subscription.sensorEventListener.onAccuracyChanged(sensor, accuracy)
++        }
++      }
++    }
++  }
++
++  override fun onFlushCompleted(sensor: Sensor) {
++    if (sensor.type == sensorType) {
++      for (subscription in mSensorEventListenerLastUpdateMap.keys) {
++        if (subscription.isEnabled) {
++          subscription.sensorEventListener.onFlushCompleted(sensor)
++        }
++      }
++    }
++  }
++
++  // Private helpers
++  private fun updateObserving() {
++    // Start/stop observing according to the experience state
++    if (mListenersCount > 0 && experienceIsForegrounded) {
++      super.startObserving()
++    } else {
++      super.stopObserving()
++    }
++  }
++}
