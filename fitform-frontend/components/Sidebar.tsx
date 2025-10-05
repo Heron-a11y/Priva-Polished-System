@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Platform, Image }
 import { Link, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { getLocalImageUrl } from '../utils/imageUrlHelper';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const isMobile = SCREEN_WIDTH < 600;
@@ -51,7 +52,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
                 {user.profile_image ? (
                   <Image 
                     source={{ 
-                      uri: user.profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.104:8000'),
+                      uri: getLocalImageUrl(user.profile_image),
                       cache: 'force-cache'
                     }} 
                     style={styles.logoImage}
@@ -198,7 +199,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
             {user.profile_image ? (
               <Image 
                 source={{ 
-                  uri: user.profile_image,
+                  uri: getLocalImageUrl(user.profile_image),
                   cache: 'force-cache'
                 }} 
                 style={styles.logoImage}

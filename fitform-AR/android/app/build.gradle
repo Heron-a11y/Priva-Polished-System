@@ -160,7 +160,7 @@ dependencies {
     implementation 'com.google.ar:core:1.40.0'
     implementation 'com.google.ar.sceneform:filament-android:1.17.1'
     
-    // TensorFlow Lite for ML models and pose detection
+    // TensorFlow Lite 2.12.0 ML models for enhanced body tracking
     implementation 'org.tensorflow:tensorflow-lite:2.12.0'
     implementation 'org.tensorflow:tensorflow-lite-gpu:2.12.0'
     implementation 'org.tensorflow:tensorflow-lite-support:0.4.4'

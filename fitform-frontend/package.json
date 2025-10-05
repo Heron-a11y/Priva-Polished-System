@@ -12,6 +12,8 @@
     "start:8081": "expo start --port 8081 --tunnel --clear",
     "update:ngrok": "node update-ngrok-url-auto.js",
     "reset-project": "node ./scripts/reset-project.js",
+    "setup-ar": "node ./scripts/setup-ar-dev.js",
+    "validate-ar": "npx tsc --noEmit && echo 'AR validation passed'",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",

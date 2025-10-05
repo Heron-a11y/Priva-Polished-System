@@ -19,7 +19,7 @@ function getLocalIP() {
         }
     }
     
-    return '192.168.1.104'; // Fallback to your IP
+    return '192.168.1.105'; // Fallback to your IP
 }
 
 const localIP = getLocalIP();

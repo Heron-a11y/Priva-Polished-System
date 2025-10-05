@@ -239,7 +239,7 @@ const ManageAppointmentsScreen = () => {
             {appointment.customer_profile_image ? (
               <Image 
                 source={{ 
-                  uri: appointment.customer_profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.104:8000'),
+                  uri: appointment.customer_profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.105:8000'),
                   cache: 'force-cache'
                 }} 
                 style={styles.customerProfileImage}

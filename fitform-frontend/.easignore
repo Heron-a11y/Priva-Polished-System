@@ -1,6 +1,13 @@
-# Ignore all parent directories completely
+# EAS Build ignore file
+# This file tells EAS Build which files and directories to exclude from the build
+
+# Ignore backend and AR directories completely
 ../fitform-backend/
 ../fitform-AR/
+../fitform-backend
+../fitform-AR
+
+# Ignore all parent directories
 ../*
 ../**/
 
@@ -29,6 +36,7 @@ ios/build/
 .expo/
 dist/
 .expo/web/
+web-build/
 
 # Ignore logs
 *.log
@@ -44,6 +52,10 @@ yarn-error.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Ignore any symlinks and Laravel storage
+../fitform-backend/storage/
+../fitform-backend/public/storage/
 
 # Ignore documentation files
 *.md
@@ -69,3 +81,21 @@ quick-fix-metro.bat
 ../fitform-AR/**
 ../**/storage/**
 ../**/public/storage/**
+
+# Ignore temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# Ignore test files
+test-*.js
+*-test.js
+*.test.js
+*.spec.js

@@ -155,6 +155,16 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    
+    // ARCore dependencies for AR body tracking
+    implementation 'com.google.ar:core:1.40.0'
+    implementation 'com.google.ar.sceneform:filament-android:1.17.1'
+    
+    // TensorFlow Lite 2.12.0 ML models for enhanced body tracking
+    implementation 'org.tensorflow:tensorflow-lite:2.12.0'
+    implementation 'org.tensorflow:tensorflow-lite-gpu:2.12.0'
+    implementation 'org.tensorflow:tensorflow-lite-support:0.4.4'
+    implementation 'org.tensorflow:tensorflow-lite-metadata:0.4.4'
 
     // ARCore dependencies for AR body tracking
     implementation 'com.google.ar:core:1.40.0'

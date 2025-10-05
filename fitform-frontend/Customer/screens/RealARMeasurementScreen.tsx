@@ -16,6 +16,7 @@ import { getConfig } from '../../src/ar/config/ARConfig';
 import { logger, logInfo, logError, logPerformance, logWarn } from '../../src/ar/utils/ARLogger';
 import { deviceCapabilities } from '../../src/ar/utils/DeviceCapabilities';
 import { Colors } from '../../constants/Colors';
+import { ARMeasurement, ARSessionState, ARCapabilities } from '../../types/ARTypes';
 
 // Create AR session manager instance with error handling
 let arSessionManager: any = null;

@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
 import { useNotificationContext } from '../contexts/NotificationContext';
+import { getLocalImageUrl } from '../utils/imageUrlHelper';
 
 interface HeaderProps {
   onHamburgerPress?: () => void;
@@ -132,7 +133,7 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
             {user?.profile_image ? (
               <Image 
                 source={{ 
-                  uri: user.profile_image,
+                  uri: getLocalImageUrl(user.profile_image),
                   cache: 'force-cache' // Force cache for persistence
                 }} 
                 style={styles.profileImage}
