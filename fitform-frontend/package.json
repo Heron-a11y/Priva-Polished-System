@@ -29,7 +29,7 @@
     "@tensorflow/tfjs": "^4.22.0",
     "@tensorflow/tfjs-react-native": "^0.8.0",
     "axios": "^1.9.0",
-    "expo": "54.0.12",
+    "expo": "^54.0.12",
     "expo-blur": "~15.0.7",
     "expo-build-properties": "~1.0.9",
     "expo-camera": "~17.0.8",
