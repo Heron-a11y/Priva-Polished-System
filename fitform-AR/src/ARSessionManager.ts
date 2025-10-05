@@ -15,6 +15,10 @@ interface ARSessionManagerNative {
   stopRealTimeProcessing(): Promise<boolean>;
   // ✅ PHASE 2: Configuration management
   loadConfiguration(config: any): Promise<boolean>;
+  // ✅ TensorFlow Lite ML Model methods
+  initializeMLModel(modelPath: string): Promise<boolean>;
+  isMLModelLoaded(): Promise<boolean>;
+  processFrameWithML(imageData: number[], width: number, height: number): Promise<any>;
 }
 
 // Define the event emitter interface
@@ -369,6 +373,72 @@ class ARSessionManager {
       return 'iOS with ARKit';
     }
     return 'Unknown platform';
+  }
+
+  /**
+   * Initialize TensorFlow Lite ML model for pose detection
+   * @param modelPath - Path to the TensorFlow Lite model file
+   * @returns Promise<boolean> - true if model loaded successfully
+   */
+  async initializeMLModel(modelPath: string): Promise<boolean> {
+    try {
+      console.log('🤖 Initializing TensorFlow Lite ML model:', modelPath);
+      
+      if (!ARSessionManagerNative) {
+        throw new Error('ARSessionManager native module not available');
+      }
+
+      const result = await ARSessionManagerNative.initializeMLModel(modelPath);
+      console.log('✅ TensorFlow Lite ML model initialized successfully');
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Failed to initialize ML model:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if ML model is loaded and ready
+   * @returns Promise<boolean> - true if model is loaded
+   */
+  async isMLModelLoaded(): Promise<boolean> {
+    try {
+      if (!ARSessionManagerNative) {
+        return false;
+      }
+
+      return await ARSessionManagerNative.isMLModelLoaded();
+      
+    } catch (error) {
+      console.error('❌ Failed to check ML model status:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Process camera frame with TensorFlow Lite ML model
+   * @param imageData - Camera frame data as number array
+   * @param width - Image width
+   * @param height - Image height
+   * @returns Promise<any> - ML model results with pose landmarks
+   */
+  async processFrameWithML(imageData: number[], width: number, height: number): Promise<any> {
+    try {
+      console.log('🤖 Processing frame with TensorFlow Lite ML model');
+      
+      if (!ARSessionManagerNative) {
+        throw new Error('ARSessionManager native module not available');
+      }
+
+      const result = await ARSessionManagerNative.processFrameWithML(imageData, width, height);
+      console.log('✅ ML model processed frame successfully');
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Failed to process frame with ML model:', error);
+      throw error;
+    }
   }
 }
 

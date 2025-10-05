@@ -27,7 +27,9 @@ class ProfileController extends Controller
                     'name' => $user->name,
                     'email' => $user->email,
                     'role' => $user->role,
-                    'profile_image' => $user->profile_image ? Storage::disk('public')->url($user->profile_image) : null,
+                    'profile_image' => $user->profile_image && Storage::disk('public')->exists($user->profile_image) 
+                        ? Storage::disk('public')->url($user->profile_image) 
+                        : null,
                     'phone' => $user->phone,
                     'address' => $user->address,
                     'city' => $user->city,
@@ -119,7 +121,9 @@ class ProfileController extends Controller
                     'name' => $user->name,
                     'email' => $user->email,
                     'role' => $user->role,
-                    'profile_image' => $user->profile_image ? Storage::disk('public')->url($user->profile_image) : null,
+                    'profile_image' => $user->profile_image && Storage::disk('public')->exists($user->profile_image) 
+                        ? Storage::disk('public')->url($user->profile_image) 
+                        : null,
                     'phone' => $user->phone,
                     'address' => $user->address,
                     'city' => $user->city,
@@ -190,7 +194,9 @@ class ProfileController extends Controller
                         'name' => $user->name,
                         'email' => $user->email,
                         'role' => $user->role,
-                        'profile_image' => $user->profile_image ? Storage::disk('public')->url($user->profile_image) : null,
+                        'profile_image' => $user->profile_image && Storage::disk('public')->exists($user->profile_image) 
+                        ? Storage::disk('public')->url($user->profile_image) 
+                        : null,
                         'phone' => $user->phone,
                         'address' => $user->address,
                         'city' => $user->city,

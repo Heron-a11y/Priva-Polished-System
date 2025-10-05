@@ -12,7 +12,7 @@ const criticalFiles = [
   'validate-assets.js',
   'android/gradle.properties',
   'android/app/build.gradle',
-  'android/app/src/main/java/com/anonymous/arbodymeasurements/ARSessionManagerModule.kt',
+  'android/app/src/main/java/com/ica_russ/arbodymeasurements/ARSessionManagerModule.kt',
   'ios/ARSessionManager.swift',
   'ios/Podfile',
   'package.json',
