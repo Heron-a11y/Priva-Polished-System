@@ -1,0 +1,2459 @@
+diff --git a/node_modules/expo-media-library/android/.project b/node_modules/expo-media-library/android/.project
+new file mode 100644
+index 0000000..2c70b44
+--- /dev/null
++++ b/node_modules/expo-media-library/android/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>expo-media-library</name>
++	<comment>Project expo-media-library created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1759581207296</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/expo-media-library/android/bin/.project b/node_modules/expo-media-library/android/bin/.project
+new file mode 100644
+index 0000000..2c70b44
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>expo-media-library</name>
++	<comment>Project expo-media-library created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1759581207296</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/expo-media-library/android/bin/build.gradle b/node_modules/expo-media-library/android/bin/build.gradle
+new file mode 100644
+index 0000000..b30a78e
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/build.gradle
+@@ -0,0 +1,81 @@
++apply plugin: 'com.android.library'
++apply plugin: 'kotlin-android'
++apply plugin: 'maven-publish'
++
++group = 'host.exp.exponent'
++version = '14.0.1'
++
++
++buildscript {
++  // Simple helper that allows the root project to override versions declared by this library.
++  ext.safeExtGet = { prop, fallback ->
++    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
++  }
++
++  repositories {
++    mavenCentral()
++  }
++
++  dependencies {
++    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${safeExtGet('kotlinVersion', '1.4.21')}")
++  }
++}
++
++// Creating sources with comments
++task androidSourcesJar(type: Jar) {
++  classifier = 'sources'
++  from android.sourceSets.main.java.srcDirs
++}
++
++afterEvaluate {
++  publishing {
++    publications {
++      release(MavenPublication) {
++        from components.release
++        // Add additional sourcesJar to artifacts
++        artifact(androidSourcesJar)
++      }
++    }
++    repositories {
++      maven {
++        url = mavenLocal().url
++      }
++    }
++  }
++}
++
++android {
++  compileSdkVersion safeExtGet("compileSdkVersion", 30)
++
++  compileOptions {
++    sourceCompatibility JavaVersion.VERSION_1_8
++    targetCompatibility JavaVersion.VERSION_1_8
++  }
++
++  defaultConfig {
++    minSdkVersion safeExtGet("minSdkVersion", 21)
++    targetSdkVersion safeExtGet("targetSdkVersion", 30)
++    versionCode 37
++    versionName "14.0.1"
++  }
++  lintOptions {
++    abortOnError false
++  }
++  kotlinOptions {
++    jvmTarget = JavaVersion.VERSION_1_8
++  }
++}
++
++dependencies {
++  implementation project(':expo-modules-core')
++
++  implementation "androidx.annotation:annotation:1.2.0"
++  api "androidx.exifinterface:exifinterface:1.3.3"
++
++  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${safeExtGet('kotlinVersion', '1.4.21')}"
++
++  if (project.findProject(':unimodules-test-core')) {
++    testImplementation project(':unimodules-test-core')
++  }
++  testImplementation "org.robolectric:robolectric:4.3.1"
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/AndroidManifest.xml b/node_modules/expo-media-library/android/bin/src/main/AndroidManifest.xml
+new file mode 100644
+index 0000000..5e2cc49
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/AndroidManifest.xml
+@@ -0,0 +1,5 @@
++
++<manifest package="expo.modules.medialibrary" xmlns:android="http://schemas.android.com/apk/res/android">
++  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
++  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
++</manifest>
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/MediaLibraryConstants.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/MediaLibraryConstants.kt
+new file mode 100644
+index 0000000..b321bbd
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/MediaLibraryConstants.kt
+@@ -0,0 +1,175 @@
++package expo.modules.medialibrary
++
++import android.net.Uri
++import android.provider.MediaStore
++import androidx.exifinterface.media.ExifInterface
++
++const val GET_ASSETS_DEFAULT_LIMIT = 20
++
++const val ERROR_UNABLE_TO_LOAD_PERMISSION = "E_UNABLE_TO_LOAD_PERMISSION"
++const val ERROR_UNABLE_TO_SAVE_PERMISSION = "E_UNABLE_TO_SAVE_PERMISSION"
++const val ERROR_UNABLE_TO_DELETE = "E_UNABLE_TO_DELETE"
++const val ERROR_UNABLE_TO_LOAD = "E_UNABLE_TO_LOAD"
++const val ERROR_UNABLE_TO_SAVE = "E_UNABLE_TO_SAVE"
++const val ERROR_NO_ALBUM = "E_NO_ALBUM"
++const val ERROR_UNABLE_TO_MIGRATE = "ERR_UNABLE_TO_MIGRATE"
++const val ERROR_MEDIA_LIBRARY_CORRUPTED = "E_MEDIA_LIBRARY_CORRUPTED"
++const val ERROR_NO_ASSET = "E_NO_ASSET"
++const val ERROR_IO_EXCEPTION = "E_IO_EXCEPTION"
++const val ERROR_NO_PERMISSIONS = "E_NO_PERMISSIONS"
++const val ERROR_UNABLE_TO_ASK_FOR_PERMISSIONS = "ERR_UNABLE_TO_ASK_FOR_PERMISSIONS"
++const val ERROR_NO_PERMISSIONS_MESSAGE = "Missing MEDIA_LIBRARY permissions."
++const val ERROR_NO_WRITE_PERMISSION_MESSAGE = "Missing MEDIA_LIBRARY write permission."
++const val ERROR_USER_DID_NOT_GRANT_WRITE_PERMISSIONS_MESSAGE = "User didn't grant write permission to requested files."
++const val ERROR_UNABLE_TO_ASK_FOR_PERMISSIONS_MESSAGE = "Unable to ask for permissions."
++const val ERROR_NO_FILE_EXTENSION = "E_NO_FILE_EXTENSION"
++
++const val LIBRARY_DID_CHANGE_EVENT = "mediaLibraryDidChange"
++
++val EXTERNAL_CONTENT_URI: Uri = MediaStore.Files.getContentUri("external")
++
++val ASSET_PROJECTION = arrayOf(
++  MediaStore.Images.Media._ID,
++  MediaStore.Files.FileColumns.DISPLAY_NAME,
++  MediaStore.Images.Media.DATA,
++  MediaStore.Files.FileColumns.MEDIA_TYPE,
++  MediaStore.MediaColumns.WIDTH,
++  MediaStore.MediaColumns.HEIGHT,
++  MediaStore.Images.Media.DATE_TAKEN,
++  MediaStore.Images.Media.DATE_MODIFIED,
++  MediaStore.Images.Media.ORIENTATION,
++  MediaStore.Video.VideoColumns.DURATION,
++  MediaStore.Images.Media.BUCKET_ID
++)
++
++val EXIF_TAGS = arrayOf(
++  arrayOf("string", ExifInterface.TAG_ARTIST),
++  arrayOf("int", ExifInterface.TAG_BITS_PER_SAMPLE),
++  arrayOf("int", ExifInterface.TAG_COMPRESSION),
++  arrayOf("string", ExifInterface.TAG_COPYRIGHT),
++  arrayOf("string", ExifInterface.TAG_DATETIME),
++  arrayOf("string", ExifInterface.TAG_IMAGE_DESCRIPTION),
++  arrayOf("int", ExifInterface.TAG_IMAGE_LENGTH),
++  arrayOf("int", ExifInterface.TAG_IMAGE_WIDTH),
++  arrayOf("int", ExifInterface.TAG_JPEG_INTERCHANGE_FORMAT),
++  arrayOf("int", ExifInterface.TAG_JPEG_INTERCHANGE_FORMAT_LENGTH),
++  arrayOf("string", ExifInterface.TAG_MAKE),
++  arrayOf("string", ExifInterface.TAG_MODEL),
++  arrayOf("int", ExifInterface.TAG_ORIENTATION),
++  arrayOf("int", ExifInterface.TAG_PHOTOMETRIC_INTERPRETATION),
++  arrayOf("int", ExifInterface.TAG_PLANAR_CONFIGURATION),
++  arrayOf("double", ExifInterface.TAG_PRIMARY_CHROMATICITIES),
++  arrayOf("double", ExifInterface.TAG_REFERENCE_BLACK_WHITE),
++  arrayOf("int", ExifInterface.TAG_RESOLUTION_UNIT),
++  arrayOf("int", ExifInterface.TAG_ROWS_PER_STRIP),
++  arrayOf("int", ExifInterface.TAG_SAMPLES_PER_PIXEL),
++  arrayOf("string", ExifInterface.TAG_SOFTWARE),
++  arrayOf("int", ExifInterface.TAG_STRIP_BYTE_COUNTS),
++  arrayOf("int", ExifInterface.TAG_STRIP_OFFSETS),
++  arrayOf("int", ExifInterface.TAG_TRANSFER_FUNCTION),
++  arrayOf("double", ExifInterface.TAG_WHITE_POINT),
++  arrayOf("double", ExifInterface.TAG_X_RESOLUTION),
++  arrayOf("double", ExifInterface.TAG_Y_CB_CR_COEFFICIENTS),
++  arrayOf("int", ExifInterface.TAG_Y_CB_CR_POSITIONING),
++  arrayOf("int", ExifInterface.TAG_Y_CB_CR_SUB_SAMPLING),
++  arrayOf("double", ExifInterface.TAG_Y_RESOLUTION),
++  arrayOf("double", ExifInterface.TAG_APERTURE_VALUE),
++  arrayOf("double", ExifInterface.TAG_BRIGHTNESS_VALUE),
++  arrayOf("string", ExifInterface.TAG_CFA_PATTERN),
++  arrayOf("int", ExifInterface.TAG_COLOR_SPACE),
++  arrayOf("string", ExifInterface.TAG_COMPONENTS_CONFIGURATION),
++  arrayOf("double", ExifInterface.TAG_COMPRESSED_BITS_PER_PIXEL),
++  arrayOf("int", ExifInterface.TAG_CONTRAST),
++  arrayOf("int", ExifInterface.TAG_CUSTOM_RENDERED),
++  arrayOf("string", ExifInterface.TAG_DATETIME_DIGITIZED),
++  arrayOf("string", ExifInterface.TAG_DATETIME_ORIGINAL),
++  arrayOf("string", ExifInterface.TAG_DEVICE_SETTING_DESCRIPTION),
++  arrayOf("double", ExifInterface.TAG_DIGITAL_ZOOM_RATIO),
++  arrayOf("string", ExifInterface.TAG_EXIF_VERSION),
++  arrayOf("double", ExifInterface.TAG_EXPOSURE_BIAS_VALUE),
++  arrayOf("double", ExifInterface.TAG_EXPOSURE_INDEX),
++  arrayOf("int", ExifInterface.TAG_EXPOSURE_MODE),
++  arrayOf("int", ExifInterface.TAG_EXPOSURE_PROGRAM),
++  arrayOf("double", ExifInterface.TAG_EXPOSURE_TIME),
++  arrayOf("double", ExifInterface.TAG_F_NUMBER),
++  arrayOf("string", ExifInterface.TAG_FILE_SOURCE),
++  arrayOf("int", ExifInterface.TAG_FLASH),
++  arrayOf("double", ExifInterface.TAG_FLASH_ENERGY),
++  arrayOf("string", ExifInterface.TAG_FLASHPIX_VERSION),
++  arrayOf("double", ExifInterface.TAG_FOCAL_LENGTH),
++  arrayOf("int", ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM),
++  arrayOf("int", ExifInterface.TAG_FOCAL_PLANE_RESOLUTION_UNIT),
++  arrayOf("double", ExifInterface.TAG_FOCAL_PLANE_X_RESOLUTION),
++  arrayOf("double", ExifInterface.TAG_FOCAL_PLANE_Y_RESOLUTION),
++  arrayOf("int", ExifInterface.TAG_GAIN_CONTROL),
++  arrayOf("int", ExifInterface.TAG_ISO_SPEED_RATINGS),
++  arrayOf("string", ExifInterface.TAG_IMAGE_UNIQUE_ID),
++  arrayOf("int", ExifInterface.TAG_LIGHT_SOURCE),
++  arrayOf("string", ExifInterface.TAG_MAKER_NOTE),
++  arrayOf("double", ExifInterface.TAG_MAX_APERTURE_VALUE),
++  arrayOf("int", ExifInterface.TAG_METERING_MODE),
++  arrayOf("int", ExifInterface.TAG_NEW_SUBFILE_TYPE),
++  arrayOf("string", ExifInterface.TAG_OECF),
++  arrayOf("int", ExifInterface.TAG_PIXEL_X_DIMENSION),
++  arrayOf("int", ExifInterface.TAG_PIXEL_Y_DIMENSION),
++  arrayOf("string", ExifInterface.TAG_RELATED_SOUND_FILE),
++  arrayOf("int", ExifInterface.TAG_SATURATION),
++  arrayOf("int", ExifInterface.TAG_SCENE_CAPTURE_TYPE),
++  arrayOf("string", ExifInterface.TAG_SCENE_TYPE),
++  arrayOf("int", ExifInterface.TAG_SENSING_METHOD),
++  arrayOf("int", ExifInterface.TAG_SHARPNESS),
++  arrayOf("double", ExifInterface.TAG_SHUTTER_SPEED_VALUE),
++  arrayOf("string", ExifInterface.TAG_SPATIAL_FREQUENCY_RESPONSE),
++  arrayOf("string", ExifInterface.TAG_SPECTRAL_SENSITIVITY),
++  arrayOf("int", ExifInterface.TAG_SUBFILE_TYPE),
++  arrayOf("string", ExifInterface.TAG_SUBSEC_TIME),
++  arrayOf("string", ExifInterface.TAG_SUBSEC_TIME_DIGITIZED),
++  arrayOf("string", ExifInterface.TAG_SUBSEC_TIME_ORIGINAL),
++  arrayOf("int", ExifInterface.TAG_SUBJECT_AREA),
++  arrayOf("double", ExifInterface.TAG_SUBJECT_DISTANCE),
++  arrayOf("int", ExifInterface.TAG_SUBJECT_DISTANCE_RANGE),
++  arrayOf("int", ExifInterface.TAG_SUBJECT_LOCATION),
++  arrayOf("string", ExifInterface.TAG_USER_COMMENT),
++  arrayOf("int", ExifInterface.TAG_WHITE_BALANCE),
++  arrayOf("int", ExifInterface.TAG_GPS_ALTITUDE_REF),
++  arrayOf("string", ExifInterface.TAG_GPS_AREA_INFORMATION),
++  arrayOf("double", ExifInterface.TAG_GPS_DOP),
++  arrayOf("string", ExifInterface.TAG_GPS_DATESTAMP),
++  arrayOf("double", ExifInterface.TAG_GPS_DEST_BEARING),
++  arrayOf("string", ExifInterface.TAG_GPS_DEST_BEARING_REF),
++  arrayOf("double", ExifInterface.TAG_GPS_DEST_DISTANCE),
++  arrayOf("string", ExifInterface.TAG_GPS_DEST_DISTANCE_REF),
++  arrayOf("double", ExifInterface.TAG_GPS_DEST_LATITUDE),
++  arrayOf("string", ExifInterface.TAG_GPS_DEST_LATITUDE_REF),
++  arrayOf("double", ExifInterface.TAG_GPS_DEST_LONGITUDE),
++  arrayOf("string", ExifInterface.TAG_GPS_DEST_LONGITUDE_REF),
++  arrayOf("int", ExifInterface.TAG_GPS_DIFFERENTIAL),
++  arrayOf("double", ExifInterface.TAG_GPS_IMG_DIRECTION),
++  arrayOf("string", ExifInterface.TAG_GPS_IMG_DIRECTION_REF),
++  arrayOf("string", ExifInterface.TAG_GPS_LATITUDE_REF),
++  arrayOf("string", ExifInterface.TAG_GPS_LONGITUDE_REF),
++  arrayOf("string", ExifInterface.TAG_GPS_MAP_DATUM),
++  arrayOf("string", ExifInterface.TAG_GPS_MEASURE_MODE),
++  arrayOf("string", ExifInterface.TAG_GPS_PROCESSING_METHOD),
++  arrayOf("string", ExifInterface.TAG_GPS_SATELLITES),
++  arrayOf("double", ExifInterface.TAG_GPS_SPEED),
++  arrayOf("string", ExifInterface.TAG_GPS_SPEED_REF),
++  arrayOf("string", ExifInterface.TAG_GPS_STATUS),
++  arrayOf("string", ExifInterface.TAG_GPS_TIMESTAMP),
++  arrayOf("double", ExifInterface.TAG_GPS_TRACK),
++  arrayOf("string", ExifInterface.TAG_GPS_TRACK_REF),
++  arrayOf("string", ExifInterface.TAG_GPS_VERSION_ID),
++  arrayOf("string", ExifInterface.TAG_INTEROPERABILITY_INDEX),
++  arrayOf("int", ExifInterface.TAG_THUMBNAIL_IMAGE_LENGTH),
++  arrayOf("int", ExifInterface.TAG_THUMBNAIL_IMAGE_WIDTH),
++  arrayOf("int", ExifInterface.TAG_DNG_VERSION),
++  arrayOf("int", ExifInterface.TAG_DEFAULT_CROP_SIZE),
++  arrayOf("int", ExifInterface.TAG_ORF_PREVIEW_IMAGE_START),
++  arrayOf("int", ExifInterface.TAG_ORF_PREVIEW_IMAGE_LENGTH),
++  arrayOf("int", ExifInterface.TAG_ORF_ASPECT_FRAME),
++  arrayOf("int", ExifInterface.TAG_RW2_SENSOR_BOTTOM_BORDER),
++  arrayOf("int", ExifInterface.TAG_RW2_SENSOR_LEFT_BORDER),
++  arrayOf("int", ExifInterface.TAG_RW2_SENSOR_RIGHT_BORDER),
++  arrayOf("int", ExifInterface.TAG_RW2_SENSOR_TOP_BORDER),
++  arrayOf("int", ExifInterface.TAG_RW2_ISO)
++)
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/MediaLibraryEnums.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/MediaLibraryEnums.kt
+new file mode 100644
+index 0000000..38fb86a
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/MediaLibraryEnums.kt
+@@ -0,0 +1,35 @@
++package expo.modules.medialibrary
++
++import android.provider.MediaStore
++
++enum class MediaType(val apiName: String, val mediaColumn: Int?) {
++  AUDIO("audio", MediaStore.Files.FileColumns.MEDIA_TYPE_AUDIO),
++  PHOTO("photo", MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE),
++  VIDEO("video", MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO),
++  UNKNOWN("unknown", MediaStore.Files.FileColumns.MEDIA_TYPE_NONE),
++  ALL("all", null);
++
++  companion object {
++    // all constants have keys equal to the values
++    fun getConstants() = values().map { Pair(it.apiName, it.apiName) }.toMap()
++
++    fun fromApiName(constantName: String) = values().find { it.apiName == constantName }
++  }
++}
++
++enum class SortBy(val keyName: String, val mediaColumnName: String) {
++  DEFAULT("default", MediaStore.Images.Media._ID),
++  CREATION_TIME("creationTime", MediaStore.Images.Media.DATE_TAKEN),
++  MODIFICATION_TIME("modificationTime", MediaStore.Images.Media.DATE_MODIFIED),
++  MEDIA_TYPE("mediaType", MediaStore.Files.FileColumns.MEDIA_TYPE),
++  WIDTH("width", MediaStore.MediaColumns.WIDTH),
++  HEIGHT("height", MediaStore.MediaColumns.HEIGHT),
++  DURATION("duration", MediaStore.Video.VideoColumns.DURATION);
++
++  companion object {
++    // all constants have keys equal to the values
++    fun getConstants() = values().map { Pair(it.keyName, it.keyName) }.toMap()
++
++    fun fromKeyName(keyName: String) = values().find { it.keyName == keyName }
++  }
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/MediaLibraryModule.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/MediaLibraryModule.kt
+new file mode 100644
+index 0000000..7ec7b91
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/MediaLibraryModule.kt
+@@ -0,0 +1,447 @@
++package expo.modules.medialibrary
++
++import android.Manifest.permission.*
++import android.app.Activity
++import android.content.Context
++import android.content.Intent
++import android.content.IntentSender.SendIntentException
++import android.content.pm.PackageManager
++import android.database.ContentObserver
++import android.net.Uri
++import android.os.AsyncTask
++import android.os.Binder
++import android.os.Build
++import android.os.Bundle
++import android.os.Handler
++import android.provider.MediaStore
++import expo.modules.core.ExportedModule
++import expo.modules.core.ModuleRegistry
++import expo.modules.core.ModuleRegistryDelegate
++import expo.modules.core.Promise
++import expo.modules.core.interfaces.ActivityEventListener
++import expo.modules.core.interfaces.ActivityProvider
++import expo.modules.core.interfaces.ExpoMethod
++import expo.modules.core.interfaces.services.EventEmitter
++import expo.modules.core.interfaces.services.UIManager
++import expo.modules.interfaces.permissions.Permissions
++import expo.modules.medialibrary.MediaLibraryModule.Action
++import expo.modules.medialibrary.albums.AddAssetsToAlbum
++import expo.modules.medialibrary.albums.CreateAlbum
++import expo.modules.medialibrary.albums.DeleteAlbums
++import expo.modules.medialibrary.albums.GetAlbum
++import expo.modules.medialibrary.albums.GetAlbums
++import expo.modules.medialibrary.albums.RemoveAssetsFromAlbum
++import expo.modules.medialibrary.albums.getAssetsInAlbums
++import expo.modules.medialibrary.albums.migration.CheckIfAlbumShouldBeMigrated
++import expo.modules.medialibrary.albums.migration.MigrateAlbum
++import expo.modules.medialibrary.assets.CreateAsset
++import expo.modules.medialibrary.assets.DeleteAssets
++import expo.modules.medialibrary.assets.GetAssetInfo
++import expo.modules.medialibrary.assets.GetAssets
++
++class MediaLibraryModule(
++  context: Context,
++  private val moduleRegistryDelegate: ModuleRegistryDelegate = ModuleRegistryDelegate(),
++) : ExportedModule(context), ActivityEventListener {
++  private val uiManager: UIManager by moduleRegistry()
++  private val permissions: Permissions? by moduleRegistry()
++  private val activityProvider: ActivityProvider by moduleRegistry()
++  private val eventEmitter: EventEmitter by moduleRegistry()
++
++  private var imagesObserver: MediaStoreContentObserver? = null
++  private var videosObserver: MediaStoreContentObserver? = null
++  private var awaitingAction: Action? = null
++
++  override fun getName() = "ExponentMediaLibrary"
++
++  override fun getConstants(): Map<String, Any> {
++    return mapOf(
++      "MediaType" to MediaType.getConstants(),
++      "SortBy" to SortBy.getConstants(),
++      "CHANGE_LISTENER_NAME" to LIBRARY_DID_CHANGE_EVENT,
++    )
++  }
++
++  override fun onCreate(moduleRegistry: ModuleRegistry) {
++    moduleRegistryDelegate.onCreate(moduleRegistry)
++  }
++
++  @ExpoMethod
++  fun requestPermissionsAsync(writeOnly: Boolean, promise: Promise) {
++    Permissions.askForPermissionsWithPermissionsManager(
++      permissions,
++      promise,
++      *getManifestPermissions(writeOnly)
++    )
++  }
++
++  @ExpoMethod
++  fun getPermissionsAsync(writeOnly: Boolean, promise: Promise) {
++    Permissions.getPermissionsWithPermissionsManager(
++      permissions,
++      promise,
++      *getManifestPermissions(writeOnly)
++    )
++  }
++
++  @ExpoMethod
++  fun saveToLibraryAsync(
++    localUri: String,
++    promise: Promise
++  ) = rejectUnlessPermissionsGranted(promise, writeOnly = true) {
++    CreateAsset(context, localUri, promise, false)
++      .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
++  }
++
++  @ExpoMethod
++  fun createAssetAsync(
++    localUri: String,
++    promise: Promise
++  ) = rejectUnlessPermissionsGranted(promise) {
++    CreateAsset(context, localUri, promise)
++      .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
++  }
++
++  @ExpoMethod
++  fun addAssetsToAlbumAsync(
++    assetsId: List<String>,
++    albumId: String,
++    copyToAlbum: Boolean,
++    promise: Promise
++  ) = rejectUnlessPermissionsGranted(promise, writeOnly = false) {
++    val action = actionIfUserGrantedPermission(promise) {
++      AddAssetsToAlbum(context, assetsId.toTypedArray(), albumId, copyToAlbum, promise)
++        .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
++    }
++    runActionWithPermissions(if (copyToAlbum) emptyList() else assetsId, action, promise)
++  }
++
++  @ExpoMethod
++  fun removeAssetsFromAlbumAsync(
++    assetsId: List<String>,
++    albumId: String,
++    promise: Promise
++  ) = rejectUnlessPermissionsGranted(promise) {
++    val action = actionIfUserGrantedPermission(promise) {
++      RemoveAssetsFromAlbum(context, assetsId.toTypedArray(), albumId, promise)
++        .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
++    }
++    runActionWithPermissions(assetsId, action, promise)
++  }
++
++  @ExpoMethod
++  fun deleteAssetsAsync(
++    assetsId: List<String>,
++    promise: Promise
++  ) = rejectUnlessPermissionsGranted(promise) {
++    val action = actionIfUserGrantedPermission(promise) {
++      DeleteAssets(context, assetsId.toTypedArray(), promise)
++        .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
++    }
++    runActionWithPermissions(assetsId, action, promise)
++  }
++
++  @ExpoMethod
++  fun getAssetInfoAsync(
++    assetId: String,
++    options: Map<String, Any?>? /* unused on android atm */,
++    promise: Promise
++  ) = rejectUnlessPermissionsGranted(promise, writeOnly = false) {
++    GetAssetInfo(context, assetId, promise).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
++  }
++
++  @ExpoMethod
++  fun getAlbumsAsync(
++    options: Map<String, Any?>? /* unused on android atm */,
++    promise: Promise
++  ) = rejectUnlessPermissionsGranted(promise) {
++    GetAlbums(context, promise).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
++  }
++
++  @ExpoMethod
++  fun getAlbumAsync(
++    albumName: String,
++    promise: Promise
++  ) = rejectUnlessPermissionsGranted(promise) {
++    GetAlbum(context, albumName, promise)
++      .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
++  }
++
++  @ExpoMethod
++  fun createAlbumAsync(
++    albumName: String,
++    assetId: String,
++    copyAsset: Boolean,
++    promise: Promise
++  ) = rejectUnlessPermissionsGranted(promise) {
++    val action = actionIfUserGrantedPermission(promise) {
++      CreateAlbum(context, albumName, assetId, copyAsset, promise)
++        .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
++    }
++    runActionWithPermissions(if (copyAsset) emptyList() else listOf(assetId), action, promise)
++  }
++
++  @ExpoMethod
++  fun deleteAlbumsAsync(
++    albumIds: List<String>,
++    promise: Promise
++  ) = rejectUnlessPermissionsGranted(promise) {
++    val action = actionIfUserGrantedPermission(promise) {
++      DeleteAlbums(context, albumIds, promise)
++        .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
++    }
++    val assetIds = getAssetsInAlbums(context, *albumIds.toTypedArray())
++    runActionWithPermissions(assetIds, action, promise)
++  }
++
++  @ExpoMethod
++  fun getAssetsAsync(
++    assetOptions: Map<String, Any?>,
++    promise: Promise
++  ) = rejectUnlessPermissionsGranted(promise) {
++    GetAssets(context, assetOptions, promise)
++      .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
++  }
++
++  @ExpoMethod
++  fun migrateAlbumIfNeededAsync(albumId: String, promise: Promise) {
++    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
++      promise.resolve(null)
++      return
++    }
++
++    val assets = MediaLibraryUtils.getAssetsById(
++      context,
++      null,
++      *getAssetsInAlbums(context, albumId).toTypedArray()
++    )
++    if (assets == null) {
++      promise.reject(ERROR_NO_ALBUM, "Couldn't find album.")
++      return
++    }
++
++    val albumsMap = assets
++      // All files should have mime type, but if not, we can safely assume that
++      // those without mime type shouldn't be move
++      .filter { it.mimeType != null }
++      .groupBy { it.parentFile }
++
++    if (albumsMap.size != 1) {
++      // Empty albums shouldn't be visible to users. That's why this is an error.
++      promise.reject(ERROR_NO_ALBUM, "Found album is empty.")
++      return
++    }
++    val albumDir = assets[0].parentFile
++    if (albumDir == null) {
++      promise.reject(ERROR_NO_ALBUM, "Couldn't get album path.")
++      return
++    }
++    if (albumDir.canWrite()) {
++      // Nothing to migrate
++      promise.resolve(null)
++      return
++    }
++
++    val action = actionIfUserGrantedPermission(promise) {
++      MigrateAlbum(context, assets, albumDir.name, promise)
++        .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
++    }
++    val needsToCheckPermissions = assets.map { it.assetId }
++    runActionWithPermissions(needsToCheckPermissions, action, promise)
++  }
++
++  @ExpoMethod
++  fun albumNeedsMigrationAsync(
++    albumId: String,
++    promise: Promise
++  ) = rejectUnlessPermissionsGranted(promise) {
++    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++      CheckIfAlbumShouldBeMigrated(context, albumId, promise)
++        .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
++      return
++    }
++    promise.resolve(false)
++  }
++
++  // Library change observer
++  @ExpoMethod
++  fun startObserving(promise: Promise) {
++    if (imagesObserver != null) {
++      promise.resolve(null)
++      return
++    }
++
++    // We need to register an observer for each type of assets,
++    // because it seems that observing a parent directory (EXTERNAL_CONTENT) doesn't work well,
++    // whereas observing directory of images or videos works fine.
++    val handler = Handler()
++    val contentResolver = context.contentResolver
++
++    imagesObserver =
++      MediaStoreContentObserver(handler, MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE)
++        .also { imageObserver ->
++          contentResolver.registerContentObserver(
++            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
++            true,
++            imageObserver
++          )
++        }
++
++    videosObserver =
++      MediaStoreContentObserver(handler, MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO)
++        .also { videoObserver ->
++          contentResolver.registerContentObserver(
++            MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
++            true,
++            videoObserver
++          )
++        }
++
++    promise.resolve(null)
++  }
++
++  @ExpoMethod
++  fun stopObserving(promise: Promise) {
++    val contentResolver = context.contentResolver
++    imagesObserver?.let {
++      contentResolver.unregisterContentObserver(it)
++      imagesObserver = null
++    }
++    videosObserver?.let {
++      contentResolver.unregisterContentObserver(it)
++      videosObserver = null
++    }
++    promise.resolve(null)
++  }
++
++  override fun onActivityResult(
++    activity: Activity,
++    requestCode: Int,
++    resultCode: Int,
++    data: Intent?
++  ) {
++    awaitingAction?.takeIf { requestCode == WRITE_REQUEST_CODE }?.let {
++      it.runWithPermissions(resultCode == Activity.RESULT_OK)
++      awaitingAction = null
++      uiManager.unregisterActivityEventListener(this)
++    }
++  }
++
++  override fun onNewIntent(intent: Intent) {}
++
++  private val isMissingPermissions: Boolean
++    get() = permissions
++      ?.hasGrantedPermissions(READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE)
++      ?.not() ?: false
++
++  private val isMissingWritePermission: Boolean
++    get() = permissions
++      ?.hasGrantedPermissions(WRITE_EXTERNAL_STORAGE)
++      ?.not() ?: false
++
++  private fun getManifestPermissions(writeOnly: Boolean): Array<String> {
++    return listOfNotNull(
++      WRITE_EXTERNAL_STORAGE,
++      READ_EXTERNAL_STORAGE.takeIf { !writeOnly },
++      ACCESS_MEDIA_LOCATION.takeIf { Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q }
++    ).toTypedArray()
++  }
++
++  private inline fun rejectUnlessPermissionsGranted(promise: Promise, writeOnly: Boolean = false, block: () -> Unit) {
++    val missingPermissionsCondition = if (writeOnly) isMissingWritePermission else isMissingPermissions
++    val missingPermissionsMessage = if (writeOnly) ERROR_NO_WRITE_PERMISSION_MESSAGE else ERROR_NO_PERMISSIONS_MESSAGE
++    if (missingPermissionsCondition) {
++      promise.reject(ERROR_NO_PERMISSIONS, missingPermissionsMessage)
++      return
++    }
++    block()
++  }
++
++  private fun interface Action {
++    fun runWithPermissions(permissionsWereGranted: Boolean)
++  }
++
++  private fun runActionWithPermissions(assetsId: List<String>, action: Action, promise: Promise) {
++    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++      val pathsWithoutPermissions = MediaLibraryUtils.getAssetsUris(context, assetsId)
++        .filter { uri ->
++          context.checkUriPermission(
++            uri,
++            Binder.getCallingPid(),
++            Binder.getCallingUid(), Intent.FLAG_GRANT_WRITE_URI_PERMISSION
++          ) != PackageManager.PERMISSION_GRANTED
++        }
++
++      if (pathsWithoutPermissions.isNotEmpty()) {
++        val deleteRequest =
++          MediaStore.createWriteRequest(context.contentResolver, pathsWithoutPermissions)
++        val activity = activityProvider.currentActivity
++
++        try {
++          uiManager.registerActivityEventListener(this)
++          awaitingAction = action
++          activity.startIntentSenderForResult(
++            deleteRequest.intentSender,
++            WRITE_REQUEST_CODE,
++            null,
++            0,
++            0,
++            0
++          )
++        } catch (e: SendIntentException) {
++          promise.reject(ERROR_UNABLE_TO_ASK_FOR_PERMISSIONS, ERROR_UNABLE_TO_ASK_FOR_PERMISSIONS_MESSAGE)
++          awaitingAction = null
++        }
++        return
++      }
++    }
++    action.runWithPermissions(true)
++  }
++
++  private fun actionIfUserGrantedPermission(
++    promise: Promise,
++    block: () -> Unit
++  ) = Action { permissionsWereGranted ->
++    if (!permissionsWereGranted) {
++      promise.reject(ERROR_NO_PERMISSIONS, ERROR_USER_DID_NOT_GRANT_WRITE_PERMISSIONS_MESSAGE)
++      return@Action
++    }
++    block()
++  }
++
++  private inner class MediaStoreContentObserver(handler: Handler, private val mMediaType: Int) :
++    ContentObserver(handler) {
++
++    private var mAssetsTotalCount = getAssetsTotalCount(mMediaType)
++
++    override fun onChange(selfChange: Boolean) {
++      this.onChange(selfChange, null)
++    }
++
++    override fun onChange(selfChange: Boolean, uri: Uri?) {
++      val newTotalCount = getAssetsTotalCount(mMediaType)
++
++      // Send event to JS only when assets count has been changed - to filter out some unnecessary events.
++      // It's not perfect solution if someone adds and deletes the same number of assets in a short period of time, but I hope these events will not be batched.
++      if (mAssetsTotalCount != newTotalCount) {
++        mAssetsTotalCount = newTotalCount
++        eventEmitter.emit(LIBRARY_DID_CHANGE_EVENT, Bundle())
++      }
++    }
++
++    private fun getAssetsTotalCount(mediaType: Int): Int =
++      context.contentResolver.query(
++        EXTERNAL_CONTENT_URI,
++        null,
++        "${MediaStore.Files.FileColumns.MEDIA_TYPE} == $mediaType",
++        null,
++        null
++      ).use { countCursor -> countCursor?.count ?: 0 }
++  }
++
++  private inline fun <reified T> moduleRegistry() = moduleRegistryDelegate.getFromModuleRegistry<T>()
++
++  companion object {
++    private const val WRITE_REQUEST_CODE = 7463
++  }
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/MediaLibraryPackage.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/MediaLibraryPackage.kt
+new file mode 100644
+index 0000000..6c9b8f6
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/MediaLibraryPackage.kt
+@@ -0,0 +1,8 @@
++package expo.modules.medialibrary
++
++import android.content.Context
++import expo.modules.core.BasePackage
++
++class MediaLibraryPackage : BasePackage() {
++  override fun createExportedModules(context: Context) = listOf(MediaLibraryModule(context))
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/MediaLibraryUtils.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/MediaLibraryUtils.kt
+new file mode 100644
+index 0000000..4ece5a2
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/MediaLibraryUtils.kt
+@@ -0,0 +1,237 @@
++package expo.modules.medialibrary
++
++import android.content.ContentResolver
++import android.content.ContentUris
++import android.content.Context
++import android.net.Uri
++import android.os.Build
++import android.os.Environment
++import android.provider.MediaStore
++import android.text.TextUtils
++import android.webkit.MimeTypeMap
++import expo.modules.core.Promise
++import expo.modules.core.utilities.ifNull
++import java.io.File
++import java.io.FileInputStream
++import java.io.FileOutputStream
++import java.io.IOException
++
++object MediaLibraryUtils {
++  class AssetFile(pathname: String, val assetId: String, val mimeType: String) : File(pathname)
++
++  /**
++   * Splits given filename into two-element tuple: name, extension
++   *
++   * Example:
++   * ```
++   * getFileNameAndExtension("foo.jpg") // returns arrayOf("foo", "jpg")
++   * getFileNameAndExtension("bar") // returns arrayOf("bar", "")
++   * ```
++   *
++   * @return Pair of strings: first is filename, second is extension
++   */
++  fun getFileNameAndExtension(name: String): Pair<String, String> {
++    val dotIdx = name.lastIndexOf(".").takeIf { it != -1 } ?: name.length
++    val extension = name.substring(startIndex = dotIdx)
++    val filename = name.substring(0, dotIdx)
++    return Pair(filename, extension)
++  }
++
++  /**
++   * Moves the [src] file into [destDir] directory. Ensures that destination is NOT overwritten.
++   * If the filename already exists at destination, a suffix is added to the copied filename.
++   */
++  @Throws(IOException::class)
++  fun safeMoveFile(src: File, destDir: File): File =
++    safeCopyFile(src, destDir).also { src.delete() }
++
++  /**
++   * Copies the [src] file into [destDir] directory. Ensures that destination is NOT overwritten.
++   * If the filename already exists at destination, a suffix is added to the copied filename.
++   */
++  @Throws(IOException::class)
++  fun safeCopyFile(src: File, destDir: File): File {
++    var newFile = File(destDir, src.name)
++    var suffix = 0
++    val (filename, extension) = getFileNameAndExtension(src.name)
++    val suffixLimit = Short.MAX_VALUE.toInt()
++    while (newFile.exists()) {
++      newFile = File(destDir, filename + "_" + suffix + extension)
++      suffix++
++      if (suffix > suffixLimit) {
++        throw IOException("File name suffix limit reached ($suffixLimit)")
++      }
++    }
++    FileInputStream(src).channel.use { input ->
++      FileOutputStream(newFile).channel.use { output ->
++        val transferred = input.transferTo(0, input.size(), output)
++        if (transferred != input.size()) {
++          newFile.delete()
++          throw IOException("Could not save file to $destDir Not enough space.")
++        }
++        return newFile
++      }
++    }
++  }
++
++  fun deleteAssets(context: Context, selection: String?, selectionArgs: Array<out String?>?, promise: Promise) {
++    val projection = arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DATA)
++    try {
++      context.contentResolver.query(
++        EXTERNAL_CONTENT_URI,
++        projection,
++        selection,
++        selectionArgs,
++        null
++      ).use { filesToDelete ->
++        if (filesToDelete == null) {
++          promise.reject(ERROR_UNABLE_TO_LOAD, "Could not delete assets. Cursor is null.")
++        } else {
++          while (filesToDelete.moveToNext()) {
++            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++              val id = filesToDelete.getLong(filesToDelete.getColumnIndex(MediaStore.MediaColumns._ID))
++              val assetUri = ContentUris.withAppendedId(EXTERNAL_CONTENT_URI, id)
++              context.contentResolver.delete(assetUri, null)
++            } else {
++              val dataColumnIndex = filesToDelete.getColumnIndex(MediaStore.MediaColumns.DATA)
++              val filePath = filesToDelete.getString(dataColumnIndex)
++              val file = File(filePath)
++              if (file.delete()) {
++                context.contentResolver.delete(
++                  EXTERNAL_CONTENT_URI,
++                  "${MediaStore.MediaColumns.DATA}=?", arrayOf(filePath)
++                )
++              } else {
++                promise.reject(ERROR_UNABLE_TO_DELETE, "Could not delete file.")
++                return
++              }
++            }
++          }
++          promise.resolve(true)
++        }
++      }
++    } catch (e: SecurityException) {
++      promise.reject(
++        ERROR_UNABLE_TO_SAVE_PERMISSION,
++        "Could not delete asset: need WRITE_EXTERNAL_STORAGE permission.", e
++      )
++    } catch (e: Exception) {
++      e.printStackTrace()
++      promise.reject(ERROR_UNABLE_TO_DELETE, "Could not delete file.", e)
++    }
++  }
++
++  /**
++   * Creates placeholders for parametrized query. Usable inside `IN` clause.
++   * Example:
++   * ```
++   * queryPlaceholdersFor(arrayOf("John, 24")) // returns "?,?"
++   * ```
++   */
++  fun queryPlaceholdersFor(assetIds: Array<out String?>): String =
++    arrayOfNulls<String>(assetIds.size)
++      .apply { fill("?") }
++      .joinToString(separator = ",")
++
++  // Used in albums and migrations only - consider moving it there
++  fun getAssetsById(context: Context, promise: Promise?, vararg assetsId: String?): List<AssetFile>? {
++    val maybePromise = promise.ifNull {
++      object : Promise {
++        override fun resolve(value: Any) = Unit
++        override fun reject(code: String, message: String, e: Throwable) = Unit
++      }
++    }
++
++    val path = arrayOf(
++      MediaStore.MediaColumns._ID,
++      MediaStore.MediaColumns.DATA,
++      MediaStore.MediaColumns.BUCKET_ID,
++      MediaStore.MediaColumns.MIME_TYPE
++    )
++    val selection = MediaStore.Images.Media._ID + " IN ( " + queryPlaceholdersFor(assetsId) + " )"
++    context.contentResolver.query(
++      EXTERNAL_CONTENT_URI,
++      path,
++      selection,
++      assetsId,
++      null
++    ).use { assets ->
++      if (assets == null) {
++        maybePromise.reject(ERROR_UNABLE_TO_LOAD, "Could not get assets. Query returns null.")
++        return null
++      } else if (assets.count != assetsId.size) {
++        maybePromise.reject(ERROR_NO_ASSET, "Could not get all of the requested assets")
++        return null
++      }
++      val assetFiles = mutableListOf<AssetFile>()
++      while (assets.moveToNext()) {
++        val assetPath = assets.getString(assets.getColumnIndex(MediaStore.Images.Media.DATA))
++        val asset = AssetFile(
++          assetPath,
++          assets.getString(assets.getColumnIndex(MediaStore.MediaColumns._ID)),
++          assets.getString(assets.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE))
++        )
++        if (!asset.exists() || !asset.isFile) {
++          maybePromise.reject(ERROR_UNABLE_TO_LOAD, "Path $assetPath does not exist or isn't file.")
++          return null
++        }
++        assetFiles.add(asset)
++      }
++      return assetFiles
++    }
++  }
++
++  private fun getMimeTypeFromFileUrl(url: String): String? {
++    val extension = MimeTypeMap.getFileExtensionFromUrl(url) ?: return null
++    return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
++  }
++
++  fun getMimeType(contentResolver: ContentResolver, uri: Uri): String? =
++    contentResolver.getType(uri) ?: getMimeTypeFromFileUrl(uri.toString())
++
++  fun getAssetsUris(context: Context, assetsId: List<String?>?): List<Uri> {
++    val result = mutableListOf<Uri>()
++    val selection = MediaStore.MediaColumns._ID + " IN (" + TextUtils.join(",", assetsId!!) + " )"
++    val selectionArgs: Array<String>? = null
++    val projection = arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.MIME_TYPE)
++    context.contentResolver.query(
++      EXTERNAL_CONTENT_URI,
++      projection,
++      selection,
++      selectionArgs,
++      null
++    )?.use { cursor ->
++      while (cursor.moveToNext()) {
++        val id = cursor.getLong(cursor.getColumnIndex(MediaStore.MediaColumns._ID))
++        val mineType = cursor.getString(cursor.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE))
++        val assetUri = ContentUris.withAppendedId(mimeTypeToExternalUri(mineType), id)
++        result.add(assetUri)
++      }
++    }
++    return result
++  }
++
++  fun mimeTypeToExternalUri(mimeType: String?): Uri = when {
++    mimeType == null -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
++    mimeType.contains("image") -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
++    mimeType.contains("video") -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
++    mimeType.contains("audio") -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
++    // For backward compatibility
++    else -> EXTERNAL_CONTENT_URI
++  }
++
++  fun getRelativePathForAssetType(mimeType: String?, useCameraDir: Boolean): String {
++    if (mimeType?.contains("image") == true || mimeType?.contains("video") == true) {
++      return if (useCameraDir) Environment.DIRECTORY_DCIM else Environment.DIRECTORY_PICTURES
++    } else if (mimeType?.contains("audio") == true) {
++      return Environment.DIRECTORY_MUSIC
++    }
++
++    // For backward compatibility
++    return if (useCameraDir) Environment.DIRECTORY_DCIM else Environment.DIRECTORY_PICTURES
++  }
++
++  @Deprecated("It uses deprecated Android method under the hood. See implementation for details.")
++  fun getEnvDirectoryForAssetType(mimeType: String?, useCameraDir: Boolean): File =
++    Environment.getExternalStoragePublicDirectory(getRelativePathForAssetType(mimeType, useCameraDir))
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/AddAssetsToAlbum.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/AddAssetsToAlbum.kt
+new file mode 100644
+index 0000000..77945e1
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/AddAssetsToAlbum.kt
+@@ -0,0 +1,94 @@
++package expo.modules.medialibrary.albums
++
++import android.content.Context
++import android.os.AsyncTask
++import android.provider.MediaStore
++import android.media.MediaScannerConnection
++import android.os.Build
++import expo.modules.core.Promise
++import expo.modules.medialibrary.ERROR_IO_EXCEPTION
++import expo.modules.medialibrary.ERROR_MEDIA_LIBRARY_CORRUPTED
++import expo.modules.medialibrary.ERROR_NO_ALBUM
++import expo.modules.medialibrary.ERROR_NO_PERMISSIONS
++import expo.modules.medialibrary.ERROR_UNABLE_TO_LOAD
++import expo.modules.medialibrary.ERROR_UNABLE_TO_SAVE_PERMISSION
++import expo.modules.medialibrary.EXTERNAL_CONTENT_URI
++import expo.modules.medialibrary.MediaLibraryUtils
++import java.io.File
++import java.io.IOException
++import java.util.concurrent.atomic.AtomicInteger
++
++internal class AddAssetsToAlbum(
++  private val context: Context,
++  private val assetIds: Array<String>,
++  private val albumId: String,
++  copyToAlbum: Boolean,
++  private val promise: Promise
++) : AsyncTask<Void?, Void?, Void?>() {
++  private val strategy = if (copyToAlbum) AssetFileStrategy.copyStrategy else AssetFileStrategy.moveStrategy
++
++  // Media store table can be corrupted. Extra check won't harm anyone.
++  private val album: File?
++    get() {
++      val path = arrayOf(MediaStore.MediaColumns.DATA)
++      val selection = "${MediaStore.MediaColumns.BUCKET_ID}=?"
++      val id = arrayOf(albumId)
++      context.contentResolver.query(
++        EXTERNAL_CONTENT_URI,
++        path,
++        selection,
++        id,
++        null
++      ).use { albumCursor ->
++        if (albumCursor == null) {
++          promise.reject(ERROR_UNABLE_TO_LOAD, "Could not get album. Query returns null.")
++          return null
++        } else if (albumCursor.count == 0) {
++          promise.reject(ERROR_NO_ALBUM, "No album with id: $albumId")
++          return null
++        }
++        albumCursor.moveToNext()
++        val filePathColumnIndex = albumCursor.getColumnIndex(MediaStore.Images.Media.DATA)
++        val fileInAlbum = File(albumCursor.getString(filePathColumnIndex))
++
++        // Media store table can be corrupted. Extra check won't harm anyone.
++        if (!fileInAlbum.isFile) {
++          promise.reject(ERROR_MEDIA_LIBRARY_CORRUPTED, "Media library is corrupted")
++          return null
++        }
++        return File(fileInAlbum.parent!!)
++      }
++    }
++
++  public override fun doInBackground(vararg params: Void?): Void? {
++    try {
++      val assets = MediaLibraryUtils.getAssetsById(context, promise, *assetIds) ?: return null
++      val album = album ?: return null
++
++      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !album.canWrite()) {
++        promise.reject(
++          ERROR_NO_PERMISSIONS,
++          "The application doesn't have permission to write to the album's directory. For more information, check out https://expo.fyi/android-r."
++        )
++        return null
++      }
++
++      val paths = assets.map { asset ->
++        val newAsset = strategy.apply(asset, album, context)
++        newAsset.path
++      }
++
++      val atomicInteger = AtomicInteger(paths.size)
++      MediaScannerConnection.scanFile(context, paths.toTypedArray(), null) { _, _ ->
++        if (atomicInteger.decrementAndGet() == 0) {
++          promise.resolve(true)
++        }
++      }
++    } catch (e: SecurityException) {
++      promise.reject(ERROR_UNABLE_TO_SAVE_PERMISSION, "Could not get albums: need WRITE_EXTERNAL_STORAGE permission.", e)
++    } catch (e: IOException) {
++      promise.reject(ERROR_IO_EXCEPTION, "Unable to read or save data", e)
++    }
++    return null
++  }
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/AlbumUtils.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/AlbumUtils.kt
+new file mode 100644
+index 0000000..9bbadc0
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/AlbumUtils.kt
+@@ -0,0 +1,84 @@
++package expo.modules.medialibrary.albums
++
++import android.content.Context
++import android.os.Bundle
++import android.provider.MediaStore
++import android.provider.MediaStore.MediaColumns
++import expo.modules.core.Promise
++import expo.modules.medialibrary.ERROR_UNABLE_TO_LOAD
++import expo.modules.medialibrary.ERROR_UNABLE_TO_LOAD_PERMISSION
++import expo.modules.medialibrary.EXTERNAL_CONTENT_URI
++import expo.modules.medialibrary.MediaLibraryUtils.queryPlaceholdersFor
++import java.lang.IllegalArgumentException
++
++/**
++ * Queries for assets filtered by given `selection`.
++ * Resolves `promise` with [Bundle] of kind: `Array<{ id, title, assetCount }>`
++ */
++fun queryAlbum(
++  context: Context,
++  selection: String?,
++  selectionArgs: Array<String>?,
++  promise: Promise
++) {
++  val projection = arrayOf(MediaColumns.BUCKET_ID, MediaColumns.BUCKET_DISPLAY_NAME)
++  val order = MediaColumns.BUCKET_DISPLAY_NAME
++  try {
++    context.contentResolver.query(
++      EXTERNAL_CONTENT_URI,
++      projection,
++      selection,
++      selectionArgs,
++      order
++    ).use { albumsCursor ->
++      if (albumsCursor == null) {
++        promise.reject(ERROR_UNABLE_TO_LOAD, "Could not get album. Query is incorrect.")
++        return
++      }
++      if (!albumsCursor.moveToNext()) {
++        promise.resolve(null)
++        return
++      }
++      val bucketIdIndex = albumsCursor.getColumnIndex(MediaColumns.BUCKET_ID)
++      val bucketDisplayNameIndex = albumsCursor.getColumnIndex(MediaColumns.BUCKET_DISPLAY_NAME)
++      val result = Bundle().apply {
++        putString("id", albumsCursor.getString(bucketIdIndex))
++        putString("title", albumsCursor.getString(bucketDisplayNameIndex))
++        putInt("assetCount", albumsCursor.count)
++      }
++      promise.resolve(result)
++    }
++  } catch (e: SecurityException) {
++    promise.reject(
++      ERROR_UNABLE_TO_LOAD_PERMISSION,
++      "Could not get albums: need READ_EXTERNAL_STORAGE permission.", e
++    )
++  } catch (e: IllegalArgumentException) {
++    promise.reject(ERROR_UNABLE_TO_LOAD, "Could not get album.", e)
++  }
++}
++
++/**
++ * Returns flat list of asset IDs (`_ID` column) for given album IDs (`BUCKET_ID` column)
++ */
++fun getAssetsInAlbums(context: Context, vararg albumIds: String?): List<String> {
++  val assetIds = mutableListOf<String>()
++  val selection = "${MediaColumns.BUCKET_ID} IN (${queryPlaceholdersFor(albumIds)} )"
++  val projection = arrayOf(MediaColumns._ID)
++  context.contentResolver.query(
++    EXTERNAL_CONTENT_URI,
++    projection,
++    selection,
++    albumIds,
++    null
++  ).use { assetCursor ->
++    if (assetCursor == null) {
++      return assetIds
++    }
++    while (assetCursor.moveToNext()) {
++      val id = assetCursor.getString(assetCursor.getColumnIndex(MediaStore.Images.Media._ID))
++      assetIds.add(id)
++    }
++  }
++  return assetIds
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/AssetFileStrategy.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/AssetFileStrategy.kt
+new file mode 100644
+index 0000000..7cb4531
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/AssetFileStrategy.kt
+@@ -0,0 +1,34 @@
++package expo.modules.medialibrary.albums
++
++import android.content.ContentUris
++import android.content.Context
++import android.os.Build
++import android.provider.MediaStore
++import expo.modules.medialibrary.EXTERNAL_CONTENT_URI
++import expo.modules.medialibrary.MediaLibraryUtils
++import java.io.File
++import java.io.IOException
++
++internal fun interface AssetFileStrategy {
++  @Throws(IOException::class)
++  fun apply(src: File, dir: File, context: Context): File
++
++  companion object {
++    val copyStrategy = AssetFileStrategy { src, dir, _ -> MediaLibraryUtils.safeCopyFile(src, dir) }
++    val moveStrategy = AssetFileStrategy strategy@{ src, dir, context ->
++      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && src is MediaLibraryUtils.AssetFile) {
++        val assetId = src.assetId
++        val assetUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, assetId.toLong())
++        val newFile = MediaLibraryUtils.safeCopyFile(src, dir)
++        context.contentResolver.delete(assetUri, null)
++        return@strategy newFile
++      }
++      val newFile = MediaLibraryUtils.safeMoveFile(src, dir)
++      context.contentResolver.delete(
++        EXTERNAL_CONTENT_URI,
++        "${MediaStore.MediaColumns.DATA}=?", arrayOf(src.path)
++      )
++      newFile
++    }
++  }
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/CreateAlbum.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/CreateAlbum.kt
+new file mode 100644
+index 0000000..b17e75e
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/CreateAlbum.kt
+@@ -0,0 +1,72 @@
++package expo.modules.medialibrary.albums
++
++import android.content.Context
++import android.os.AsyncTask
++import android.media.MediaScannerConnection
++import android.net.Uri
++import android.provider.MediaStore
++import expo.modules.core.Promise
++import expo.modules.core.utilities.ifNull
++import expo.modules.medialibrary.ERROR_NO_ALBUM
++import expo.modules.medialibrary.ERROR_UNABLE_TO_LOAD
++import expo.modules.medialibrary.ERROR_UNABLE_TO_LOAD_PERMISSION
++import expo.modules.medialibrary.ERROR_UNABLE_TO_SAVE
++import expo.modules.medialibrary.MediaLibraryUtils
++import java.io.File
++import java.io.IOException
++
++internal class CreateAlbum(
++  private val context: Context,
++  private val albumName: String,
++  private val assetId: String,
++  copyAsset: Boolean,
++  private val promise: Promise
++) : AsyncTask<Void?, Void?, Void?>() {
++  private val mStrategy = if (copyAsset) AssetFileStrategy.copyStrategy else AssetFileStrategy.moveStrategy
++
++  private fun createAlbum(mimeType: String): File? {
++    val albumDir = MediaLibraryUtils.getEnvDirectoryForAssetType(mimeType, false)
++      .ifNull {
++        promise.reject(ERROR_NO_ALBUM, "Could not guess asset type.")
++        return null
++      }
++
++    val album = File(albumDir.path, albumName)
++      .takeIf { it.exists() || it.mkdirs() }
++      .ifNull {
++        promise.reject(ERROR_NO_ALBUM, "Could not create album directory.")
++        return null
++      }
++    return album
++  }
++
++  public override fun doInBackground(vararg params: Void?): Void? {
++    try {
++      val files = MediaLibraryUtils.getAssetsById(context, promise, assetId) ?: return null
++      val albumCreator = files[0]
++      val album = createAlbum(albumCreator.mimeType) ?: return null
++      val newFile = mStrategy.apply(albumCreator, album, context)
++      MediaScannerConnection.scanFile(
++        context,
++        arrayOf(newFile.path),
++        null
++      ) { path: String, uri: Uri? ->
++        if (uri == null) {
++          promise.reject(ERROR_UNABLE_TO_SAVE, "Could not add image to album.")
++          return@scanFile
++        }
++        val selection = "${MediaStore.Images.Media.DATA}=?"
++        val args = arrayOf(path)
++        queryAlbum(context, selection, args, promise)
++      }
++    } catch (e: SecurityException) {
++      promise.reject(
++        ERROR_UNABLE_TO_LOAD_PERMISSION,
++        "Could not create album: need WRITE_EXTERNAL_STORAGE permission.", e
++      )
++    } catch (e: IOException) {
++      promise.reject(ERROR_UNABLE_TO_LOAD, "Could not read file or parse EXIF tags", e)
++    }
++    return null
++  }
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/DeleteAlbums.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/DeleteAlbums.kt
+new file mode 100644
+index 0000000..4155763
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/DeleteAlbums.kt
+@@ -0,0 +1,24 @@
++package expo.modules.medialibrary.albums
++
++import android.content.Context
++import android.os.AsyncTask
++import android.provider.MediaStore
++import expo.modules.core.Promise
++import expo.modules.medialibrary.MediaLibraryUtils
++import expo.modules.medialibrary.MediaLibraryUtils.queryPlaceholdersFor
++
++internal class DeleteAlbums(
++  private val context: Context,
++  albumIds: List<String>,
++  private val promise: Promise
++) : AsyncTask<Void?, Void?, Void?>() {
++  private val mAlbumIds = albumIds.toTypedArray()
++
++  override fun doInBackground(vararg voids: Void?): Void? {
++    val selection = "${MediaStore.Images.Media.BUCKET_ID} IN (${queryPlaceholdersFor(mAlbumIds)} )"
++    val selectionArgs = mAlbumIds
++
++    MediaLibraryUtils.deleteAssets(context, selection, selectionArgs, promise)
++    return null
++  }
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/GetAlbum.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/GetAlbum.kt
+new file mode 100644
+index 0000000..0dfdfe7
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/GetAlbum.kt
+@@ -0,0 +1,23 @@
++package expo.modules.medialibrary.albums
++
++import android.content.Context
++import android.os.AsyncTask
++import android.provider.MediaStore.MediaColumns
++import android.provider.MediaStore.Files.FileColumns
++
++import expo.modules.core.Promise
++
++internal class GetAlbum(
++  private val context: Context,
++  private val albumName: String,
++  private val promise: Promise
++) : AsyncTask<Void?, Void?, Void?>() {
++  public override fun doInBackground(vararg params: Void?): Void? {
++    val selection = "${FileColumns.MEDIA_TYPE} != ${FileColumns.MEDIA_TYPE_NONE}" +
++      " AND ${MediaColumns.BUCKET_DISPLAY_NAME}=?"
++    val selectionArgs = arrayOf(albumName)
++
++    queryAlbum(context, selection, selectionArgs, promise)
++    return null
++  }
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/GetAlbums.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/GetAlbums.kt
+new file mode 100644
+index 0000000..46a9f9f
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/GetAlbums.kt
+@@ -0,0 +1,81 @@
++package expo.modules.medialibrary.albums
++
++import android.content.Context
++import android.database.Cursor.FIELD_TYPE_NULL
++import android.os.AsyncTask
++import android.os.Bundle
++import android.provider.MediaStore
++import android.provider.MediaStore.Images.Media
++import expo.modules.core.Promise
++import expo.modules.medialibrary.ERROR_UNABLE_TO_LOAD
++import expo.modules.medialibrary.ERROR_UNABLE_TO_LOAD_PERMISSION
++import expo.modules.medialibrary.EXTERNAL_CONTENT_URI
++
++internal open class GetAlbums(private val mContext: Context, private val mPromise: Promise) :
++  AsyncTask<Void?, Void?, Void?>() {
++
++  override fun doInBackground(vararg params: Void?): Void? {
++    val projection = arrayOf(Media.BUCKET_ID, Media.BUCKET_DISPLAY_NAME)
++    val selection = "${MediaStore.Files.FileColumns.MEDIA_TYPE} != ${MediaStore.Files.FileColumns.MEDIA_TYPE_NONE}"
++
++    val albums = HashMap<String, Album>()
++
++    try {
++      mContext.contentResolver
++        .query(
++          EXTERNAL_CONTENT_URI,
++          projection,
++          selection,
++          null,
++          Media.BUCKET_DISPLAY_NAME
++        )
++        .use { assetCursor ->
++          if (assetCursor == null) {
++            mPromise.reject(
++              ERROR_UNABLE_TO_LOAD,
++              "Could not get albums. Query returns null."
++            )
++            return@use
++          }
++          val bucketIdIndex = assetCursor.getColumnIndex(Media.BUCKET_ID)
++          val bucketDisplayNameIndex = assetCursor.getColumnIndex(Media.BUCKET_DISPLAY_NAME)
++
++          while (assetCursor.moveToNext()) {
++            val id = assetCursor.getString(bucketIdIndex)
++
++            if (assetCursor.getType(bucketDisplayNameIndex) == FIELD_TYPE_NULL) {
++              continue
++            }
++
++            val album = albums[id] ?: Album(
++              id = id,
++              title = assetCursor.getString(bucketDisplayNameIndex)
++            ).also {
++              albums[id] = it
++            }
++
++            album.count++
++          }
++
++          mPromise.resolve(albums.values.map { it.toBundle() })
++        }
++    } catch (e: SecurityException) {
++      mPromise.reject(
++        ERROR_UNABLE_TO_LOAD_PERMISSION,
++        "Could not get albums: need READ_EXTERNAL_STORAGE permission.", e
++      )
++    } catch (e: RuntimeException) {
++      mPromise.reject(ERROR_UNABLE_TO_LOAD, "Could not get albums.", e)
++    }
++    return null
++  }
++
++  private class Album(private val id: String, private val title: String, var count: Int = 0) {
++    fun toBundle() = Bundle().apply {
++      putString("id", id)
++      putString("title", title)
++      putParcelable("type", null)
++      putInt("assetCount", count)
++    }
++  }
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/RemoveAssetsFromAlbum.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/RemoveAssetsFromAlbum.kt
+new file mode 100644
+index 0000000..0b185b6
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/RemoveAssetsFromAlbum.kt
+@@ -0,0 +1,22 @@
++package expo.modules.medialibrary.albums
++
++import android.content.Context
++import android.os.AsyncTask
++import android.provider.MediaStore.Images.Media
++import expo.modules.core.Promise
++import expo.modules.medialibrary.MediaLibraryUtils
++
++internal class RemoveAssetsFromAlbum(
++  private val context: Context,
++  private val assetIds: Array<String>,
++  private val albumId: String,
++  private val promise: Promise
++) : AsyncTask<Void?, Void?, Void?>() {
++  override fun doInBackground(vararg params: Void?): Void? {
++    val bucketSelection = "${Media.BUCKET_ID}=? AND ${Media._ID} IN (${assetIds.joinToString(",")} )"
++    val bucketId = arrayOf(albumId)
++
++    MediaLibraryUtils.deleteAssets(context, bucketSelection, bucketId, promise)
++    return null
++  }
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/migration/CheckIfAlbumShouldBeMigrated.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/migration/CheckIfAlbumShouldBeMigrated.kt
+new file mode 100644
+index 0000000..a25c567
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/migration/CheckIfAlbumShouldBeMigrated.kt
+@@ -0,0 +1,55 @@
++package expo.modules.medialibrary.albums.migration
++
++import android.content.Context
++import android.os.AsyncTask
++import android.os.Build
++import android.provider.MediaStore
++import androidx.annotation.RequiresApi
++import expo.modules.core.Promise
++import expo.modules.medialibrary.ERROR_NO_ALBUM
++import expo.modules.medialibrary.EXTERNAL_CONTENT_URI
++import java.io.File
++
++@RequiresApi(Build.VERSION_CODES.R)
++class CheckIfAlbumShouldBeMigrated(
++  private val context: Context,
++  private val albumId: String,
++  private val promise: Promise
++) : AsyncTask<Void?, Void?, Void?>() {
++  public override fun doInBackground(vararg voids: Void?): Void? {
++    val albumDir = getAlbumDirectory(context, albumId)
++    if (albumDir == null) {
++      promise.reject(ERROR_NO_ALBUM, "Couldn't find album")
++    } else {
++      promise.resolve(!albumDir.canWrite())
++    }
++    return null
++  }
++}
++
++/**
++ * Returns directory for given Album ID (`BUCKET_ID` column) or `null` if album not found.
++ */
++private fun getAlbumDirectory(context: Context, albumId: String): File? {
++  val selection =
++    "${MediaStore.Files.FileColumns.MEDIA_TYPE} != ${MediaStore.Files.FileColumns.MEDIA_TYPE_NONE}" +
++      " AND ${MediaStore.MediaColumns.BUCKET_ID}=?"
++  val selectionArgs = arrayOf(albumId)
++  val projection = arrayOf(MediaStore.MediaColumns.DATA)
++  context.contentResolver.query(
++    EXTERNAL_CONTENT_URI,
++    projection,
++    selection,
++    selectionArgs,
++    null
++  ).use { albumCursor ->
++    if (albumCursor != null && albumCursor.moveToNext()) {
++      val dataColumnIndex = albumCursor.getColumnIndex(MediaStore.Images.Media.DATA)
++      val fileInAlbum = File(albumCursor.getString(dataColumnIndex))
++      if (fileInAlbum.isFile) {
++        return File(fileInAlbum.parent ?: return null)
++      }
++    }
++  }
++  return null
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/migration/MigrateAlbum.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/migration/MigrateAlbum.kt
+new file mode 100644
+index 0000000..4298d7d
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/albums/migration/MigrateAlbum.kt
+@@ -0,0 +1,55 @@
++package expo.modules.medialibrary.albums.migration
++
++import expo.modules.medialibrary.MediaLibraryUtils.AssetFile
++import android.os.AsyncTask
++import android.content.ContentValues
++import android.provider.MediaStore
++import android.content.ContentUris
++import android.content.Context
++import android.os.Build
++import androidx.annotation.RequiresApi
++import expo.modules.core.Promise
++import expo.modules.medialibrary.ERROR_UNABLE_TO_MIGRATE
++import expo.modules.medialibrary.MediaLibraryUtils
++import java.io.File
++
++@RequiresApi(Build.VERSION_CODES.R)
++internal class MigrateAlbum(
++  private val context: Context,
++  private val assetFiles: List<AssetFile>,
++  private val albumDirName: String,
++  private val promise: Promise
++) : AsyncTask<Void?, Void?, Void?>() {
++  override fun doInBackground(vararg voids: Void?): Void? {
++    // Previously, users were able to save different assets type in the same directory.
++    // But now, it's not always possible.
++    // If album contains movies or pictures, we can move it to Environment.DIRECTORY_PICTURES.
++    // Otherwise, we reject.
++    val assetsRelativePaths = assetFiles
++      .map { MediaLibraryUtils.getRelativePathForAssetType(it.mimeType, false) }
++      .toSet()
++    if (assetsRelativePaths.size > 1) {
++      promise.reject(ERROR_UNABLE_TO_MIGRATE, "The album contains incompatible file types.")
++      return null
++    }
++
++    val relativePath = assetsRelativePaths.iterator().next() + File.separator + albumDirName
++    val values = ContentValues().apply {
++      put(MediaStore.MediaColumns.RELATIVE_PATH, relativePath)
++    }
++    assetFiles.forEach { assetFile ->
++      context
++        .contentResolver
++        .update(
++          ContentUris.withAppendedId(
++            MediaLibraryUtils.mimeTypeToExternalUri(assetFile.mimeType),
++            assetFile.assetId.toLong()
++          ),
++          values,
++          null
++        )
++    }
++    promise.resolve(null)
++    return null
++  }
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/AssetUtils.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/AssetUtils.kt
+new file mode 100644
+index 0000000..7b6cd1b
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/AssetUtils.kt
+@@ -0,0 +1,301 @@
++package expo.modules.medialibrary.assets
++
++import android.content.ContentResolver
++import android.content.Context
++import android.database.Cursor
++import android.graphics.BitmapFactory
++import android.media.MediaMetadataRetriever
++import android.net.Uri
++import android.os.Build
++import android.os.Bundle
++import android.provider.MediaStore
++import android.util.Log
++import androidx.annotation.RequiresApi
++import androidx.exifinterface.media.ExifInterface
++import expo.modules.core.Promise
++import expo.modules.medialibrary.ASSET_PROJECTION
++import expo.modules.medialibrary.ERROR_IO_EXCEPTION
++import expo.modules.medialibrary.ERROR_NO_PERMISSIONS
++import expo.modules.medialibrary.ERROR_UNABLE_TO_LOAD
++import expo.modules.medialibrary.ERROR_UNABLE_TO_LOAD_PERMISSION
++import expo.modules.medialibrary.EXTERNAL_CONTENT_URI
++import expo.modules.medialibrary.EXIF_TAGS
++import expo.modules.medialibrary.MediaType
++import java.io.FileNotFoundException
++import java.io.IOException
++import java.lang.NumberFormatException
++import java.lang.RuntimeException
++import java.lang.UnsupportedOperationException
++import kotlin.math.abs
++
++/**
++ * Queries content resolver for a single asset.
++ * Resolves [promise] with a single-element array of [Bundle]
++ */
++fun queryAssetInfo(
++  context: Context,
++  selection: String?,
++  selectionArgs: Array<String>?,
++  resolveWithFullInfo: Boolean,
++  promise: Promise
++) {
++  val contentResolver = context.contentResolver
++  try {
++    contentResolver.query(
++      EXTERNAL_CONTENT_URI,
++      ASSET_PROJECTION,
++      selection,
++      selectionArgs,
++      null
++    ).use { assetCursor ->
++      if (assetCursor == null) {
++        promise.reject(ERROR_UNABLE_TO_LOAD, "Could not get asset. Query returns null.")
++      } else {
++        if (assetCursor.count == 1) {
++          assetCursor.moveToFirst()
++          val array = arrayListOf<Bundle>()
++          putAssetsInfo(contentResolver, assetCursor, array, limit = 1, offset = 0, resolveWithFullInfo)
++          // actually we want to return just the first item, but array.getMap returns ReadableMap
++          // which is not compatible with promise.resolve and there is no simple solution to convert
++          // ReadableMap to WritableMap so it's easier to return an array and pick the first item on JS side
++          promise.resolve(array)
++        } else {
++          promise.resolve(null)
++        }
++      }
++    }
++  } catch (e: SecurityException) {
++    promise.reject(
++      ERROR_UNABLE_TO_LOAD_PERMISSION,
++      "Could not get asset: need READ_EXTERNAL_STORAGE permission.", e
++    )
++  } catch (e: IOException) {
++    promise.reject(ERROR_IO_EXCEPTION, "Could not read file", e)
++  } catch (e: UnsupportedOperationException) {
++    e.printStackTrace()
++    promise.reject(ERROR_NO_PERMISSIONS, e.message)
++  }
++}
++
++/**
++ * Reads given `cursor` and saves the data to `response` param.
++ * Reads `limit` rows, starting by `offset`.
++ * Cursor must be a result of query with [ASSET_PROJECTION] projection
++ */
++@Throws(IOException::class, UnsupportedOperationException::class)
++fun putAssetsInfo(
++  contentResolver: ContentResolver,
++  cursor: Cursor,
++  response: MutableList<Bundle>,
++  limit: Int,
++  offset: Int,
++  resolveWithFullInfo: Boolean
++) {
++  val idIndex = cursor.getColumnIndex(MediaStore.Images.Media._ID)
++  val filenameIndex = cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME)
++  val mediaTypeIndex = cursor.getColumnIndex(MediaStore.Files.FileColumns.MEDIA_TYPE)
++  val creationDateIndex = cursor.getColumnIndex(MediaStore.Images.Media.DATE_TAKEN)
++  val modificationDateIndex = cursor.getColumnIndex(MediaStore.Images.Media.DATE_MODIFIED)
++  val durationIndex = cursor.getColumnIndex(MediaStore.Video.VideoColumns.DURATION)
++  val localUriIndex = cursor.getColumnIndex(MediaStore.Images.Media.DATA)
++  val albumIdIndex = cursor.getColumnIndex(MediaStore.Images.Media.BUCKET_ID)
++  if (!cursor.moveToPosition(offset)) {
++    return
++  }
++  var i = 0
++  while (i < limit && !cursor.isAfterLast) {
++    val assetId = cursor.getString(idIndex)
++    val path = cursor.getString(localUriIndex)
++    val localUri = "file://$path"
++    val mediaType = cursor.getInt(mediaTypeIndex)
++    var exifInterface: ExifInterface? = null
++    if (mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE) {
++      try {
++        exifInterface = ExifInterface(path)
++      } catch (e: IOException) {
++        Log.w("expo-media-library", "Could not parse EXIF tags for $localUri")
++        e.printStackTrace()
++      }
++    }
++    val (width, height) =
++      getAssetDimensionsFromCursor(contentResolver, exifInterface, cursor, mediaType, localUriIndex)
++    val asset = Bundle().apply {
++      putString("id", assetId)
++      putString("filename", cursor.getString(filenameIndex))
++      putString("uri", localUri)
++      putString("mediaType", exportMediaType(mediaType))
++      putLong("width", width.toLong())
++      putLong("height", height.toLong())
++      putLong("creationTime", cursor.getLong(creationDateIndex))
++      putDouble("modificationTime", cursor.getLong(modificationDateIndex) * 1000.0)
++      putDouble("duration", cursor.getInt(durationIndex) / 1000.0)
++      putString("albumId", cursor.getString(albumIdIndex))
++    }
++    if (resolveWithFullInfo && exifInterface != null) {
++      getExifFullInfo(exifInterface, asset)
++
++      val location = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
++        val photoUri = Uri.withAppendedPath(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, assetId)
++        getExifLocationForUri(contentResolver, photoUri)
++      } else {
++        getExifLocationLegacy(exifInterface)
++      }
++      asset.putParcelable("location", location)
++      asset.putString("localUri", localUri)
++    }
++    cursor.moveToNext()
++    response.add(asset)
++    i++
++  }
++}
++
++fun getExifFullInfo(exifInterface: ExifInterface, response: Bundle) {
++  val exifMap = Bundle()
++  for ((type, name) in EXIF_TAGS) {
++    if (exifInterface.getAttribute(name) != null) {
++      when (type) {
++        "string" -> exifMap.putString(name, exifInterface.getAttribute(name))
++        "int" -> exifMap.putInt(name, exifInterface.getAttributeInt(name, 0))
++        "double" -> exifMap.putDouble(name, exifInterface.getAttributeDouble(name, 0.0))
++      }
++    }
++  }
++  response.putParcelable("exif", exifMap)
++}
++
++/**
++ * API 29+ adds "scoped storage" which requires extra permissions (`ACCESS_MEDIA_LOCATION`) to access photo data.
++ * Reference: [Android docs](https://developer.android.com/training/data-storage/shared/media#location-info-photos)
++ * @returns [Bundle] with latitude and longitude or `null` if fail
++ * @throws UnsupportedOperationException when `ACCESS_MEDIA_LOCATION` permission isn't granted
++ */
++@RequiresApi(api = Build.VERSION_CODES.Q)
++@Throws(UnsupportedOperationException::class, IOException::class)
++fun getExifLocationForUri(contentResolver: ContentResolver, photoUri: Uri): Bundle? {
++  try {
++    // Exception occurs here if ACCESS_MEDIA_LOCATION permission isn't granted
++    val uri = MediaStore.setRequireOriginal(photoUri)
++
++    return contentResolver.openInputStream(uri)?.use { stream ->
++      ExifInterface(stream)
++        .latLong
++        ?.let { (lat, lng) ->
++          Bundle().apply {
++            putDouble("latitude", lat)
++            putDouble("longitude", lng)
++          }
++        }
++    }
++  } catch (e: IOException) {
++    Log.w("expo-media-library", "Could not parse EXIF tags for $photoUri")
++    e.printStackTrace()
++  } catch (e: UnsupportedOperationException) {
++    throw UnsupportedOperationException("Cannot access ExifInterface because of missing ACCESS_MEDIA_LOCATION permission")
++  }
++  return null
++}
++
++/**
++ * Used in API < 29.
++ * For API 29+ please use [getExifLocationForUri] instead
++ * @returns [Bundle] with latitude and longitude or `null` if fail
++ */
++fun getExifLocationLegacy(exifInterface: ExifInterface): Bundle? {
++  val latLong = exifInterface.latLong ?: return null
++  return Bundle().apply {
++    putDouble("latitude", latLong[0])
++    putDouble("longitude", latLong[1])
++  }
++}
++
++/**
++ * Gets image/video dimensions
++ * @return Pair of integers: width and height, respectively
++ */
++@Throws(IOException::class)
++fun getAssetDimensionsFromCursor(
++  contentResolver: ContentResolver,
++  exifInterface: ExifInterface?,
++  cursor: Cursor,
++  mediaType: Int,
++  localUriColumnIndex: Int
++): Pair<Int, Int> {
++  val uri = cursor.getString(localUriColumnIndex)
++  if (mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO) {
++    val videoUri = Uri.parse("file://$uri")
++    try {
++      contentResolver.openAssetFileDescriptor(videoUri, "r").use { photoDescriptor ->
++        MediaMetadataRetriever().use { retriever ->
++          retriever.setDataSource(photoDescriptor!!.fileDescriptor)
++          val videoWidth =
++            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)!!.toInt()
++          val videoHeight =
++            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)!!.toInt()
++          val videoOrientation =
++            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)!!.toInt()
++
++          return maybeRotateAssetSize(videoWidth, videoHeight, videoOrientation)
++        }
++      }
++    } catch (e: NumberFormatException) {
++      Log.e("expo-media-library", "MediaMetadataRetriever unexpectedly returned non-integer: ${e.message}")
++    } catch (e: FileNotFoundException) {
++      Log.e("expo-media-library", "ContentResolver failed to read $uri: ${e.message}")
++    } catch (e: RuntimeException) {
++      Log.e("expo-media-library", "MediaMetadataRetriever finished with unexpected error: ${e.message}")
++    }
++  }
++
++  val widthIndex = cursor.getColumnIndex(MediaStore.MediaColumns.WIDTH)
++  val heightIndex = cursor.getColumnIndex(MediaStore.MediaColumns.HEIGHT)
++  val orientationIndex = cursor.getColumnIndex(MediaStore.Images.Media.ORIENTATION)
++  var width = cursor.getInt(widthIndex)
++  var height = cursor.getInt(heightIndex)
++  var orientation = cursor.getInt(orientationIndex)
++
++  // If the image doesn't have the required information, we can get them from Bitmap.Options
++  if (mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE && (width <= 0 || height <= 0)) {
++    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
++    BitmapFactory.decodeFile(uri, options)
++    width = options.outWidth
++    height = options.outHeight
++  }
++  if (exifInterface != null) {
++    val exifOrientation = exifInterface.getAttributeInt(
++      ExifInterface.TAG_ORIENTATION,
++      ExifInterface.ORIENTATION_NORMAL
++    )
++    if (exifOrientation == ExifInterface.ORIENTATION_ROTATE_90 ||
++      exifOrientation == ExifInterface.ORIENTATION_ROTATE_270 ||
++      exifOrientation == ExifInterface.ORIENTATION_TRANSPOSE ||
++      exifOrientation == ExifInterface.ORIENTATION_TRANSVERSE
++    ) {
++      orientation = 90
++    }
++  }
++  return maybeRotateAssetSize(width, height, orientation)
++}
++
++/**
++ * Converts [MediaStore] media type into MediaLibrary [MediaType] api constant
++ */
++fun exportMediaType(mediaType: Int) = when (mediaType) {
++  MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE -> MediaType.PHOTO
++  MediaStore.Files.FileColumns.MEDIA_TYPE_AUDIO,
++  MediaStore.Files.FileColumns.MEDIA_TYPE_PLAYLIST -> MediaType.AUDIO
++  MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO -> MediaType.VIDEO
++  else -> MediaType.UNKNOWN
++}.apiName
++
++/**
++ * Swaps `width` and `height` if the `orientation` is `90` or `-90`
++ * @return Pair of integers: width and height, respectively
++ */
++fun maybeRotateAssetSize(width: Int, height: Int, orientation: Int): Pair<Int, Int> {
++  // given width and height might need to be swapped if the orientation is -90 or 90
++  return if (abs(orientation) % 180 == 90) {
++    Pair(height, width)
++  } else {
++    Pair(width, height)
++  }
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/CreateAsset.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/CreateAsset.kt
+new file mode 100644
+index 0000000..7d175d7
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/CreateAsset.kt
+@@ -0,0 +1,173 @@
++package expo.modules.medialibrary.assets
++
++import android.os.AsyncTask
++import android.content.ContentValues
++import android.provider.MediaStore
++import android.content.ContentUris
++import android.content.Context
++import android.media.MediaScannerConnection
++import android.net.Uri
++import android.os.Build
++import androidx.annotation.RequiresApi
++import expo.modules.core.Promise
++import expo.modules.core.utilities.ifNull
++import expo.modules.medialibrary.ERROR_IO_EXCEPTION
++import expo.modules.medialibrary.ERROR_NO_FILE_EXTENSION
++import expo.modules.medialibrary.ERROR_UNABLE_TO_LOAD_PERMISSION
++import expo.modules.medialibrary.ERROR_UNABLE_TO_SAVE
++import expo.modules.medialibrary.MediaLibraryUtils
++import java.io.File
++import java.io.FileInputStream
++import java.io.FileOutputStream
++import java.io.IOException
++import java.lang.Exception
++
++class CreateAsset @JvmOverloads constructor(
++  private val context: Context,
++  uri: String,
++  private val promise: Promise,
++  private val resolveWithAdditionalData: Boolean = true
++) : AsyncTask<Void?, Void?, Void?>() {
++  private val mUri = normalizeAssetUri(uri)
++
++  private fun normalizeAssetUri(uri: String): Uri {
++    return if (uri.startsWith("/")) {
++      Uri.fromFile(File(uri))
++    } else {
++      Uri.parse(uri)
++    }
++  }
++
++  private val isFileExtensionPresent: Boolean
++    get() = mUri.lastPathSegment?.contains(".") ?: false
++
++  /**
++   * Creates asset entry in database
++   * @return uri to created asset or null if it fails
++   */
++  @RequiresApi(api = Build.VERSION_CODES.Q)
++  private fun createContentResolverAssetEntry(): Uri? {
++    val contentResolver = context.contentResolver
++    val mimeType = MediaLibraryUtils.getMimeType(contentResolver, mUri)
++    val filename = mUri.lastPathSegment
++    val path = MediaLibraryUtils.getRelativePathForAssetType(mimeType, true)
++
++    val contentUri = MediaLibraryUtils.mimeTypeToExternalUri(mimeType)
++    val contentValues = ContentValues().apply {
++      put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
++      put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
++      put(MediaStore.MediaColumns.RELATIVE_PATH, path)
++      put(MediaStore.MediaColumns.IS_PENDING, 1)
++    }
++    return contentResolver.insert(contentUri, contentValues)
++  }
++
++  /**
++   * Same as [MediaLibraryUtils.safeCopyFile] but takes Content URI as destination
++   */
++  @RequiresApi(api = Build.VERSION_CODES.Q)
++  @Throws(IOException::class)
++  private fun writeFileContentsToAsset(localFile: File, assetUri: Uri) {
++    val contentResolver = context.contentResolver
++    FileInputStream(localFile).channel.use { input ->
++      (contentResolver.openOutputStream(assetUri) as FileOutputStream).channel.use { output ->
++        val transferred = input.transferTo(0, input.size(), output)
++        if (transferred != input.size()) {
++          contentResolver.delete(assetUri, null, null)
++          throw IOException("Could not save file to $assetUri Not enough space.")
++        }
++      }
++    }
++
++    // After writing contents, set IS_PENDING flag back to 0
++    val values = ContentValues().apply {
++      put(MediaStore.MediaColumns.IS_PENDING, 0)
++    }
++    contentResolver.update(assetUri, values, null, null)
++  }
++
++  /**
++   * Recommended method of creating assets since API 30
++   */
++  @RequiresApi(api = Build.VERSION_CODES.R)
++  @Throws(IOException::class)
++  private fun createAssetUsingContentResolver() {
++    val assetUri = createContentResolverAssetEntry().ifNull {
++      promise.reject(ERROR_UNABLE_TO_SAVE, "Could not create content entry.")
++      return
++    }
++    writeFileContentsToAsset(File(mUri.path!!), assetUri)
++
++    if (resolveWithAdditionalData) {
++      val selection = "${MediaStore.MediaColumns._ID}=?"
++      val args = arrayOf(ContentUris.parseId(assetUri).toString())
++      queryAssetInfo(context, selection, args, false, promise)
++    } else {
++      promise.resolve(null)
++    }
++  }
++
++  /**
++   * Creates asset using filesystem. Legacy method - do not use above API 29
++   */
++  @Throws(IOException::class)
++  private fun createAssetFileLegacy(): File? {
++    val localFile = File(mUri.path!!)
++
++    val destDir = MediaLibraryUtils.getEnvDirectoryForAssetType(
++      MediaLibraryUtils.getMimeType(context.contentResolver, mUri),
++      true
++    ).ifNull {
++      promise.reject(ERROR_UNABLE_TO_SAVE, "Could not guess file type.")
++      return null
++    }
++
++    val destFile = MediaLibraryUtils.safeCopyFile(localFile, destDir)
++    if (!destDir.exists() || !destFile.isFile) {
++      promise.reject(ERROR_UNABLE_TO_SAVE, "Could not create asset record. Related file is not existing.")
++      return null
++    }
++    return destFile
++  }
++
++  override fun doInBackground(vararg params: Void?): Void? {
++    if (!isFileExtensionPresent) {
++      promise.reject(ERROR_NO_FILE_EXTENSION, "Could not get the file's extension.")
++      return null
++    }
++    try {
++      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++        createAssetUsingContentResolver()
++        return null
++      }
++
++      val asset = createAssetFileLegacy() ?: return null
++      MediaScannerConnection.scanFile(
++        context, arrayOf(asset.path),
++        null
++      ) { path: String, uri: Uri? ->
++        if (uri == null) {
++          promise.reject(ERROR_UNABLE_TO_SAVE, "Could not add image to gallery.")
++          return@scanFile
++        }
++        if (resolveWithAdditionalData) {
++          val selection = MediaStore.Images.Media.DATA + "=?"
++          val args = arrayOf(path)
++          queryAssetInfo(context, selection, args, false, promise)
++        } else {
++          promise.resolve(null)
++        }
++      }
++    } catch (e: IOException) {
++      promise.reject(ERROR_IO_EXCEPTION, "Unable to copy file into external storage.", e)
++    } catch (e: SecurityException) {
++      promise.reject(
++        ERROR_UNABLE_TO_LOAD_PERMISSION,
++        "Could not get asset: need READ_EXTERNAL_STORAGE permission.", e
++      )
++    } catch (e: Exception) {
++      promise.reject(ERROR_UNABLE_TO_SAVE, "Could not create asset.", e)
++    }
++    return null
++  }
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/DeleteAssets.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/DeleteAssets.kt
+new file mode 100644
+index 0000000..6eb2c21
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/DeleteAssets.kt
+@@ -0,0 +1,21 @@
++package expo.modules.medialibrary.assets
++
++import android.content.Context
++import android.os.AsyncTask
++import android.provider.MediaStore
++import expo.modules.core.Promise
++import expo.modules.medialibrary.MediaLibraryUtils
++
++internal class DeleteAssets(
++  private val context: Context,
++  private val assetIds: Array<String>,
++  private val promise: Promise
++) : AsyncTask<Void?, Void?, Void?>() {
++  override fun doInBackground(vararg params: Void?): Void? {
++    val selection = "${MediaStore.Images.Media._ID} IN (${assetIds.joinToString(separator = ",")} )"
++    val selectionArgs: Array<String>? = null
++
++    MediaLibraryUtils.deleteAssets(context, selection, selectionArgs, promise)
++    return null
++  }
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/GetAssetInfo.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/GetAssetInfo.kt
+new file mode 100644
+index 0000000..a7477a8
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/GetAssetInfo.kt
+@@ -0,0 +1,20 @@
++package expo.modules.medialibrary.assets
++
++import android.content.Context
++import android.os.AsyncTask
++import android.provider.MediaStore
++import expo.modules.core.Promise
++
++internal class GetAssetInfo(
++  private val context: Context,
++  private val assetId: String,
++  private val promise: Promise
++) : AsyncTask<Void?, Void?, Void?>() {
++  public override fun doInBackground(vararg params: Void?): Void? {
++    val selection = "${MediaStore.Images.Media._ID}=?"
++    val selectionArgs = arrayOf(assetId)
++
++    queryAssetInfo(context, selection, selectionArgs, true, promise)
++    return null
++  }
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/GetAssets.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/GetAssets.kt
+new file mode 100644
+index 0000000..332af09
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/GetAssets.kt
+@@ -0,0 +1,69 @@
++package expo.modules.medialibrary.assets
++
++import android.os.AsyncTask
++import android.os.Bundle
++import android.content.Context
++import expo.modules.core.Promise
++import expo.modules.medialibrary.ASSET_PROJECTION
++import expo.modules.medialibrary.ERROR_NO_PERMISSIONS
++import expo.modules.medialibrary.ERROR_UNABLE_TO_LOAD
++import expo.modules.medialibrary.ERROR_UNABLE_TO_LOAD_PERMISSION
++import expo.modules.medialibrary.EXTERNAL_CONTENT_URI
++import java.io.IOException
++import java.lang.IllegalArgumentException
++import java.util.ArrayList
++
++internal class GetAssets(
++  private val context: Context,
++  private val assetOptions: Map<String, Any?>,
++  private val promise: Promise
++) : AsyncTask<Void?, Void?, Void?>() {
++  public override fun doInBackground(vararg params: Void?): Void? {
++    val contentResolver = context.contentResolver
++    try {
++      val (selection, order, limit, offset) = getQueryFromOptions(assetOptions)
++      contentResolver.query(
++        EXTERNAL_CONTENT_URI,
++        ASSET_PROJECTION,
++        selection,
++        null,
++        order
++      ).use { assetsCursor ->
++        if (assetsCursor == null) {
++          promise.reject(ERROR_UNABLE_TO_LOAD, "Could not get assets. Query returns null.")
++          return null
++        }
++
++        val assetsInfo = ArrayList<Bundle>()
++        putAssetsInfo(
++          contentResolver,
++          assetsCursor,
++          assetsInfo,
++          limit,
++          offset,
++          false
++        )
++        val response = Bundle().apply {
++          putParcelableArrayList("assets", assetsInfo)
++          putBoolean("hasNextPage", !assetsCursor.isAfterLast)
++          putString("endCursor", assetsCursor.position.toString())
++          putInt("totalCount", assetsCursor.count)
++        }
++        promise.resolve(response)
++      }
++    } catch (e: SecurityException) {
++      promise.reject(
++        ERROR_UNABLE_TO_LOAD_PERMISSION,
++        "Could not get asset: need READ_EXTERNAL_STORAGE permission.", e
++      )
++    } catch (e: IOException) {
++      promise.reject(ERROR_UNABLE_TO_LOAD, "Could not read file", e)
++    } catch (e: IllegalArgumentException) {
++      promise.reject(ERROR_UNABLE_TO_LOAD, "Invalid MediaType", e)
++    } catch (e: UnsupportedOperationException) {
++      e.printStackTrace()
++      promise.reject(ERROR_NO_PERMISSIONS, e.message)
++    }
++    return null
++  }
++}
+diff --git a/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/GetAssetsQuery.kt b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/GetAssetsQuery.kt
+new file mode 100644
+index 0000000..29091d4
+--- /dev/null
++++ b/node_modules/expo-media-library/android/bin/src/main/java/expo/modules/medialibrary/assets/GetAssetsQuery.kt
+@@ -0,0 +1,125 @@
++package expo.modules.medialibrary.assets
++
++import android.provider.MediaStore
++import expo.modules.core.utilities.ifNull
++import expo.modules.core.utilities.takeIfInstanceOf
++import expo.modules.medialibrary.GET_ASSETS_DEFAULT_LIMIT
++import expo.modules.medialibrary.MediaType
++import expo.modules.medialibrary.SortBy
++import java.util.ArrayList
++
++data class GetAssetsQuery(
++  val selection: String,
++  val order: String,
++  val limit: Int,
++  val offset: Int,
++)
++
++@Throws(IllegalArgumentException::class)
++internal fun getQueryFromOptions(input: Map<String, Any?>): GetAssetsQuery {
++  val limit = input["first"].takeIfInstanceOf<Number>()?.toInt() ?: GET_ASSETS_DEFAULT_LIMIT
++
++  // to maintain compatibility with iOS field `after` is string
++  val offset = input["after"]
++    .takeIfInstanceOf<String>()
++    ?.runCatching { toInt() } // NumberFormatException
++    ?.getOrNull()
++    ?: 0
++
++  val selection = createSelectionString(input)
++
++  val sortBy = input["sortBy"] as? List<*>
++  val order = if (sortBy != null && sortBy.isNotEmpty()) {
++    convertOrderDescriptors(sortBy)
++  } else {
++    MediaStore.Images.Media.DEFAULT_SORT_ORDER
++  }
++
++  return GetAssetsQuery(selection, order, limit, offset)
++}
++
++@Throws(IllegalArgumentException::class)
++private fun createSelectionString(input: Map<String, Any?>): String {
++  val selectionBuilder = StringBuilder()
++
++  if (input.containsKey("album")) {
++    selectionBuilder.append("${MediaStore.Images.Media.BUCKET_ID} = ${input["album"]}")
++    selectionBuilder.append(" AND ")
++  }
++
++  val mediaType = input["mediaType"] as? List<*>
++  if (mediaType != null && !mediaType.contains(MediaType.ALL.apiName)) {
++    val mediaTypeInts = mediaType.map { parseMediaType(it.toString()) }
++    selectionBuilder.append(
++      "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (${mediaTypeInts.joinToString(separator = ",")})"
++    )
++  } else {
++    selectionBuilder.append(
++      "${MediaStore.Files.FileColumns.MEDIA_TYPE} != ${MediaStore.Files.FileColumns.MEDIA_TYPE_NONE}"
++    )
++  }
++
++  input["createdAfter"].takeIfInstanceOf<Number>()?.let {
++    selectionBuilder.append(" AND ${MediaStore.Images.Media.DATE_TAKEN} > ${it.toLong()}")
++  }
++  input["createdBefore"].takeIfInstanceOf<Number>()?.let {
++    selectionBuilder.append(" AND ${MediaStore.Images.Media.DATE_TAKEN} < ${it.toLong()}")
++  }
++
++  return selectionBuilder.toString()
++}
++
++/**
++ * Converts media type constant string to media column defined in [MediaType]
++ * @throws IllegalArgumentException if the value is not defined there
++ */
++@Throws(IllegalArgumentException::class)
++private fun parseMediaType(mediaTypeName: String): Int =
++  MediaType.fromApiName(mediaTypeName)?.mediaColumn.ifNull {
++    val errorMessage = "MediaType $mediaTypeName is not supported!"
++    throw IllegalArgumentException(errorMessage)
++  }
++
++/**
++ * Converts sorting key string to column value defined in [SortBy]
++ * @throws IllegalArgumentException if the value is not defined there
++ */
++@Throws(IllegalArgumentException::class)
++fun parseSortByKey(key: String): String =
++  SortBy.fromKeyName(key)?.mediaColumnName.ifNull {
++    val errorMessage = "SortBy key $key is not supported!"
++    throw IllegalArgumentException(errorMessage)
++  }
++
++/**
++ * Converts orderBy options to a value accepted as `order` parameter of
++ * [android.content.ContentResolver.query] method
++ *
++ * Expected input: List of either:
++ * - `String` representing order key, defined in [MediaLibraryConstants.SORT_KEYS]
++ * - Two-element tuple (defined as `List[String, Boolean]`), where:
++ *    - first element represents order key, defined in [MediaLibraryConstants.SORT_KEYS]
++ *    - second element: `true` --> ASC, `false` --> DESC order
++ *
++ * @throws IllegalArgumentException when conversion fails
++ */
++@Throws(IllegalArgumentException::class)
++fun convertOrderDescriptors(orderDescriptor: List<*>): String {
++  val results = ArrayList<String>(20)
++  for (item in orderDescriptor) {
++    when (item) {
++      is String -> {
++        val key = parseSortByKey(item)
++        results.add("$key DESC")
++      }
++      is List<*> -> {
++        require(item.size == 2) { "Array sortBy in assetsOptions has invalid layout." }
++        val key = parseSortByKey(item[0] as String)
++        val order = item[1] as Boolean
++        results.add(key + if (order) " ASC" else " DESC")
++      }
++      else -> throw IllegalArgumentException("Array sortBy in assetsOptions contains invalid items.")
++    }
++  }
++  return results.joinToString(separator = ",")
++}

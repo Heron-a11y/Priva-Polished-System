@@ -1,0 +1,842 @@
+diff --git a/node_modules/expo-dev-menu-interface/android/.project b/node_modules/expo-dev-menu-interface/android/.project
+new file mode 100644
+index 0000000..ffadfd2
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>expo-dev-menu-interface</name>
++	<comment>Project expo-dev-menu-interface created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1759581207273</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/.project b/node_modules/expo-dev-menu-interface/android/bin/.project
+new file mode 100644
+index 0000000..ffadfd2
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>expo-dev-menu-interface</name>
++	<comment>Project expo-dev-menu-interface created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1759581207273</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/build.gradle b/node_modules/expo-dev-menu-interface/android/bin/build.gradle
+new file mode 100644
+index 0000000..7b98c19
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/build.gradle
+@@ -0,0 +1,92 @@
++apply plugin: 'com.android.library'
++apply plugin: 'kotlin-android'
++apply plugin: 'maven-publish'
++
++group = 'host.exp.exponent'
++version = '1.0.0'
++
++buildscript {
++  def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
++  if (expoModulesCorePlugin.exists()) {
++    apply from: expoModulesCorePlugin
++    applyKotlinExpoModulesCorePlugin()
++  }
++
++  // Simple helper that allows the root project to override versions declared by this library.
++  ext.safeExtGet = { prop, fallback ->
++    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
++  }
++
++  // Ensures backward compatibility
++  ext.getKotlinVersion = {
++    if (ext.has("kotlinVersion")) {
++      ext.kotlinVersion()
++    } else {
++      ext.safeExtGet("kotlinVersion", "1.6.10")
++    }
++  }
++
++  repositories {
++    mavenCentral()
++  }
++
++  dependencies {
++    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${getKotlinVersion()}")
++  }
++}
++
++// Creating sources with comments
++task androidSourcesJar(type: Jar) {
++  archiveClassifier.set('sources')
++  from android.sourceSets.main.java.srcDirs
++}
++
++afterEvaluate {
++  publishing {
++    publications {
++      release(MavenPublication) {
++        from components.release
++        // Add additional sourcesJar to artifacts
++        artifact(androidSourcesJar)
++      }
++    }
++    repositories {
++      maven {
++        url = mavenLocal().url
++      }
++    }
++  }
++}
++
++android {
++  compileSdkVersion safeExtGet("compileSdkVersion", 31)
++
++  compileOptions {
++    sourceCompatibility JavaVersion.VERSION_11
++    targetCompatibility JavaVersion.VERSION_11
++  }
++
++  kotlinOptions {
++    jvmTarget = JavaVersion.VERSION_11.majorVersion
++  }
++
++  defaultConfig {
++    minSdkVersion safeExtGet("minSdkVersion", 21)
++    targetSdkVersion safeExtGet("targetSdkVersion", 31)
++    versionCode 6
++    versionName '1.0.0'
++  }
++  lintOptions {
++    abortOnError false
++  }
++}
++
++dependencies {
++  //noinspection GradleDynamicVersion
++  implementation 'com.facebook.react:react-native:+'
++
++  implementation 'com.squareup.okhttp3:okhttp:3.14.9'
++
++  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${getKotlinVersion()}"
++  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.3"
++}
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/src/main/AndroidManifest.xml b/node_modules/expo-dev-menu-interface/android/bin/src/main/AndroidManifest.xml
+new file mode 100644
+index 0000000..e8bdfa1
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/src/main/AndroidManifest.xml
+@@ -0,0 +1,5 @@
++
++<manifest package="expo.interfaces.devmenu">
++
++</manifest>
++  
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuDelegateInterface.kt b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuDelegateInterface.kt
+new file mode 100644
+index 0000000..2a76bfe
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuDelegateInterface.kt
+@@ -0,0 +1,20 @@
++package expo.interfaces.devmenu
++
++import android.os.Bundle
++import com.facebook.react.ReactInstanceManager
++
++interface DevMenuDelegateInterface {
++  /**
++   * Returns a `Bundle` with the most important information about the current app.
++   */
++  fun appInfo(): Bundle?
++
++  /**
++   * Returns a `ReactInstanceManager` ot the currently shown app. It is a context of what the dev menu displays.
++   */
++  fun reactInstanceManager(): ReactInstanceManager
++
++  fun supportsDevelopment(): Boolean {
++    return true
++  }
++}
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuExtensionInterface.kt b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuExtensionInterface.kt
+new file mode 100644
+index 0000000..a1b026c
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuExtensionInterface.kt
+@@ -0,0 +1,27 @@
++package expo.interfaces.devmenu
++
++import expo.interfaces.devmenu.items.DevMenuDataSourceInterface
++import expo.interfaces.devmenu.items.DevMenuItemsContainerInterface
++import expo.interfaces.devmenu.items.DevMenuScreen
++
++interface DevMenuExtensionSettingsInterface {
++  fun wasRunOnDevelopmentBridge(): Boolean
++  val manager: DevMenuManagerInterface
++}
++
++interface DevMenuExtensionInterface {
++  /**
++   * Returns a name of the module and the extension. Also required by [com.facebook.react.bridge.ReactContextBaseJavaModule].
++   */
++  fun getName(): String
++
++  /**
++   * Returns a `DevMenuItemsContainer` that contains the dev menu items to show on the main screen.
++   * It's called only once for the extension instance — results are being cached on first dev menu launch.
++   */
++  fun devMenuItems(settings: DevMenuExtensionSettingsInterface): DevMenuItemsContainerInterface?
++
++  fun devMenuScreens(settings: DevMenuExtensionSettingsInterface): List<DevMenuScreen>? = null
++
++  fun devMenuDataSources(settings: DevMenuExtensionSettingsInterface): List<DevMenuDataSourceInterface>? = null
++}
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuInterfacePackage.kt b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuInterfacePackage.kt
+new file mode 100644
+index 0000000..6900cbd
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuInterfacePackage.kt
+@@ -0,0 +1,17 @@
++package expo.interfaces.devmenu
++
++import android.view.View
++import com.facebook.react.ReactPackage
++import com.facebook.react.bridge.NativeModule
++import com.facebook.react.bridge.ReactApplicationContext
++import com.facebook.react.uimanager.ReactShadowNode
++import com.facebook.react.uimanager.ViewManager
++
++/**
++ * We need this dummy package because otherwise, the react-native auto-linking won't work.
++ */
++class DevMenuInterfacePackage : ReactPackage {
++  override fun createNativeModules(reactContext: ReactApplicationContext): MutableList<NativeModule> = mutableListOf()
++
++  override fun createViewManagers(reactContext: ReactApplicationContext): MutableList<ViewManager<View, ReactShadowNode<*>>> = mutableListOf()
++}
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuManagerInterface.kt b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuManagerInterface.kt
+new file mode 100644
+index 0000000..63c69c5
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuManagerInterface.kt
+@@ -0,0 +1,110 @@
++package expo.interfaces.devmenu
++
++import android.app.Activity
++import android.os.Bundle
++import android.view.KeyEvent
++import android.view.MotionEvent
++import com.facebook.react.ReactNativeHost
++import com.facebook.react.bridge.ReadableMap
++import expo.interfaces.devmenu.items.DevMenuDataSourceItem
++import kotlinx.coroutines.CoroutineScope
++
++interface DevMenuManagerInterface {
++  /**
++   * Opens the dev menu in provided [activity]
++   */
++  fun openMenu(activity: Activity, screen: String? = null)
++
++  /**
++   * Closes the dev menu.
++   * This method will trigger the js code, which should smoothly hide the menu.
++   */
++  fun closeMenu()
++
++  /**
++   * Hides the dev menu.
++   * This method will destroyed the current dev menu [Activity].
++   */
++  fun hideMenu()
++
++  /**
++   * Toggles the dev menu in provided [activity]
++   */
++  fun toggleMenu(activity: Activity)
++
++  /**
++   * Handles `onKeyEvent`. It's active only if [DevMenuPreferencesInterface.keyCommandsEnabled] is true.
++   */
++  fun onKeyEvent(keyCode: Int, event: KeyEvent): Boolean
++
++  /**
++   * Handles `onTouchEvent`. It's active only if [DevMenuPreferencesInterface.touchGestureEnabled] is true.
++   */
++  fun onTouchEvent(ev: MotionEvent?)
++
++  /**
++   * Initializes the dev menu manager to work with provided delegate.
++   */
++  fun setDelegate(newDelegate: DevMenuDelegateInterface)
++
++  /**
++   * Initializes the dev menu manager to work with react native host.
++   */
++  fun initializeWithReactNativeHost(reactNativeHost: ReactNativeHost)
++
++  /**
++   * Finds and dispatches action with provided [actionId].
++   * If such action doesn't exist, ignore it.
++   */
++  fun dispatchCallable(actionId: String, args: ReadableMap?)
++
++  /**
++   * @return a list of dev menu items serialized to the [Bundle].
++   */
++  fun serializedItems(): List<Bundle>
++
++  /**
++   * @return a list of dev menu screens serialized to the [Bundle].
++   */
++  fun serializedScreens(): List<Bundle>
++
++  /**
++   * @return a instance of [DevMenuPreferencesInterface] that keeps all settings for current dev menu delegate,
++   * or `null` if delegate wasn't provided.
++   */
++  fun getSettings(): DevMenuPreferencesInterface?
++
++  /**
++   * @return the dev menu application host.
++   */
++  fun getMenuHost(): ReactNativeHost
++
++  /**
++   * Synchronizes [ReactInstanceManager] from delegate with one saved in [DevMenuManger].
++   */
++  fun synchronizeDelegate()
++
++  /**
++   * Set the current screen on which all action will be dispatched.
++   */
++  fun setCurrentScreen(screen: String?)
++
++  /**
++   * Sends an event to the delegate's bridge if exists.
++   */
++  fun sendEventToDelegateBridge(eventName: String, eventData: Any?)
++
++  /**
++   * Whether delegate was initialized
++   */
++  fun isInitialized(): Boolean
++
++  /**
++   * Whether to automatically show the dev menu on app load. Defaults to true if not set.
++   */
++  fun setCanLaunchDevMenuOnStart(shouldAutoLaunch: Boolean)
++
++  suspend fun fetchDataSource(id: String): List<DevMenuDataSourceItem>
++
++  val coroutineScope: CoroutineScope
++}
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuManagerProviderInterface.kt b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuManagerProviderInterface.kt
+new file mode 100644
+index 0000000..8fd7964
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuManagerProviderInterface.kt
+@@ -0,0 +1,9 @@
++package expo.interfaces.devmenu
++
++@FunctionalInterface
++interface DevMenuManagerProviderInterface {
++  /**
++   * Provides access to the object implementing the [DevMenuManagerInterface] interface.
++   */
++  fun getDevMenuManager(): DevMenuManagerInterface
++}
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuPreferencesInterface.kt b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuPreferencesInterface.kt
+new file mode 100644
+index 0000000..4566221
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/DevMenuPreferencesInterface.kt
+@@ -0,0 +1,41 @@
++package expo.interfaces.devmenu
++
++import com.facebook.react.bridge.ReadableMap
++import com.facebook.react.bridge.WritableMap
++
++interface DevMenuPreferencesInterface {
++  /**
++   * Whether to enable shake gesture.
++   */
++  var motionGestureEnabled: Boolean
++
++  /**
++   * Whether to enable three-finger long press gesture.
++   */
++  var touchGestureEnabled: Boolean
++
++  /**
++   * Whether to enable key commands.
++   */
++  var keyCommandsEnabled: Boolean
++
++  /**
++   * Whether to automatically show the dev menu once its delegate is set and the bridge is loaded.
++   */
++  var showsAtLaunch: Boolean
++
++  /**
++   * Returns `true` only if the user finished onboarding, `false` otherwise.
++   */
++  var isOnboardingFinished: Boolean
++
++  /**
++   * Serializes settings into a [WritableMap] so they can be passed through the bridge.
++   */
++  fun serialize(): WritableMap
++
++  /**
++   * Updates settings from [ReadableMap] - the map can be a partial of all the possible settings options
++   */
++  fun setPreferences(settings: ReadableMap)
++}
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/annotations/ContainsDevMenuExtension.kt b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/annotations/ContainsDevMenuExtension.kt
+new file mode 100644
+index 0000000..4e09f80
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/annotations/ContainsDevMenuExtension.kt
+@@ -0,0 +1,5 @@
++package expo.interfaces.devmenu.annotations
++
++@Target(AnnotationTarget.CLASS)
++@Retention(AnnotationRetention.RUNTIME)
++annotation class ContainsDevMenuExtension
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuDataSource.kt b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuDataSource.kt
+new file mode 100644
+index 0000000..81e2d56
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuDataSource.kt
+@@ -0,0 +1,22 @@
++package expo.interfaces.devmenu.items
++
++import android.os.Bundle
++
++interface DevMenuDataSourceItem {
++  fun serialize(): Bundle
++}
++
++interface DevMenuDataSourceInterface {
++  val id: String
++
++  suspend fun fetchData(): List<DevMenuDataSourceItem>
++}
++
++class DevMenuListDataSource(
++  override val id: String,
++  val dataFetcher: suspend () -> List<DevMenuSelectionList.Item>
++) : DevMenuDataSourceInterface {
++  override suspend fun fetchData(): List<DevMenuDataSourceItem> {
++    return dataFetcher()
++  }
++}
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuExportedCallable.kt b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuExportedCallable.kt
+new file mode 100644
+index 0000000..ac992c3
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuExportedCallable.kt
+@@ -0,0 +1,34 @@
++package expo.interfaces.devmenu.items
++
++import com.facebook.react.bridge.ReadableMap
++
++interface DevMenuCallableProvider {
++  fun registerCallable(): DevMenuExportedCallable?
++}
++
++sealed class DevMenuExportedCallable(val id: String)
++
++class DevMenuExportedFunction(
++  id: String,
++  val function: (ReadableMap?) -> Unit
++) : DevMenuExportedCallable(id) {
++  fun call(args: ReadableMap?) {
++    function(args)
++  }
++}
++
++class DevMenuExportedAction(
++  id: String,
++  val action: () -> Unit
++) : DevMenuExportedCallable(id) {
++  var keyCommand: KeyCommand? = null
++  var isAvailable = { true }
++
++  fun registerKeyCommand(keyCommand: KeyCommand?) {
++    this.keyCommand = keyCommand
++  }
++
++  fun call() {
++    action()
++  }
++}
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuItemImportance.kt b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuItemImportance.kt
+new file mode 100644
+index 0000000..9bb2624
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuItemImportance.kt
+@@ -0,0 +1,12 @@
++package expo.interfaces.devmenu.items
++
++/**
++ * Tells how important the dev menu item is. To use it with [DevMenuItem], you need to pass its [value].
++ */
++enum class DevMenuItemImportance(val value: Int) {
++  LOWEST(-200),
++  LOW(-100),
++  MEDIUM(0),
++  HIGH(100),
++  HIGHEST(200);
++}
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuItems.kt b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuItems.kt
+new file mode 100644
+index 0000000..435e5b7
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuItems.kt
+@@ -0,0 +1,182 @@
++package expo.interfaces.devmenu.items
++
++import android.os.Bundle
++import android.view.KeyCharacterMap
++import com.facebook.react.bridge.ReadableMap
++
++val keyCharacterMap: KeyCharacterMap = KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD)
++
++// Android virtual keyboard only supports `SHIFT` as a modifier.
++data class KeyCommand(val code: Int, val withShift: Boolean = false)
++
++/**
++ * An abstract representation of the single dev menu item.
++ */
++sealed class DevMenuItem {
++  /**
++   * Represent how this item will be treated by the js.
++   *  1 - [DevMenuAction]
++   *  2 - [DevMenuGroup]
++   *  3 - [DevMenuScreen]
++   *  4 - [DevMenuLink]
++   *  5 - [DevMenuSelectionList]
++   */
++  abstract fun getExportedType(): Int
++
++  open fun serialize() = Bundle().apply {
++    putInt("type", getExportedType())
++  }
++}
++
++abstract class DevMenuScreenItem : DevMenuItem() {
++  var importance = DevMenuItemImportance.MEDIUM.value
++}
++
++class DevMenuScreen(
++  val screenName: String,
++  itemsContainer: DevMenuDSLItemsContainerInterface = DevMenuItemsContainer()
++) : DevMenuItem(), DevMenuDSLItemsContainerInterface by itemsContainer {
++  override fun getExportedType() = 3
++
++  override fun serialize() = super.serialize().apply {
++    putString("screenName", screenName)
++    putParcelableArray("items", serializeItems())
++  }
++}
++
++class DevMenuGroup(
++  itemsContainer: DevMenuDSLItemsContainerInterface = DevMenuItemsContainer()
++) : DevMenuScreenItem(), DevMenuDSLItemsContainerInterface by itemsContainer {
++  override fun getExportedType() = 2
++
++  override fun serialize() = super.serialize().apply {
++    putParcelableArray("items", serializeItems())
++  }
++}
++
++class DevMenuAction(
++  actionId: String,
++  action: () -> Unit
++) : DevMenuScreenItem(), DevMenuCallableProvider {
++  val callable = DevMenuExportedAction(actionId, action)
++  var isAvailable: () -> Boolean
++    get() = callable.isAvailable
++    set(value) {
++      callable.isAvailable = value
++    }
++  var isEnabled = { false }
++  var label = { "" }
++  var detail = { "" }
++  var glyphName = { "" }
++
++  var keyCommand: KeyCommand?
++    get() = callable.keyCommand
++    set(value) {
++      callable.registerKeyCommand(value)
++    }
++
++  override fun getExportedType() = 1
++
++  override fun serialize() = super.serialize().apply {
++    putString("actionId", callable.id)
++    putBoolean("isAvailable", isAvailable())
++    putBoolean("isEnabled", isEnabled())
++    putString("label", label())
++    putString("detail", detail())
++    putString("glyphName", glyphName())
++
++    putBundle(
++      "keyCommand",
++      keyCommand?.let { keyCommand ->
++        Bundle().apply {
++          putString("input", keyCharacterMap.getDisplayLabel(keyCommand.code).toString())
++          putInt("modifiers", exportKeyCommandModifiers())
++        }
++      }
++    )
++  }
++
++  private fun exportKeyCommandModifiers(): Int {
++    if (keyCommand?.withShift == true) {
++      return 1 shl 3
++    }
++    return 0
++  }
++
++  override fun registerCallable(): DevMenuExportedCallable {
++    return callable
++  }
++}
++
++class DevMenuLink(private val target: String) : DevMenuScreenItem() {
++  var label = { "" }
++  var glyphName = { "" }
++
++  override fun getExportedType() = 4
++
++  override fun serialize() = super.serialize().apply {
++    putString("target", target)
++    putString("label", label())
++    putString("glyphName", glyphName())
++  }
++}
++
++class DevMenuSelectionList : DevMenuScreenItem(), DevMenuCallableProvider {
++  class Item : DevMenuDataSourceItem {
++    class Tag {
++      var glyphName = { "" }
++      var text = { "" }
++
++      internal fun serialize() = Bundle().apply {
++        putString("text", text())
++        putString("glyphName", glyphName())
++      }
++    }
++
++    var title = { "" }
++    var tags: () -> List<Tag> = { emptyList() }
++    var warning: () -> String? = { null }
++    var isChecked = { false }
++    var onClickData: () -> Bundle? = { null }
++
++    override fun serialize() = Bundle().apply {
++      putString("title", title())
++      putString("warning", warning())
++      putBoolean("isChecked", isChecked())
++      putBundle("onClickData", onClickData())
++      putParcelableArray("tags", tags().map { it.serialize() }.toTypedArray())
++    }
++  }
++
++  private var items = ArrayList<Item>()
++  private var callable: DevMenuExportedFunction? = null
++  var dataSourceId: () -> String? = { null }
++
++  fun addOnClick(handler: (ReadableMap?) -> Unit) {
++    callable = DevMenuExportedFunction("expo-dev-menu.selection-list.#${ActionID++}", handler)
++  }
++
++  fun addItem(item: Item) {
++    items.add(item)
++  }
++
++  override fun getExportedType(): Int {
++    return 5
++  }
++
++  override fun serialize() = super.serialize().apply {
++    callable?.let {
++      putString("actionId", it.id)
++    }
++    putString("dataSourceId", dataSourceId())
++    putParcelableArray("items", items.map { it.serialize() }.toTypedArray())
++  }
++
++  companion object {
++    private var ActionID = 0
++  }
++
++  override fun registerCallable(): DevMenuExportedCallable? {
++    return callable
++  }
++}
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuItemsContainer.kt b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuItemsContainer.kt
+new file mode 100644
+index 0000000..e0155dd
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuItemsContainer.kt
+@@ -0,0 +1,53 @@
++package expo.interfaces.devmenu.items
++
++import java.util.*
++
++open class DevMenuItemsContainer : DevMenuDSLItemsContainerInterface {
++  private val items = mutableListOf<DevMenuScreenItem>()
++
++  override fun getRootItems(): List<DevMenuScreenItem> {
++    items.sortedWith(compareBy { it.importance })
++    return items
++  }
++
++  override fun getAllItems(): List<DevMenuScreenItem> {
++    val result = LinkedList<DevMenuScreenItem>()
++
++    items.forEach {
++      result.add(it)
++
++      if (it is DevMenuItemsContainerInterface) {
++        result.addAll(it.getAllItems())
++      }
++    }
++    return result
++  }
++
++  private fun addItem(item: DevMenuScreenItem) {
++    items.add(item)
++  }
++
++  override fun group(init: DevMenuGroup.() -> Unit) = addItem(DevMenuGroup(), init)
++
++  override fun action(actionId: String, action: () -> Unit, init: DevMenuAction.() -> Unit) =
++    addItem(DevMenuAction(actionId, action), init)
++
++  override fun link(target: String, init: DevMenuLink.() -> Unit) = addItem(DevMenuLink(target), init)
++
++  override fun selectionList(init: DevMenuSelectionList.() -> Unit) = addItem(DevMenuSelectionList(), init)
++
++  private fun <T : DevMenuScreenItem> addItem(item: T, init: T.() -> Unit): T {
++    item.init()
++    addItem(item)
++    return item
++  }
++
++  companion object {
++    @JvmStatic
++    fun export(init: DevMenuDSLItemsContainerInterface.() -> Unit): DevMenuItemsContainer {
++      val container = DevMenuItemsContainer()
++      container.init()
++      return container
++    }
++  }
++}
+diff --git a/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuItemsContainerInterface.kt b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuItemsContainerInterface.kt
+new file mode 100644
+index 0000000..d597b96
+--- /dev/null
++++ b/node_modules/expo-dev-menu-interface/android/bin/src/main/java/expo/interfaces/devmenu/items/DevMenuItemsContainerInterface.kt
+@@ -0,0 +1,30 @@
++package expo.interfaces.devmenu.items
++
++import android.os.Bundle
++
++interface DevMenuItemsContainerInterface {
++  fun getRootItems(): List<DevMenuScreenItem>
++  fun getAllItems(): List<DevMenuScreenItem>
++}
++
++fun DevMenuItemsContainerInterface.serializeItems(): Array<Bundle> =
++  getRootItems()
++    .map { it.serialize() }
++    .toTypedArray()
++
++inline fun <reified T> DevMenuItemsContainerInterface.getItemsOfType(): List<T> {
++  return getAllItems().filterIsInstance<T>()
++}
++
++interface DevMenuDSLItemsContainerInterface : DevMenuItemsContainerInterface {
++  fun group(init: DevMenuGroup.() -> Unit): DevMenuGroup
++  fun action(actionId: String, action: () -> Unit, init: DevMenuAction.() -> Unit): DevMenuAction
++  fun link(target: String, init: DevMenuLink.() -> Unit): DevMenuLink
++  fun selectionList(init: DevMenuSelectionList.() -> Unit): DevMenuSelectionList
++}
++
++fun screen(name: String, init: DevMenuScreen.() -> Unit): DevMenuScreen {
++  val screen = DevMenuScreen(name)
++  screen.init()
++  return screen
++}
+diff --git a/node_modules/expo-dev-menu-interface/android/build.gradle b/node_modules/expo-dev-menu-interface/android/build.gradle
+index 2be51ae..7b98c19 100644
+--- a/node_modules/expo-dev-menu-interface/android/build.gradle
++++ b/node_modules/expo-dev-menu-interface/android/build.gradle
+@@ -37,7 +37,7 @@ buildscript {
+ 
+ // Creating sources with comments
+ task androidSourcesJar(type: Jar) {
+-  classifier = 'sources'
++  archiveClassifier.set('sources')
+   from android.sourceSets.main.java.srcDirs
+ }
+ 

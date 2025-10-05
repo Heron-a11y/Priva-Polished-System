@@ -1,0 +1,283 @@
+diff --git a/node_modules/expo/android/.project b/node_modules/expo/android/.project
+new file mode 100644
+index 0000000..137d521
+--- /dev/null
++++ b/node_modules/expo/android/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>expo</name>
++	<comment>Project expo created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1759581207246</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/expo/android/bin/.project b/node_modules/expo/android/bin/.project
+new file mode 100644
+index 0000000..137d521
+--- /dev/null
++++ b/node_modules/expo/android/bin/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>expo</name>
++	<comment>Project expo created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1759581207246</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/expo/android/bin/build.gradle b/node_modules/expo/android/bin/build.gradle
+new file mode 100644
+index 0000000..93aa16a
+--- /dev/null
++++ b/node_modules/expo/android/bin/build.gradle
+@@ -0,0 +1,157 @@
++apply plugin: 'com.android.library'
++apply plugin: 'kotlin-android'
++apply plugin: 'maven-publish'
++
++// Import autolinking script
++apply from: "../scripts/autolinking.gradle"
++
++static def versionToNumber(major, minor, patch) {
++  return patch * 100 + minor * 10000 + major * 1000000
++}
++
++def getRNVersion() {
++  def nodeModulesVersion = [
++      "node",
++      "-e",
++      "console.log(require('react-native/package.json').version);"
++  ]
++      .execute(null, projectDir)
++      .text
++      .trim()
++
++  def version = System.getenv("REACT_NATIVE_OVERRIDE_VERSION") ?: safeExtGet("reactNativeVersion", nodeModulesVersion)
++  def coreVersion = version.split("-")[0]
++  def (major, minor, patch) = coreVersion.tokenize('.').collect { it.toInteger() }
++
++  return versionToNumber(
++      major,
++      minor,
++      patch
++  )
++}
++
++ensureDependeciesWereEvaluated(project)
++
++group = 'host.exp.exponent'
++version = '49.0.23'
++
++buildscript {
++  def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
++  if (expoModulesCorePlugin.exists()) {
++    apply from: expoModulesCorePlugin
++    applyKotlinExpoModulesCorePlugin()
++  }
++
++  // Simple helper that allows the root project to override versions declared by this library.
++  ext.safeExtGet = { prop, fallback ->
++    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
++  }
++
++  // Ensures backward compatibility
++  ext.getKotlinVersion = {
++    if (ext.has("kotlinVersion")) {
++      ext.kotlinVersion()
++    } else {
++      ext.safeExtGet("kotlinVersion", "1.8.10")
++    }
++  }
++
++  repositories {
++    mavenCentral()
++  }
++
++  dependencies {
++    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${getKotlinVersion()}")
++  }
++}
++
++afterEvaluate {
++  publishing {
++    publications {
++      release(MavenPublication) {
++        from components.release
++      }
++    }
++    repositories {
++      maven {
++        url = mavenLocal().url
++      }
++    }
++  }
++}
++
++android {
++  compileSdkVersion safeExtGet("compileSdkVersion", 34)
++
++  compileOptions {
++    sourceCompatibility JavaVersion.VERSION_11
++    targetCompatibility JavaVersion.VERSION_11
++  }
++
++  kotlinOptions {
++    jvmTarget = JavaVersion.VERSION_11.majorVersion
++  }
++
++  namespace "expo.core"
++  defaultConfig {
++    minSdkVersion safeExtGet("minSdkVersion", 21)
++    targetSdkVersion safeExtGet("targetSdkVersion", 33)
++    versionCode 1
++    versionName "49.0.23"
++    consumerProguardFiles("proguard-rules.pro")
++  }
++  lintOptions {
++    abortOnError false
++  }
++  testOptions {
++    unitTests.includeAndroidResources = true
++  }
++
++  sourceSets {
++    main {
++      java {
++        srcDirs += new File(project.buildDir, generatedFilesSrcDir)
++
++        def rnVersion = getRNVersion()
++        if (rnVersion >= versionToNumber(0, 71, 0)) {
++          srcDirs += "src/reactNativeHostWrapper"
++        } else if (rnVersion >= versionToNumber(0, 69, 0)) {
++          srcDirs += "src/reactNativeHostWrapper69"
++        } else if (rnVersion >= versionToNumber(0, 67, 0)) {
++          srcDirs += "src/reactNativeHostWrapper67"
++        } else {
++          srcDirs += "src/reactNativeHostWrapper64"
++        }
++      }
++    }
++  }
++  publishing {
++    singleVariant("release") {
++      withSourcesJar()
++    }
++  }
++}
++
++dependencies { dependencyHandler ->
++  //noinspection GradleDynamicVersion
++  implementation 'com.facebook.react:react-native:+'
++
++  testImplementation 'junit:junit:4.13.2'
++  testImplementation 'androidx.test:core:1.4.0'
++  testImplementation "com.google.truth:truth:1.1.2"
++  testImplementation 'io.mockk:mockk:1.12.0'
++
++  // Link expo modules as dependencies of the adapter. It uses `api` configuration so they all will be visible for the app as well.
++  // A collection of the dependencies depends on the options passed to `useExpoModules` in your project's `settings.gradle`.
++  addExpoModulesDependencies(dependencyHandler, project)
++}
++
++// A task generating a package list of expo modules.
++task generateExpoModulesPackageList {
++  doLast {
++    generateExpoModulesPackageList()
++  }
++}
++
++// Run that task during prebuilding phase.
++preBuild.dependsOn "generateExpoModulesPackageList"
+diff --git a/node_modules/expo/android/bin/proguard-rules.pro b/node_modules/expo/android/bin/proguard-rules.pro
+new file mode 100644
+index 0000000..7829fb2
+--- /dev/null
++++ b/node_modules/expo/android/bin/proguard-rules.pro
+@@ -0,0 +1,21 @@
++# For ReactActivityDelegateWrapper
++-keepclassmembers public class com.facebook.react.ReactActivityDelegate {
++  protected *;
++  private ReactDelegate mReactDelegate;
++}
++-keepclassmembers public class com.facebook.react.ReactActivity {
++  private final ReactActivityDelegate mDelegate;
++}
++
++# For ReactNativeHostWrapper
++-keepclassmembers public class com.facebook.react.ReactNativeHost {
++  protected *;
++}
++
++# For ExpoModulesPackage autolinking
++-keepclassmembers public class expo.modules.ExpoModulesPackageList {
++  public *;
++}
++
++-keepnames class * extends expo.modules.core.BasePackage
++-keepnames class * implements expo.modules.core.interfaces.Package
+diff --git a/node_modules/expo/android/build.gradle b/node_modules/expo/android/build.gradle
+index 794310b..93aa16a 100644
+--- a/node_modules/expo/android/build.gradle
++++ b/node_modules/expo/android/build.gradle
+@@ -81,7 +81,7 @@ afterEvaluate {
+ }
+ 
+ android {
+-  compileSdkVersion safeExtGet("compileSdkVersion", 33)
++  compileSdkVersion safeExtGet("compileSdkVersion", 34)
+ 
+   compileOptions {
+     sourceCompatibility JavaVersion.VERSION_11

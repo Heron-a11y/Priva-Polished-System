@@ -3,18 +3,55 @@
     "name": "AR Body Measurements",
     "slug": "ar-body-measurements",
     "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.reedewree.arbodymeasurements",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera for AR body measurements",
+        "NSMicrophoneUsageDescription": "This app may use the microphone for AR functionality"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.reedewree.arbodymeasurements",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
+    },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
+    "owner": "cocband",
+    "plugins": [
+      "expo-camera",
+      "expo-media-library",
+      "expo-sensors"
+    ],
     "extra": {
       "eas": {
-        "projectId": "472eab38-662e-4105-aa66-8901d4b082ab"
+        "projectId": "5b5dc778-19a5-4f44-9258-1b1f9a138921"
       }
-    },
-    "owner": "itb03",
-    "android": {
-      "package": "com.itb03.arbodymeasurements"
     }
   }
 }

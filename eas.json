@@ -14,7 +14,8 @@
       "android": {
         "gradleCommand": ":app:assembleDebug",
         "buildType": "apk",
-        "resourceClass": "medium"
+        "resourceClass": "medium",
+        "prebuildCommand": "node scripts/fix-gradle-comprehensive.js"
       }
     },
     "preview": {
@@ -27,7 +28,8 @@
       },
       "android": {
         "buildType": "apk",
-        "resourceClass": "medium"
+        "resourceClass": "medium",
+        "prebuildCommand": "node scripts/fix-gradle-comprehensive.js"
       }
     },
     "production": {
@@ -38,7 +40,8 @@
       },
       "android": {
         "buildType": "apk",
-        "resourceClass": "medium"
+        "resourceClass": "medium",
+        "prebuildCommand": "node scripts/fix-gradle-comprehensive.js"
       }
     },
     "ios-simulator": {
@@ -57,7 +60,17 @@
       "android": {
         "gradleCommand": ":app:assembleDebug",
         "buildType": "apk",
-        "resourceClass": "medium"
+        "resourceClass": "medium",
+        "prebuildCommand": "node scripts/fix-gradle-comprehensive.js"
+      }
+    },
+    "android-preview": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "resourceClass": "medium",
+        "prebuildCommand": "node scripts/fix-gradle-comprehensive.js"
       }
     }
   },

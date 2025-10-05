@@ -175,11 +175,21 @@ class ARSessionManager {
         throw new Error('AR is not supported on this device');
       }
 
+      // Check if session is already active
+      const currentStatus = await this.getSessionStatus();
+      if (currentStatus.isActive) {
+        console.warn('AR session already active');
+        return true;
+      }
+
       const result = await this.nativeModule.startSession();
       
       if (result) {
         // Set up measurement update listener
         this.setupMeasurementUpdateListener();
+        
+        // Start performance monitoring
+        this.startPerformanceMonitoring();
       }
       
       return result;
@@ -187,6 +197,25 @@ class ARSessionManager {
       console.error('Error starting AR session:', error);
       return false;
     }
+  }
+
+  private startPerformanceMonitoring(): void {
+    // Monitor performance every 5 seconds
+    const performanceInterval = setInterval(async () => {
+      try {
+        const status = await this.getSessionStatus();
+        console.log('Performance monitoring:', {
+          isActive: status.isActive,
+          hasValidMeasurements: status.hasValidMeasurements,
+          bodyCount: status.bodyCount
+        });
+      } catch (error) {
+        console.error('Performance monitoring error:', error);
+      }
+    }, 5000);
+
+    // Store interval for cleanup
+    (this as any).performanceInterval = performanceInterval;
   }
 
   /**

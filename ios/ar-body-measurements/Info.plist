@@ -74,16 +74,112 @@
 			<key>supportedVideoFormats</key>
 			<array>
 				<string>ARWorldTrackingConfiguration.VideoFormat.1920x1080</string>
+				<string>ARWorldTrackingConfiguration.VideoFormat.3840x2160</string>
+				<string>ARWorldTrackingConfiguration.VideoFormat.4032x3024</string>
 			</array>
+			<key>supportedFrameRates</key>
+			<array>
+				<string>30</string>
+				<string>60</string>
+				<string>120</string>
+			</array>
+			<key>isLightEstimationEnabled</key>
+			<true/>
+			<key>isAutoFocusEnabled</key>
+			<true/>
+			<key>isDepthDataEnabled</key>
+			<true/>
 		</dict>
 		<key>ARBodyTrackingConfiguration</key>
 		<dict>
 			<key>supportedVideoFormats</key>
 			<array>
 				<string>ARBodyTrackingConfiguration.VideoFormat.1920x1080</string>
+				<string>ARBodyTrackingConfiguration.VideoFormat.3840x2160</string>
+				<string>ARBodyTrackingConfiguration.VideoFormat.4032x3024</string>
+			</array>
+			<key>supportedFrameRates</key>
+			<array>
+				<string>30</string>
+				<string>60</string>
+				<string>120</string>
+			</array>
+			<key>automaticSkeletonScaleEstimationEnabled</key>
+			<true/>
+			<key>isLightEstimationEnabled</key>
+			<true/>
+			<key>isAutoFocusEnabled</key>
+			<true/>
+			<key>isDepthDataEnabled</key>
+			<true/>
+			<key>isPersonSegmentationEnabled</key>
+			<true/>
+			<key>isPersonOcclusionEnabled</key>
+			<true/>
+		</dict>
+		<key>ARFaceTrackingConfiguration</key>
+		<dict>
+			<key>supportedVideoFormats</key>
+			<array>
+				<string>ARFaceTrackingConfiguration.VideoFormat.1920x1080</string>
+				<string>ARFaceTrackingConfiguration.VideoFormat.3840x2160</string>
+			</array>
+			<key>supportedFrameRates</key>
+			<array>
+				<string>30</string>
+				<string>60</string>
+			</array>
+			<key>isLightEstimationEnabled</key>
+			<true/>
+			<key>isAutoFocusEnabled</key>
+			<true/>
+		</dict>
+		<key>ARHandTrackingConfiguration</key>
+		<dict>
+			<key>supportedVideoFormats</key>
+			<array>
+				<string>ARHandTrackingConfiguration.VideoFormat.1920x1080</string>
+			</array>
+			<key>supportedFrameRates</key>
+			<array>
+				<string>30</string>
+				<string>60</string>
+			</array>
+			<key>isLightEstimationEnabled</key>
+			<true/>
+		</dict>
+		<key>ARObjectScanningConfiguration</key>
+		<dict>
+			<key>supportedVideoFormats</key>
+			<array>
+				<string>ARObjectScanningConfiguration.VideoFormat.1920x1080</string>
+			</array>
+			<key>supportedFrameRates</key>
+			<array>
+				<string>30</string>
+				<string>60</string>
 			</array>
 		</dict>
 	</dict>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleDefault</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>

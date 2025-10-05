@@ -1,0 +1,1676 @@
+diff --git a/node_modules/expo-camera/android/.project b/node_modules/expo-camera/android/.project
+new file mode 100644
+index 0000000..6effb4e
+--- /dev/null
++++ b/node_modules/expo-camera/android/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>expo-camera</name>
++	<comment>Project expo-camera created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1759581207253</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/expo-camera/android/bin/.project b/node_modules/expo-camera/android/bin/.project
+new file mode 100644
+index 0000000..6effb4e
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>expo-camera</name>
++	<comment>Project expo-camera created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1759581207253</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/expo-camera/android/bin/build.gradle b/node_modules/expo-camera/android/bin/build.gradle
+new file mode 100644
+index 0000000..7f7aa91
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/build.gradle
+@@ -0,0 +1,99 @@
++apply plugin: 'com.android.library'
++apply plugin: 'kotlin-android'
++apply plugin: 'maven-publish'
++
++group = 'host.exp.exponent'
++version = '13.0.0'
++
++buildscript {
++  def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
++  if (expoModulesCorePlugin.exists()) {
++    apply from: expoModulesCorePlugin
++    applyKotlinExpoModulesCorePlugin()
++  }
++
++  // Simple helper that allows the root project to override versions declared by this library.
++  ext.safeExtGet = { prop, fallback ->
++    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
++  }
++
++  // Ensures backward compatibility
++  ext.getKotlinVersion = {
++    if (ext.has("kotlinVersion")) {
++      ext.kotlinVersion()
++    } else {
++      ext.safeExtGet("kotlinVersion", "1.6.10")
++    }
++  }
++
++  repositories {
++    mavenCentral()
++  }
++
++  dependencies {
++    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${getKotlinVersion()}")
++  }
++}
++
++// Creating sources with comments
++task androidSourcesJar(type: Jar) {
++  archiveClassifier.set('sources')
++  from android.sourceSets.main.java.srcDirs
++}
++
++afterEvaluate {
++  publishing {
++    publications {
++      release(MavenPublication) {
++        from components.release
++        // Add additional sourcesJar to artifacts
++        artifact(androidSourcesJar)
++      }
++    }
++    repositories {
++      maven {
++        url = mavenLocal().url
++      }
++    }
++  }
++}
++
++android {
++  compileSdkVersion safeExtGet("compileSdkVersion", 31)
++
++  compileOptions {
++    sourceCompatibility JavaVersion.VERSION_11
++    targetCompatibility JavaVersion.VERSION_11
++  }
++
++  kotlinOptions {
++    jvmTarget = JavaVersion.VERSION_11.majorVersion
++  }
++
++  defaultConfig {
++    minSdkVersion safeExtGet("minSdkVersion", 21)
++    targetSdkVersion safeExtGet("targetSdkVersion", 31)
++    versionCode 32
++    versionName "13.0.0"
++  }
++
++  lintOptions {
++    abortOnError false
++  }
++}
++
++repositories {
++  mavenCentral()
++  maven {
++    url "$projectDir/maven"
++  }
++}
++
++dependencies {
++  implementation project(':expo-modules-core')
++
++  api "androidx.exifinterface:exifinterface:1.0.0"
++  api 'com.google.android:cameraview:1.0.0'
++
++  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${getKotlinVersion()}"
++}
+diff --git a/node_modules/expo-camera/android/bin/src/main/AndroidManifest.xml b/node_modules/expo-camera/android/bin/src/main/AndroidManifest.xml
+new file mode 100644
+index 0000000..51edf63
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/AndroidManifest.xml
+@@ -0,0 +1,3 @@
++<manifest package="expo.modules.camera" xmlns:android="http://schemas.android.com/apk/res/android">
++  <uses-permission android:name="android.permission.CAMERA" />
++</manifest>
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/CameraExceptions.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/CameraExceptions.kt
+new file mode 100644
+index 0000000..455a1ff
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/CameraExceptions.kt
+@@ -0,0 +1,7 @@
++package expo.modules.camera
++
++import expo.modules.kotlin.exception.CodedException
++
++class CameraExceptions {
++  class CameraIsNotRunning : CodedException(message = "Camera is not running")
++}
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/CameraViewHelper.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/CameraViewHelper.kt
+new file mode 100644
+index 0000000..7434f36
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/CameraViewHelper.kt
+@@ -0,0 +1,125 @@
++package expo.modules.camera
++
++import androidx.exifinterface.media.ExifInterface
++import android.graphics.Bitmap
++import android.graphics.Canvas
++import android.graphics.Color
++import android.graphics.Paint
++import android.media.CamcorderProfile
++import android.os.Bundle
++
++import com.google.android.cameraview.CameraView
++
++import java.io.ByteArrayOutputStream
++import java.io.IOException
++import java.text.SimpleDateFormat
++import java.util.*
++
++object CameraViewHelper {
++  // Utilities
++  @JvmStatic
++  fun getCorrectCameraRotation(rotation: Int, facing: Int) =
++    if (facing == CameraView.FACING_FRONT) (rotation - 90 + 360) % 360
++    else (-rotation + 90 + 360) % 360
++
++  @JvmStatic
++  fun getCamcorderProfile(cameraId: Int, quality: Int): CamcorderProfile {
++    var profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_HIGH)
++    when (quality) {
++      VIDEO_2160P -> profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_2160P)
++      VIDEO_1080P -> profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_1080P)
++      VIDEO_720P -> profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_720P)
++      VIDEO_480P -> profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_480P)
++      VIDEO_4x3 -> {
++        profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_480P)
++        profile.videoFrameWidth = 640
++      }
++    }
++    return profile
++  }
++
++  @JvmStatic
++  fun getExifData(exifInterface: ExifInterface): Bundle {
++    val exifMap = Bundle()
++    for ((type, name) in exifTags) {
++      if (exifInterface.getAttribute(name) != null) {
++        when (type) {
++          "string" -> exifMap.putString(name, exifInterface.getAttribute(name))
++          "int" -> exifMap.putInt(name, exifInterface.getAttributeInt(name, 0))
++          "double" -> exifMap.putDouble(name, exifInterface.getAttributeDouble(name, 0.0))
++        }
++      }
++    }
++    exifInterface.latLong?.let {
++      exifMap.putDouble(ExifInterface.TAG_GPS_LATITUDE, it[0])
++      exifMap.putDouble(ExifInterface.TAG_GPS_LONGITUDE, it[1])
++      exifMap.putDouble(ExifInterface.TAG_GPS_ALTITUDE, exifInterface.getAltitude(0.0))
++    }
++    return exifMap
++  }
++
++  @JvmStatic
++  @Throws(IllegalArgumentException::class)
++  fun setExifData(baseExif: ExifInterface, exifMap: Map<String, Any>) {
++    for ((_, name) in exifTags) {
++      exifMap[name]?.let {
++        // Convert possible type to string before putting into baseExif
++        when (it) {
++          is String -> baseExif.setAttribute(name, it)
++          is Number -> baseExif.setAttribute(name, it.toDouble().toBigDecimal().toPlainString())
++          is Boolean -> baseExif.setAttribute(name, it.toString())
++        }
++      }
++    }
++
++    if (exifMap.containsKey(ExifInterface.TAG_GPS_LATITUDE) &&
++      exifMap.containsKey(ExifInterface.TAG_GPS_LONGITUDE) &&
++      exifMap[ExifInterface.TAG_GPS_LATITUDE] is Number &&
++      exifMap[ExifInterface.TAG_GPS_LONGITUDE] is Number
++    ) {
++      baseExif.setLatLong(
++        exifMap[ExifInterface.TAG_GPS_LATITUDE] as Double,
++        exifMap[ExifInterface.TAG_GPS_LONGITUDE] as Double
++      )
++    }
++
++    if (exifMap.containsKey(ExifInterface.TAG_GPS_ALTITUDE) &&
++      exifMap[ExifInterface.TAG_GPS_ALTITUDE] is Number
++    ) {
++      baseExif.setAltitude(exifMap[ExifInterface.TAG_GPS_ALTITUDE] as Double)
++    }
++  }
++
++  @JvmStatic
++  @Throws(IOException::class)
++  fun addExifData(baseExif: ExifInterface, additionalExif: ExifInterface) {
++    for (tagInfo in exifTags) {
++      val name = tagInfo[1]
++      additionalExif.getAttribute(name)?.let {
++        baseExif.setAttribute(name, it)
++      }
++    }
++    baseExif.saveAttributes()
++  }
++
++  fun generateSimulatorPhoto(width: Int, height: Int): ByteArray {
++    val fakePhotoBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
++    val canvas = Canvas(fakePhotoBitmap)
++    val background = Paint().apply {
++      color = Color.BLACK
++    }
++    canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), background)
++    val textPaint = Paint().apply {
++      color = Color.YELLOW
++      textSize = 35f
++    }
++    val calendar = Calendar.getInstance()
++    val simpleDateFormat = SimpleDateFormat("dd.MM.yy HH:mm:ss", Locale.US)
++    canvas.drawText(simpleDateFormat.format(calendar.time), width * 0.1f, height * 0.9f, textPaint)
++
++    val stream = ByteArrayOutputStream()
++    fakePhotoBitmap.compress(Bitmap.CompressFormat.PNG, 90, stream)
++    val fakePhotoByteArray = stream.toByteArray()
++    return fakePhotoByteArray
++  }
++}
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/CameraViewModule.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/CameraViewModule.kt
+new file mode 100644
+index 0000000..a6c3e6d
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/CameraViewModule.kt
+@@ -0,0 +1,262 @@
++package expo.modules.camera
++
++import android.Manifest
++import com.google.android.cameraview.AspectRatio
++import com.google.android.cameraview.Size
++import expo.modules.camera.tasks.ResolveTakenPictureAsyncTask
++import expo.modules.core.interfaces.services.UIManager
++import expo.modules.core.utilities.EmulatorUtilities
++import expo.modules.interfaces.barcodescanner.BarCodeScannerSettings
++import expo.modules.interfaces.permissions.Permissions
++import expo.modules.kotlin.Promise
++import expo.modules.kotlin.exception.Exceptions
++import expo.modules.kotlin.functions.Queues
++import expo.modules.kotlin.modules.Module
++import expo.modules.kotlin.modules.ModuleDefinition
++import java.io.File
++
++class CameraViewModule : Module() {
++  override fun definition() = ModuleDefinition {
++    Name("ExponentCamera")
++
++    Constants(
++      "Type" to mapOf(
++        "front" to com.google.android.cameraview.Constants.FACING_FRONT,
++        "back" to com.google.android.cameraview.Constants.FACING_BACK
++      ),
++      "FlashMode" to mapOf(
++        "off" to com.google.android.cameraview.Constants.FLASH_OFF,
++        "on" to com.google.android.cameraview.Constants.FLASH_ON,
++        "auto" to com.google.android.cameraview.Constants.FLASH_AUTO,
++        "torch" to com.google.android.cameraview.Constants.FLASH_TORCH
++      ),
++      "AutoFocus" to mapOf(
++        "on" to true,
++        "off" to false
++      ),
++      "WhiteBalance" to mapOf(
++        "auto" to com.google.android.cameraview.Constants.WB_AUTO,
++        "cloudy" to com.google.android.cameraview.Constants.WB_CLOUDY,
++        "sunny" to com.google.android.cameraview.Constants.WB_SUNNY,
++        "shadow" to com.google.android.cameraview.Constants.WB_SHADOW,
++        "fluorescent" to com.google.android.cameraview.Constants.WB_FLUORESCENT,
++        "incandescent" to com.google.android.cameraview.Constants.WB_INCANDESCENT
++      ),
++      "VideoQuality" to mapOf(
++        "2160p" to VIDEO_2160P,
++        "1080p" to VIDEO_1080P,
++        "720p" to VIDEO_720P,
++        "480p" to VIDEO_480P,
++        "4:3" to VIDEO_4x3
++      ),
++    )
++
++    AsyncFunction("pausePreview") { viewTag: Int ->
++      val view = findView(viewTag)
++
++      if (view.cameraView.isCameraOpened) {
++        view.cameraView.pausePreview()
++      }
++    }.runOnQueue(Queues.MAIN)
++
++    AsyncFunction("resumePreview") { viewTag: Int ->
++      val view = findView(viewTag)
++
++      if (view.cameraView.isCameraOpened) {
++        view.cameraView.resumePreview()
++      }
++    }.runOnQueue(Queues.MAIN)
++
++    AsyncFunction("takePicture") { options: PictureOptions, viewTag: Int, promise: Promise ->
++      val view = findView(viewTag)
++
++      if (!EmulatorUtilities.isRunningOnEmulator()) {
++        if (!view.cameraView.isCameraOpened) {
++          throw CameraExceptions.CameraIsNotRunning()
++        }
++
++        view.takePicture(options, promise, cacheDirectory)
++      } else {
++        val image = CameraViewHelper.generateSimulatorPhoto(view.width, view.height)
++        ResolveTakenPictureAsyncTask(image, promise, options, cacheDirectory, view).execute()
++      }
++    }.runOnQueue(Queues.MAIN)
++
++    AsyncFunction("record") { options: RecordingOptions, viewTag: Int, promise: Promise ->
++      if (!permissionsManager.hasGrantedPermissions(Manifest.permission.RECORD_AUDIO)) {
++        throw Exceptions.MissingPermissions(Manifest.permission.RECORD_AUDIO)
++      }
++
++      val view = findView(viewTag)
++
++      if (!view.cameraView.isCameraOpened) {
++        throw CameraExceptions.CameraIsNotRunning()
++      }
++
++      view.record(options, promise, cacheDirectory)
++    }.runOnQueue(Queues.MAIN)
++
++    AsyncFunction("stopRecording") { viewTag: Int ->
++      val view = findView(viewTag)
++
++      if (view.cameraView.isCameraOpened) {
++        view.cameraView.stopRecording()
++      }
++    }.runOnQueue(Queues.MAIN)
++
++    AsyncFunction("getSupportedRatios") { viewTag: Int ->
++      val view = findView(viewTag)
++
++      if (!view.cameraView.isCameraOpened) {
++        throw CameraExceptions.CameraIsNotRunning()
++      }
++
++      return@AsyncFunction view.cameraView.supportedAspectRatios.map { it.toString() }
++    }.runOnQueue(Queues.MAIN)
++
++    AsyncFunction("getAvailablePictureSizes") { ratio: String?, viewTag: Int ->
++      val view = findView(viewTag)
++
++      if (!view.cameraView.isCameraOpened) {
++        throw CameraExceptions.CameraIsNotRunning()
++      }
++
++      val sizes = view.cameraView.getAvailablePictureSizes(AspectRatio.parse(ratio))
++      return@AsyncFunction sizes.map { it.toString() }
++    }.runOnQueue(Queues.MAIN)
++
++    AsyncFunction("requestPermissionsAsync") { promise: Promise ->
++      Permissions.askForPermissionsWithPermissionsManager(
++        permissionsManager,
++        promise,
++        Manifest.permission.CAMERA
++      )
++    }
++
++    AsyncFunction("requestCameraPermissionsAsync") { promise: Promise ->
++      Permissions.askForPermissionsWithPermissionsManager(
++        permissionsManager,
++        promise,
++        Manifest.permission.CAMERA
++      )
++    }
++
++    AsyncFunction("requestMicrophonePermissionsAsync") { promise: Promise ->
++      Permissions.askForPermissionsWithPermissionsManager(
++        permissionsManager,
++        promise,
++        Manifest.permission.RECORD_AUDIO
++      )
++    }
++
++    AsyncFunction("getPermissionsAsync") { promise: Promise ->
++      Permissions.getPermissionsWithPermissionsManager(
++        permissionsManager,
++        promise,
++        Manifest.permission.CAMERA
++      )
++    }
++
++    AsyncFunction("getCameraPermissionsAsync") { promise: Promise ->
++      Permissions.getPermissionsWithPermissionsManager(
++        permissionsManager,
++        promise,
++        Manifest.permission.CAMERA
++      )
++    }
++
++    AsyncFunction("getMicrophonePermissionsAsync") { promise: Promise ->
++      Permissions.getPermissionsWithPermissionsManager(
++        permissionsManager,
++        promise,
++        Manifest.permission.RECORD_AUDIO
++      )
++    }
++
++    View(ExpoCameraView::class) {
++      Events(
++        "onCameraReady",
++        "onMountError",
++        "onBarCodeScanned",
++        "onFacesDetected",
++        "onFaceDetectionError",
++        "onPictureSaved"
++      )
++
++      OnViewDestroys<ExpoCameraView> { view ->
++        val uiManager = appContext.legacyModule<UIManager>()
++        uiManager?.unregisterLifecycleEventListener(view)
++        view.cameraView.stop()
++      }
++
++      Prop("type") { view: ExpoCameraView, type: Int ->
++        view.cameraView.facing = type
++      }
++
++      Prop("ratio") { view: ExpoCameraView, ratio: String? ->
++        if (ratio == null) {
++          return@Prop
++        }
++        view.cameraView.setAspectRatio(AspectRatio.parse(ratio))
++      }
++
++      Prop("flashMode") { view: ExpoCameraView, torchMode: Int ->
++        view.cameraView.flash = torchMode
++      }
++
++      Prop("autoFocus") { view: ExpoCameraView, autoFocus: Boolean ->
++        view.cameraView.autoFocus = autoFocus
++      }
++
++      Prop("focusDepth") { view: ExpoCameraView, depth: Float ->
++        view.cameraView.focusDepth = depth
++      }
++
++      Prop("zoom") { view: ExpoCameraView, zoom: Float ->
++        view.cameraView.zoom = zoom
++      }
++
++      Prop("whiteBalance") { view: ExpoCameraView, whiteBalance: Int ->
++        view.cameraView.whiteBalance = whiteBalance
++      }
++
++      Prop("pictureSize") { view: ExpoCameraView, size: String? ->
++        if (size == null) {
++          return@Prop
++        }
++        view.cameraView.pictureSize = Size.parse(size)
++      }
++
++      Prop("barCodeScannerSettings") { view: ExpoCameraView, settings: Map<String, Any?>? ->
++        view.setBarCodeScannerSettings(BarCodeScannerSettings(settings))
++      }
++
++      Prop("useCamera2Api") { view: ExpoCameraView, useCamera2Api: Boolean ->
++        view.cameraView.setUsingCamera2Api(useCamera2Api)
++      }
++
++      Prop("barCodeScannerEnabled") { view: ExpoCameraView, barCodeScannerEnabled: Boolean ->
++        view.setShouldScanBarCodes(barCodeScannerEnabled)
++      }
++
++      Prop("faceDetectorEnabled") { view: ExpoCameraView, faceDetectorEnabled: Boolean ->
++        view.setShouldDetectFaces(faceDetectorEnabled)
++      }
++
++      Prop("faceDetectorSettings") { view: ExpoCameraView, settings: Map<String, Any>? ->
++        view.setFaceDetectorSettings(settings)
++      }
++    }
++  }
++
++  private val cacheDirectory: File
++    get() = appContext.cacheDirectory
++
++  private val permissionsManager: Permissions
++    get() = appContext.permissions ?: throw Exceptions.PermissionsModuleNotFound()
++
++  private fun findView(viewTag: Int): ExpoCameraView {
++    return appContext.findView(viewTag)
++      ?: throw Exceptions.ViewNotFound(ExpoCameraView::class, viewTag)
++  }
++}
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/Events.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/Events.kt
+new file mode 100644
+index 0000000..46649b5
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/Events.kt
+@@ -0,0 +1,32 @@
++package expo.modules.camera
++
++import android.os.Bundle
++import expo.modules.kotlin.records.Field
++import expo.modules.kotlin.records.Record
++
++data class BarCodeScannedEvent(
++  @Field val target: Int,
++  @Field val data: String,
++  @Field val type: Int,
++  @Field val cornerPoints: ArrayList<Bundle>,
++  @Field val boundingBox: Bundle
++) : Record
++
++data class CameraMountErrorEvent(
++  @Field val message: String
++) : Record
++
++data class FaceDetectionErrorEvent(
++  @Field val isOperational: Boolean
++) : Record
++
++data class FacesDetectedEvent(
++  @Field val type: String,
++  @Field val faces: List<Bundle>,
++  @Field val target: Int
++) : Record
++
++data class PictureSavedEvent(
++  @Field val id: Int,
++  @Field val data: Bundle
++) : Record
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/ExifTags.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/ExifTags.kt
+new file mode 100644
+index 0000000..bf038f7
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/ExifTags.kt
+@@ -0,0 +1,145 @@
++package expo.modules.camera
++
++import androidx.exifinterface.media.ExifInterface
++
++const val VIDEO_2160P = 0
++const val VIDEO_1080P = 1
++const val VIDEO_720P = 2
++const val VIDEO_480P = 3
++const val VIDEO_4x3 = 4
++
++val exifTags = arrayOf(
++  arrayOf("string", ExifInterface.TAG_ARTIST),
++  arrayOf("int", ExifInterface.TAG_BITS_PER_SAMPLE),
++  arrayOf("int", ExifInterface.TAG_COMPRESSION),
++  arrayOf("string", ExifInterface.TAG_COPYRIGHT),
++  arrayOf("string", ExifInterface.TAG_DATETIME),
++  arrayOf("string", ExifInterface.TAG_IMAGE_DESCRIPTION),
++  arrayOf("int", ExifInterface.TAG_IMAGE_LENGTH),
++  arrayOf("int", ExifInterface.TAG_IMAGE_WIDTH),
++  arrayOf("int", ExifInterface.TAG_JPEG_INTERCHANGE_FORMAT),
++  arrayOf("int", ExifInterface.TAG_JPEG_INTERCHANGE_FORMAT_LENGTH),
++  arrayOf("string", ExifInterface.TAG_MAKE),
++  arrayOf("string", ExifInterface.TAG_MODEL),
++  arrayOf("int", ExifInterface.TAG_ORIENTATION),
++  arrayOf("int", ExifInterface.TAG_PHOTOMETRIC_INTERPRETATION),
++  arrayOf("int", ExifInterface.TAG_PLANAR_CONFIGURATION),
++  arrayOf("double", ExifInterface.TAG_PRIMARY_CHROMATICITIES),
++  arrayOf("double", ExifInterface.TAG_REFERENCE_BLACK_WHITE),
++  arrayOf("int", ExifInterface.TAG_RESOLUTION_UNIT),
++  arrayOf("int", ExifInterface.TAG_ROWS_PER_STRIP),
++  arrayOf("int", ExifInterface.TAG_SAMPLES_PER_PIXEL),
++  arrayOf("string", ExifInterface.TAG_SOFTWARE),
++  arrayOf("int", ExifInterface.TAG_STRIP_BYTE_COUNTS),
++  arrayOf("int", ExifInterface.TAG_STRIP_OFFSETS),
++  arrayOf("int", ExifInterface.TAG_TRANSFER_FUNCTION),
++  arrayOf("double", ExifInterface.TAG_WHITE_POINT),
++  arrayOf("double", ExifInterface.TAG_X_RESOLUTION),
++  arrayOf("double", ExifInterface.TAG_Y_CB_CR_COEFFICIENTS),
++  arrayOf("int", ExifInterface.TAG_Y_CB_CR_POSITIONING),
++  arrayOf("int", ExifInterface.TAG_Y_CB_CR_SUB_SAMPLING),
++  arrayOf("double", ExifInterface.TAG_Y_RESOLUTION),
++  arrayOf("double", ExifInterface.TAG_APERTURE_VALUE),
++  arrayOf("double", ExifInterface.TAG_BRIGHTNESS_VALUE),
++  arrayOf("string", ExifInterface.TAG_CFA_PATTERN),
++  arrayOf("int", ExifInterface.TAG_COLOR_SPACE),
++  arrayOf("string", ExifInterface.TAG_COMPONENTS_CONFIGURATION),
++  arrayOf("double", ExifInterface.TAG_COMPRESSED_BITS_PER_PIXEL),
++  arrayOf("int", ExifInterface.TAG_CONTRAST),
++  arrayOf("int", ExifInterface.TAG_CUSTOM_RENDERED),
++  arrayOf("string", ExifInterface.TAG_DATETIME_DIGITIZED),
++  arrayOf("string", ExifInterface.TAG_DATETIME_ORIGINAL),
++  arrayOf("string", ExifInterface.TAG_DEVICE_SETTING_DESCRIPTION),
++  arrayOf("double", ExifInterface.TAG_DIGITAL_ZOOM_RATIO),
++  arrayOf("string", ExifInterface.TAG_EXIF_VERSION),
++  arrayOf("double", ExifInterface.TAG_EXPOSURE_BIAS_VALUE),
++  arrayOf("double", ExifInterface.TAG_EXPOSURE_INDEX),
++  arrayOf("int", ExifInterface.TAG_EXPOSURE_MODE),
++  arrayOf("int", ExifInterface.TAG_EXPOSURE_PROGRAM),
++  arrayOf("double", ExifInterface.TAG_EXPOSURE_TIME),
++  arrayOf("double", ExifInterface.TAG_F_NUMBER),
++  arrayOf("string", ExifInterface.TAG_FILE_SOURCE),
++  arrayOf("int", ExifInterface.TAG_FLASH),
++  arrayOf("double", ExifInterface.TAG_FLASH_ENERGY),
++  arrayOf("string", ExifInterface.TAG_FLASHPIX_VERSION),
++  arrayOf("double", ExifInterface.TAG_FOCAL_LENGTH),
++  arrayOf("int", ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM),
++  arrayOf("int", ExifInterface.TAG_FOCAL_PLANE_RESOLUTION_UNIT),
++  arrayOf("double", ExifInterface.TAG_FOCAL_PLANE_X_RESOLUTION),
++  arrayOf("double", ExifInterface.TAG_FOCAL_PLANE_Y_RESOLUTION),
++  arrayOf("int", ExifInterface.TAG_GAIN_CONTROL),
++  arrayOf("int", ExifInterface.TAG_ISO_SPEED_RATINGS),
++  arrayOf("string", ExifInterface.TAG_IMAGE_UNIQUE_ID),
++  arrayOf("int", ExifInterface.TAG_LIGHT_SOURCE),
++  arrayOf("string", ExifInterface.TAG_MAKER_NOTE),
++  arrayOf("double", ExifInterface.TAG_MAX_APERTURE_VALUE),
++  arrayOf("int", ExifInterface.TAG_METERING_MODE),
++  arrayOf("int", ExifInterface.TAG_NEW_SUBFILE_TYPE),
++  arrayOf("string", ExifInterface.TAG_OECF),
++  arrayOf("int", ExifInterface.TAG_PIXEL_X_DIMENSION),
++  arrayOf("int", ExifInterface.TAG_PIXEL_Y_DIMENSION),
++  arrayOf("string", ExifInterface.TAG_RELATED_SOUND_FILE),
++  arrayOf("int", ExifInterface.TAG_SATURATION),
++  arrayOf("int", ExifInterface.TAG_SCENE_CAPTURE_TYPE),
++  arrayOf("string", ExifInterface.TAG_SCENE_TYPE),
++  arrayOf("int", ExifInterface.TAG_SENSING_METHOD),
++  arrayOf("int", ExifInterface.TAG_SHARPNESS),
++  arrayOf("double", ExifInterface.TAG_SHUTTER_SPEED_VALUE),
++  arrayOf("string", ExifInterface.TAG_SPATIAL_FREQUENCY_RESPONSE),
++  arrayOf("string", ExifInterface.TAG_SPECTRAL_SENSITIVITY),
++  arrayOf("int", ExifInterface.TAG_SUBFILE_TYPE),
++  arrayOf("string", ExifInterface.TAG_SUBSEC_TIME),
++  arrayOf("string", ExifInterface.TAG_SUBSEC_TIME_DIGITIZED),
++  arrayOf("string", ExifInterface.TAG_SUBSEC_TIME_ORIGINAL),
++  arrayOf("int", ExifInterface.TAG_SUBJECT_AREA),
++  arrayOf("double", ExifInterface.TAG_SUBJECT_DISTANCE),
++  arrayOf("int", ExifInterface.TAG_SUBJECT_DISTANCE_RANGE),
++  arrayOf("int", ExifInterface.TAG_SUBJECT_LOCATION),
++  arrayOf("string", ExifInterface.TAG_USER_COMMENT),
++  arrayOf("int", ExifInterface.TAG_WHITE_BALANCE),
++  arrayOf("double", ExifInterface.TAG_GPS_ALTITUDE),
++  arrayOf("int", ExifInterface.TAG_GPS_ALTITUDE_REF),
++  arrayOf("string", ExifInterface.TAG_GPS_AREA_INFORMATION),
++  arrayOf("double", ExifInterface.TAG_GPS_DOP),
++  arrayOf("string", ExifInterface.TAG_GPS_DATESTAMP),
++  arrayOf("double", ExifInterface.TAG_GPS_DEST_BEARING),
++  arrayOf("string", ExifInterface.TAG_GPS_DEST_BEARING_REF),
++  arrayOf("double", ExifInterface.TAG_GPS_DEST_DISTANCE),
++  arrayOf("string", ExifInterface.TAG_GPS_DEST_DISTANCE_REF),
++  arrayOf("double", ExifInterface.TAG_GPS_DEST_LATITUDE),
++  arrayOf("string", ExifInterface.TAG_GPS_DEST_LATITUDE_REF),
++  arrayOf("double", ExifInterface.TAG_GPS_DEST_LONGITUDE),
++  arrayOf("string", ExifInterface.TAG_GPS_DEST_LONGITUDE_REF),
++  arrayOf("int", ExifInterface.TAG_GPS_DIFFERENTIAL),
++  arrayOf("string", ExifInterface.TAG_GPS_H_POSITIONING_ERROR),
++  arrayOf("double", ExifInterface.TAG_GPS_IMG_DIRECTION),
++  arrayOf("string", ExifInterface.TAG_GPS_IMG_DIRECTION_REF),
++  arrayOf("double", ExifInterface.TAG_GPS_LATITUDE),
++  arrayOf("string", ExifInterface.TAG_GPS_LATITUDE_REF),
++  arrayOf("double", ExifInterface.TAG_GPS_LONGITUDE),
++  arrayOf("string", ExifInterface.TAG_GPS_LONGITUDE_REF),
++  arrayOf("string", ExifInterface.TAG_GPS_MAP_DATUM),
++  arrayOf("string", ExifInterface.TAG_GPS_MEASURE_MODE),
++  arrayOf("string", ExifInterface.TAG_GPS_PROCESSING_METHOD),
++  arrayOf("string", ExifInterface.TAG_GPS_SATELLITES),
++  arrayOf("double", ExifInterface.TAG_GPS_SPEED),
++  arrayOf("string", ExifInterface.TAG_GPS_SPEED_REF),
++  arrayOf("string", ExifInterface.TAG_GPS_STATUS),
++  arrayOf("string", ExifInterface.TAG_GPS_TIMESTAMP),
++  arrayOf("double", ExifInterface.TAG_GPS_TRACK),
++  arrayOf("string", ExifInterface.TAG_GPS_TRACK_REF),
++  arrayOf("string", ExifInterface.TAG_GPS_VERSION_ID),
++  arrayOf("string", ExifInterface.TAG_INTEROPERABILITY_INDEX),
++  arrayOf("int", ExifInterface.TAG_THUMBNAIL_IMAGE_LENGTH),
++  arrayOf("int", ExifInterface.TAG_THUMBNAIL_IMAGE_WIDTH),
++  arrayOf("int", ExifInterface.TAG_DNG_VERSION),
++  arrayOf("int", ExifInterface.TAG_DEFAULT_CROP_SIZE),
++  arrayOf("int", ExifInterface.TAG_ORF_PREVIEW_IMAGE_START),
++  arrayOf("int", ExifInterface.TAG_ORF_PREVIEW_IMAGE_LENGTH),
++  arrayOf("int", ExifInterface.TAG_ORF_ASPECT_FRAME),
++  arrayOf("int", ExifInterface.TAG_RW2_SENSOR_BOTTOM_BORDER),
++  arrayOf("int", ExifInterface.TAG_RW2_SENSOR_LEFT_BORDER),
++  arrayOf("int", ExifInterface.TAG_RW2_SENSOR_RIGHT_BORDER),
++  arrayOf("int", ExifInterface.TAG_RW2_SENSOR_TOP_BORDER),
++  arrayOf("int", ExifInterface.TAG_RW2_ISO)
++)
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/ExpoCameraView.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/ExpoCameraView.kt
+new file mode 100644
+index 0000000..ddf4c34
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/ExpoCameraView.kt
+@@ -0,0 +1,428 @@
++package expo.modules.camera
++
++import android.Manifest
++import android.content.Context
++import android.graphics.Color
++import android.graphics.SurfaceTexture
++import android.net.Uri
++import android.os.Bundle
++import android.view.View
++import com.google.android.cameraview.CameraView
++import expo.modules.camera.CameraViewHelper.getCamcorderProfile
++import expo.modules.camera.CameraViewHelper.getCorrectCameraRotation
++import expo.modules.camera.tasks.BarCodeScannerAsyncTask
++import expo.modules.camera.tasks.BarCodeScannerAsyncTaskDelegate
++import expo.modules.camera.tasks.FaceDetectorAsyncTaskDelegate
++import expo.modules.camera.tasks.FaceDetectorTask
++import expo.modules.camera.tasks.PictureSavedDelegate
++import expo.modules.camera.tasks.ResolveTakenPictureAsyncTask
++import expo.modules.camera.utils.FileSystemUtils
++import expo.modules.camera.utils.ImageDimensions
++import expo.modules.core.interfaces.LifecycleEventListener
++import expo.modules.core.interfaces.services.UIManager
++import expo.modules.core.utilities.EmulatorUtilities
++import expo.modules.interfaces.barcodescanner.BarCodeScannerInterface
++import expo.modules.interfaces.barcodescanner.BarCodeScannerProviderInterface
++import expo.modules.interfaces.barcodescanner.BarCodeScannerResult
++import expo.modules.interfaces.barcodescanner.BarCodeScannerSettings
++import expo.modules.interfaces.camera.CameraViewInterface
++import expo.modules.interfaces.facedetector.FaceDetectorInterface
++import expo.modules.interfaces.facedetector.FaceDetectorProviderInterface
++import expo.modules.kotlin.AppContext
++import expo.modules.kotlin.Promise
++import expo.modules.kotlin.views.ExpoView
++import java.io.File
++import java.io.IOException
++import java.util.*
++import java.util.concurrent.ConcurrentHashMap
++import java.util.concurrent.ConcurrentLinkedQueue
++import expo.modules.camera.utils.mapX
++import expo.modules.camera.utils.mapY
++import kotlin.math.roundToInt
++import android.view.WindowManager
++import expo.modules.interfaces.barcodescanner.BarCodeScannerResult.BoundingBox
++import expo.modules.kotlin.viewevent.EventDispatcher
++
++class ExpoCameraView(
++  context: Context,
++  appContext: AppContext,
++) : ExpoView(context, appContext),
++  LifecycleEventListener,
++  BarCodeScannerAsyncTaskDelegate,
++  FaceDetectorAsyncTaskDelegate,
++  PictureSavedDelegate,
++  CameraViewInterface {
++  internal val cameraView = CameraView(context, true)
++
++  private val pictureTakenPromises: Queue<Promise> = ConcurrentLinkedQueue()
++  private val pictureTakenOptions: MutableMap<Promise, PictureOptions> = ConcurrentHashMap()
++  private val pictureTakenDirectories: MutableMap<Promise, File> = ConcurrentHashMap()
++  private var videoRecordedPromise: Promise? = null
++  private var isPaused = false
++  private var isNew = true
++
++  private val onCameraReady by EventDispatcher<Unit>()
++  private val onMountError by EventDispatcher<CameraMountErrorEvent>()
++  private val onBarCodeScanned by EventDispatcher<BarCodeScannedEvent>(
++    /**
++     * We want every distinct barcode to be reported to the JS listener.
++     * If we return some static value as a coalescing key there may be two barcode events
++     * containing two different barcodes waiting to be transmitted to JS
++     * that would get coalesced (because both of them would have the same coalescing key).
++     * So let's differentiate them with a hash of the contents (mod short's max value).
++     */
++    coalescingKey = { event -> (event.data.hashCode() % Short.MAX_VALUE).toShort() }
++  )
++  private val onFacesDetected by EventDispatcher<FacesDetectedEvent>(
++    /**
++     * Should events about detected faces coalesce, the best strategy will be
++     * to ensure that events with different faces count are always being transmitted.
++     */
++    coalescingKey = { event -> (event.faces.size % Short.MAX_VALUE).toShort() }
++  )
++  private val onFaceDetectionError by EventDispatcher<FaceDetectionErrorEvent>()
++  private val onPictureSaved by EventDispatcher<PictureSavedEvent>(
++    coalescingKey = { event ->
++      val uriHash = event.data.getString("uri")?.hashCode() ?: -1
++      (uriHash % Short.MAX_VALUE).toShort()
++    }
++  )
++
++  // Concurrency lock for scanners to avoid flooding the runtime
++  @Volatile
++  var barCodeScannerTaskLock = false
++
++  @Volatile
++  var faceDetectorTaskLock = false
++
++  // Scanning-related properties
++  private var barCodeScanner: BarCodeScannerInterface? = null
++  private var faceDetector: FaceDetectorInterface? = null
++  private var pendingFaceDetectorSettings: Map<String, Any>? = null
++  private var shouldDetectFaces = false
++  private var mShouldScanBarCodes = false
++
++  override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
++    val width = right - left
++    val height = bottom - top
++
++    cameraView.layout(0, 0, width, height)
++    cameraView.setBackgroundColor(Color.BLACK)
++
++    val preview = cameraView.view ?: return
++    preview.layout(0, 0, width, height)
++  }
++
++  override fun onViewAdded(child: View) {
++    // react adds children to containers at the beginning of children list and that moves pre-react added preview to the end of that list
++    // above would cause preview (TextureView that covers all available space) to be rendered at the top of children stack
++    // while we need this preview to be rendered last beneath all other children
++
++    // child is not preview
++    if (cameraView === child) {
++      return
++    }
++
++    // bring to front all non-preview children
++    val childrenToBeReordered = mutableListOf<View>()
++    for (i in 0 until this.childCount) {
++      val childView = getChildAt(i)
++      if (i == 0 && childView === cameraView) {
++        // preview is already first in children list - do not reorder anything
++        return
++      }
++      if (childView !== cameraView) {
++        childrenToBeReordered.add(childView)
++      }
++    }
++    for (childView in childrenToBeReordered) {
++      bringChildToFront(childView)
++    }
++    cameraView.requestLayout()
++    cameraView.invalidate()
++  }
++
++  fun takePicture(options: PictureOptions, promise: Promise, cacheDirectory: File) {
++    pictureTakenPromises.add(promise)
++    pictureTakenOptions[promise] = options
++    pictureTakenDirectories[promise] = cacheDirectory
++    try {
++      cameraView.takePicture()
++    } catch (e: Exception) {
++      pictureTakenPromises.remove(promise)
++      pictureTakenOptions.remove(promise)
++      pictureTakenDirectories.remove(promise)
++      throw e
++    }
++  }
++
++  override fun onPictureSaved(response: Bundle) {
++    onPictureSaved(PictureSavedEvent(response.getInt("id"), response.getBundle("data")!!))
++  }
++
++  fun record(options: RecordingOptions, promise: Promise, cacheDirectory: File) {
++    try {
++      val path = FileSystemUtils.generateOutputPath(cacheDirectory, "Camera", ".mp4")
++      val profile = getCamcorderProfile(cameraView.cameraId, options.quality)
++      options.videoBitrate?.let { profile.videoBitRate = it }
++      if (cameraView.record(path, options.maxDuration * 1000, options.maxFileSize, !options.muteValue, profile)) {
++        videoRecordedPromise = promise
++      } else {
++        promise.reject("E_RECORDING_FAILED", "Starting video recording failed. Another recording might be in progress.", null)
++      }
++    } catch (e: IOException) {
++      promise.reject("E_RECORDING_FAILED", "Starting video recording failed - could not create video file.", null)
++    }
++  }
++
++  /**
++   * Initialize the barcode scanner.
++   * Supports all iOS codes except [code138, code39mod43, itf14]
++   * Additionally supports [codabar, code128, maxicode, rss14, rssexpanded, upc_a, upc_ean]
++   */
++  private fun initBarCodeScanner() {
++    val barCodeScannerProvider = appContext.legacyModule<BarCodeScannerProviderInterface>()
++    barCodeScanner = barCodeScannerProvider?.createBarCodeDetectorWithContext(context)
++  }
++
++  fun setShouldScanBarCodes(shouldScanBarCodes: Boolean) {
++    mShouldScanBarCodes = shouldScanBarCodes
++    cameraView.scanning = mShouldScanBarCodes || shouldDetectFaces
++  }
++
++  fun setBarCodeScannerSettings(settings: BarCodeScannerSettings) {
++    barCodeScanner?.setSettings(settings)
++  }
++
++  // Even = portrait, odd = landscape
++  private fun getDeviceOrientation() =
++    (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.rotation
++
++  private fun transformBarCodeScannerResultToViewCoordinates(barCode: BarCodeScannerResult) {
++    val cornerPoints = barCode.cornerPoints
++
++    // For some reason they're swapped, I don't know anymore...
++    val cameraWidth = barCode.referenceImageHeight
++    val cameraHeight = barCode.referenceImageWidth
++
++    val facingBack = cameraView.facing == CameraView.FACING_BACK
++    val facingFront = cameraView.facing == CameraView.FACING_FRONT
++    val portrait = getDeviceOrientation() % 2 == 0
++    val landscape = getDeviceOrientation() % 2 == 1
++
++    if (facingBack && portrait) {
++      cornerPoints.mapX { cameraWidth - cornerPoints[it] }
++    }
++    if (facingBack && landscape) {
++      cornerPoints.mapY { cameraHeight - cornerPoints[it] }
++    }
++    if (facingFront) {
++      cornerPoints.mapX { cameraWidth - cornerPoints[it] }
++      cornerPoints.mapY { cameraHeight - cornerPoints[it] }
++    }
++
++    val scaleX = width / cameraWidth.toDouble()
++    val scaleY = height / cameraHeight.toDouble()
++
++    cornerPoints.mapX {
++      (cornerPoints[it] * scaleX)
++        .roundToInt()
++    }
++    cornerPoints.mapY {
++      (cornerPoints[it] * scaleY)
++        .roundToInt()
++    }
++
++    barCode.cornerPoints = cornerPoints
++  }
++
++  private fun getCornerPointsAndBoundingBox(cornerPoints: List<Int>, boundingBox: BoundingBox): Pair<ArrayList<Bundle>, Bundle> {
++    val density = cameraView.resources.displayMetrics.density
++    val convertedCornerPoints = ArrayList<Bundle>()
++    for (i in cornerPoints.indices step 2) {
++      val y = cornerPoints[i].toFloat() / density
++      val x = cornerPoints[i + 1].toFloat() / density
++      convertedCornerPoints.add(
++        Bundle().apply {
++          putFloat("x", x)
++          putFloat("y", y)
++        }
++      )
++    }
++    val boundingBoxBundle = Bundle().apply {
++      putParcelable(
++        "origin",
++        Bundle().apply {
++          putFloat("x", boundingBox.x.toFloat() / density)
++          putFloat("y", boundingBox.y.toFloat() / density)
++        }
++      )
++      putParcelable(
++        "size",
++        Bundle().apply {
++          putFloat("width", boundingBox.width.toFloat() / density)
++          putFloat("height", boundingBox.height.toFloat() / density)
++        }
++      )
++    }
++    return convertedCornerPoints to boundingBoxBundle
++  }
++
++  override fun onBarCodeScanned(barCode: BarCodeScannerResult) {
++    if (mShouldScanBarCodes) {
++      transformBarCodeScannerResultToViewCoordinates(barCode)
++      val (cornerPoints, boundingBox) = getCornerPointsAndBoundingBox(barCode.cornerPoints, barCode.boundingBox)
++      onBarCodeScanned(
++        BarCodeScannedEvent(
++          target = id,
++          data = barCode.value,
++          type = barCode.type,
++          cornerPoints = cornerPoints,
++          boundingBox = boundingBox
++        )
++      )
++    }
++  }
++
++  override fun onBarCodeScanningTaskCompleted() {
++    barCodeScannerTaskLock = false
++  }
++
++  override fun setPreviewTexture(surfaceTexture: SurfaceTexture?) {
++    cameraView.setPreviewTexture(surfaceTexture)
++  }
++
++  override fun getPreviewSizeAsArray() = intArrayOf(cameraView.previewSize.width, cameraView.previewSize.height)
++
++  override fun onHostResume() {
++    if (hasCameraPermissions()) {
++      if (isPaused && !cameraView.isCameraOpened || isNew) {
++        isPaused = false
++        isNew = false
++        if (!EmulatorUtilities.isRunningOnEmulator()) {
++          cameraView.start()
++          val faceDetectorProvider = appContext.legacyModule<FaceDetectorProviderInterface>()
++          faceDetector = faceDetectorProvider?.createFaceDetectorWithContext(context)
++          pendingFaceDetectorSettings?.let {
++            faceDetector?.setSettings(it)
++            pendingFaceDetectorSettings = null
++          }
++        }
++      }
++    } else {
++      onMountError(CameraMountErrorEvent("Camera permissions not granted - component could not be rendered."))
++    }
++  }
++
++  override fun onHostPause() {
++    if (!isPaused && cameraView.isCameraOpened) {
++      faceDetector?.release()
++      isPaused = true
++      cameraView.stop()
++    }
++  }
++
++  override fun onHostDestroy() {
++    faceDetector?.release()
++    cameraView.stop()
++  }
++
++  private fun hasCameraPermissions(): Boolean {
++    val permissionsManager = appContext.permissions ?: return false
++    return permissionsManager.hasGrantedPermissions(Manifest.permission.CAMERA)
++  }
++
++  fun setShouldDetectFaces(shouldDetectFaces: Boolean) {
++    this.shouldDetectFaces = shouldDetectFaces
++    cameraView.scanning = mShouldScanBarCodes || shouldDetectFaces
++  }
++
++  fun setFaceDetectorSettings(settings: Map<String, Any>?) {
++    faceDetector?.setSettings(settings) ?: run {
++      pendingFaceDetectorSettings = settings
++    }
++  }
++
++  override fun onFacesDetected(faces: List<Bundle>) {
++    if (shouldDetectFaces) {
++      onFacesDetected(
++        FacesDetectedEvent(
++          "face",
++          faces,
++          id
++        )
++      )
++    }
++  }
++
++  override fun onFaceDetectionError(faceDetector: FaceDetectorInterface) {
++    faceDetectorTaskLock = false
++    if (shouldDetectFaces) {
++      onFaceDetectionError(FaceDetectionErrorEvent(true))
++    }
++  }
++
++  override fun onFaceDetectingTaskCompleted() {
++    faceDetectorTaskLock = false
++  }
++
++  init {
++    initBarCodeScanner()
++    isChildrenDrawingOrderEnabled = true
++    val uIManager = appContext.legacyModule<UIManager>()
++    uIManager!!.registerLifecycleEventListener(this)
++    cameraView.addCallback(object : CameraView.Callback() {
++      override fun onCameraOpened(cameraView: CameraView) {
++        onCameraReady(Unit)
++      }
++
++      override fun onMountError(cameraView: CameraView) {
++        onMountError(
++          CameraMountErrorEvent("Camera component could not be rendered - is there any other instance running?")
++        )
++      }
++
++      override fun onPictureTaken(cameraView: CameraView, data: ByteArray) {
++        val promise = pictureTakenPromises.poll() ?: return
++        val cacheDirectory = pictureTakenDirectories.remove(promise)
++        val options = pictureTakenOptions.remove(promise)!!
++        if (options.fastMode) {
++          promise.resolve(null)
++        }
++        cacheDirectory?.let {
++          ResolveTakenPictureAsyncTask(data, promise, options, it, this@ExpoCameraView).execute()
++        }
++      }
++
++      override fun onVideoRecorded(cameraView: CameraView, path: String) {
++        videoRecordedPromise?.let {
++          it.resolve(
++            Bundle().apply {
++              putString("uri", Uri.fromFile(File(path)).toString())
++            }
++          )
++          videoRecordedPromise = null
++        }
++      }
++
++      override fun onFramePreview(cameraView: CameraView, data: ByteArray, width: Int, height: Int, rotation: Int) {
++        val correctRotation = getCorrectCameraRotation(rotation, cameraView.facing)
++        if (mShouldScanBarCodes && !barCodeScannerTaskLock) {
++          barCodeScannerTaskLock = true
++          barCodeScanner?.let { BarCodeScannerAsyncTask(this@ExpoCameraView, it, data, width, height, rotation).execute() }
++        }
++        if (shouldDetectFaces && !faceDetectorTaskLock) {
++          faceDetectorTaskLock = true
++          val density = cameraView.resources.displayMetrics.density
++          val dimensions = ImageDimensions(width, height, correctRotation, cameraView.facing)
++          val scaleX = cameraView.width.toDouble() / (dimensions.width * density)
++          val scaleY = cameraView.height.toDouble() / (dimensions.height * density)
++          val task = faceDetector?.let { FaceDetectorTask(this@ExpoCameraView, it, data, width, height, correctRotation, cameraView.facing == CameraView.FACING_FRONT, scaleX, scaleY) }
++          task?.execute()
++        }
++      }
++    })
++
++    addView(cameraView)
++  }
++}
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/Options.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/Options.kt
+new file mode 100644
+index 0000000..b245264
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/Options.kt
+@@ -0,0 +1,23 @@
++package expo.modules.camera
++
++import android.media.CamcorderProfile
++import expo.modules.kotlin.records.Field
++import expo.modules.kotlin.records.Record
++
++class PictureOptions : Record {
++  @Field val quality: Double = 1.0
++  @Field val base64: Boolean = false
++  @Field val exif: Boolean = false
++  @Field val additionalExif: Map<String, Any>? = null
++  @Field val skipProcessing: Boolean = false
++  @Field val fastMode: Boolean = false
++  @Field val id: Int? = null
++}
++
++class RecordingOptions : Record {
++  @Field val maxDuration: Int = -1
++  @Field val maxFileSize: Int = -1
++  @Field val quality: Int = CamcorderProfile.QUALITY_HIGH
++  @Field val muteValue: Boolean = false
++  @Field val videoBitrate: Int? = null
++}
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/BarCodeScannerAsyncTask.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/BarCodeScannerAsyncTask.kt
+new file mode 100644
+index 0000000..da35f4d
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/BarCodeScannerAsyncTask.kt
+@@ -0,0 +1,27 @@
++package expo.modules.camera.tasks
++
++import android.os.AsyncTask
++
++import expo.modules.interfaces.barcodescanner.BarCodeScannerInterface
++import expo.modules.interfaces.barcodescanner.BarCodeScannerResult
++
++class BarCodeScannerAsyncTask(
++  private val delegate: BarCodeScannerAsyncTaskDelegate,
++  private val barCodeScanner: BarCodeScannerInterface,
++  private val imageData: ByteArray,
++  private val width: Int,
++  private val height: Int,
++  private val rotation: Int
++) : AsyncTask<Void?, Void?, BarCodeScannerResult?>() {
++  override fun doInBackground(vararg params: Void?) = if (!isCancelled) {
++    barCodeScanner.scan(imageData, width, height, rotation)
++  } else null
++
++  override fun onPostExecute(result: BarCodeScannerResult?) {
++    super.onPostExecute(result)
++    result?.let {
++      delegate.onBarCodeScanned(result)
++    }
++    delegate.onBarCodeScanningTaskCompleted()
++  }
++}
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/BarCodeScannerAsyncTaskDelegate.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/BarCodeScannerAsyncTaskDelegate.kt
+new file mode 100644
+index 0000000..ad7a152
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/BarCodeScannerAsyncTaskDelegate.kt
+@@ -0,0 +1,8 @@
++package expo.modules.camera.tasks
++
++import expo.modules.interfaces.barcodescanner.BarCodeScannerResult
++
++interface BarCodeScannerAsyncTaskDelegate {
++  fun onBarCodeScanned(barCode: BarCodeScannerResult)
++  fun onBarCodeScanningTaskCompleted()
++}
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/FaceDetectorAsyncTaskDelegate.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/FaceDetectorAsyncTaskDelegate.kt
+new file mode 100644
+index 0000000..7e41377
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/FaceDetectorAsyncTaskDelegate.kt
+@@ -0,0 +1,10 @@
++package expo.modules.camera.tasks
++
++import android.os.Bundle
++import expo.modules.interfaces.facedetector.FaceDetectorInterface
++
++interface FaceDetectorAsyncTaskDelegate {
++  fun onFacesDetected(faces: List<Bundle>)
++  fun onFaceDetectionError(faceDetector: FaceDetectorInterface)
++  fun onFaceDetectingTaskCompleted()
++}
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/FaceDetectorTask.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/FaceDetectorTask.kt
+new file mode 100644
+index 0000000..7ddb729
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/FaceDetectorTask.kt
+@@ -0,0 +1,34 @@
++package expo.modules.camera.tasks
++
++import expo.modules.interfaces.facedetector.FaceDetectorInterface
++
++class FaceDetectorTask(
++  private val mDelegate: FaceDetectorAsyncTaskDelegate,
++  private val mFaceDetector: FaceDetectorInterface,
++  private val mImageData: ByteArray,
++  private val mWidth: Int,
++  private val mHeight: Int,
++  private val mRotation: Int,
++  private val mMirrored: Boolean,
++  private val mScaleX: Double,
++  private val mScaleY: Double
++) {
++  fun execute() {
++    mFaceDetector.detectFaces(
++      mImageData, mWidth, mHeight, mRotation, mMirrored, mScaleX, mScaleY,
++      { result ->
++        result?.let {
++          mDelegate.onFacesDetected(result)
++        } ?: run {
++          mDelegate.onFaceDetectionError(mFaceDetector)
++        }
++        mDelegate.onFaceDetectingTaskCompleted()
++      },
++      { error ->
++        mDelegate.onFaceDetectionError(mFaceDetector)
++        mDelegate.onFaceDetectingTaskCompleted()
++      },
++      { skippedReason -> mDelegate.onFaceDetectingTaskCompleted() }
++    )
++  }
++}
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/PictureSavedDelegate.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/PictureSavedDelegate.kt
+new file mode 100644
+index 0000000..7fb610d
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/PictureSavedDelegate.kt
+@@ -0,0 +1,7 @@
++package expo.modules.camera.tasks
++
++import android.os.Bundle
++
++interface PictureSavedDelegate {
++  fun onPictureSaved(response: Bundle)
++}
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/ResolveTakenPictureAsyncTask.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/ResolveTakenPictureAsyncTask.kt
+new file mode 100644
+index 0000000..020a190
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/tasks/ResolveTakenPictureAsyncTask.kt
+@@ -0,0 +1,215 @@
++package expo.modules.camera.tasks
++
++import android.content.res.Resources
++import android.graphics.Bitmap
++import android.graphics.BitmapFactory
++import android.graphics.Matrix
++import android.net.Uri
++import android.os.AsyncTask
++import android.os.Bundle
++import android.util.Base64
++import androidx.exifinterface.media.ExifInterface
++import expo.modules.camera.PictureOptions
++import expo.modules.camera.CameraViewHelper.addExifData
++import expo.modules.camera.CameraViewHelper.getExifData
++import expo.modules.camera.CameraViewHelper.setExifData
++import expo.modules.camera.utils.FileSystemUtils
++import expo.modules.kotlin.Promise
++import java.io.ByteArrayInputStream
++import java.io.ByteArrayOutputStream
++import java.io.File
++import java.io.FileOutputStream
++import java.io.IOException
++
++private const val DIRECTORY_NOT_FOUND_MSG = "Documents directory of the app could not be found."
++private const val UNKNOWN_IO_EXCEPTION_MSG = "An unknown I/O exception has occurred."
++private const val UNKNOWN_EXCEPTION_MSG = "An unknown exception has occurred."
++private const val PARAMETER_EXCEPTION_MSG = "An incompatible parameter has been passed in. "
++private const val ERROR_TAG = "E_TAKING_PICTURE_FAILED"
++private const val DIRECTORY_NAME = "Camera"
++private const val EXTENSION = ".jpg"
++private const val BASE64_KEY = "base64"
++private const val HEIGHT_KEY = "height"
++private const val WIDTH_KEY = "width"
++private const val EXIF_KEY = "exif"
++private const val DATA_KEY = "data"
++private const val URI_KEY = "uri"
++private const val ID_KEY = "id"
++
++class ResolveTakenPictureAsyncTask(
++  private var imageData: ByteArray,
++  private var promise: Promise,
++  private var options: PictureOptions,
++  private val directory: File,
++  private var pictureSavedDelegate: PictureSavedDelegate
++) : AsyncTask<Void?, Void?, Bundle?>() {
++
++  private val quality: Int
++    get() = (options.quality * 100).toInt()
++
++  override fun doInBackground(vararg params: Void?): Bundle? {
++    // handle SkipProcessing
++    if (options.skipProcessing) {
++      return handleSkipProcessing()
++    }
++
++    var bitmap = BitmapFactory.decodeByteArray(imageData, 0, imageData.size)
++
++    // set, read, and apply EXIF data
++    try {
++      ByteArrayInputStream(imageData).use { inputStream ->
++        val response = Bundle()
++
++        val exifInterface = ExifInterface(inputStream)
++
++        // If there are additional exif data, insert it here
++        options.additionalExif?.let {
++          setExifData(exifInterface, it)
++        }
++
++        // Get orientation of the image from mImageData via inputStream
++        val orientation = exifInterface.getAttributeInt(
++          ExifInterface.TAG_ORIENTATION,
++          ExifInterface.ORIENTATION_UNDEFINED
++        )
++
++        // Rotate the bitmap to the proper orientation if needed
++        if (orientation != ExifInterface.ORIENTATION_UNDEFINED) {
++          bitmap = rotateBitmap(bitmap, getImageRotation(orientation))
++        }
++
++        // Write Exif data to the response if requested
++        if (options.exif) {
++          val exifData = getExifData(exifInterface)
++          response.putBundle(EXIF_KEY, exifData)
++        }
++
++        // Upon rotating, write the image's dimensions to the response
++        response.apply {
++          putInt(WIDTH_KEY, bitmap!!.width)
++          putInt(HEIGHT_KEY, bitmap!!.height)
++        }
++
++        // Cache compressed image in imageStream
++        ByteArrayOutputStream().use { imageStream ->
++          bitmap!!.compress(Bitmap.CompressFormat.JPEG, quality, imageStream)
++          // Write compressed image to file in cache directory
++          val filePath = writeStreamToFile(imageStream)
++
++          // Save Exif data to the image if requested
++          if (options.exif) {
++            val exifFromFile = ExifInterface(filePath!!)
++            addExifData(exifFromFile, exifInterface)
++          }
++          val imageFile = File(filePath)
++          val fileUri = Uri.fromFile(imageFile).toString()
++          response.putString(URI_KEY, fileUri)
++
++          // Write base64-encoded image to the response if requested
++          if (options.base64) {
++            response.putString(BASE64_KEY, Base64.encodeToString(imageStream.toByteArray(), Base64.NO_WRAP))
++          }
++        }
++        return response
++      }
++    } catch (e: Exception) {
++      when (e) {
++        is Resources.NotFoundException -> promise.reject(ERROR_TAG, DIRECTORY_NOT_FOUND_MSG, e)
++        is IOException -> promise.reject(ERROR_TAG, UNKNOWN_IO_EXCEPTION_MSG, e)
++        is IllegalArgumentException -> promise.reject(ERROR_TAG, PARAMETER_EXCEPTION_MSG, e)
++        else -> promise.reject(ERROR_TAG, UNKNOWN_EXCEPTION_MSG, e)
++      }
++      e.printStackTrace()
++    }
++    // An exception had to occur, promise has already been rejected. Do not try to resolve it again.
++    return null
++  }
++
++  private fun handleSkipProcessing(): Bundle? {
++    try {
++      // save byte array (it's already a JPEG)
++      ByteArrayOutputStream().use { imageStream ->
++        imageStream.write(imageData)
++
++        // write compressed image to file in cache directory
++        val filePath = writeStreamToFile(imageStream)
++        val imageFile = File(filePath)
++
++        // handle image uri
++        val fileUri = Uri.fromFile(imageFile).toString()
++
++        // read exif information
++        val exifInterface = ExifInterface(filePath!!)
++
++        return Bundle().apply {
++          putString(URI_KEY, fileUri)
++          putInt(WIDTH_KEY, exifInterface.getAttributeInt(ExifInterface.TAG_IMAGE_WIDTH, -1))
++          putInt(HEIGHT_KEY, exifInterface.getAttributeInt(ExifInterface.TAG_IMAGE_LENGTH, -1))
++          // handle exif request
++          if (options.exif) {
++            val exifData = getExifData(exifInterface)
++            putBundle(EXIF_KEY, exifData)
++          }
++          // handle base64
++          if (options.base64) {
++            putString(BASE64_KEY, Base64.encodeToString(imageData, Base64.NO_WRAP))
++          }
++        }
++      }
++    } catch (e: Exception) {
++      if (e is IOException) {
++        promise.reject(ERROR_TAG, UNKNOWN_IO_EXCEPTION_MSG, e)
++      } else {
++        promise.reject(ERROR_TAG, UNKNOWN_EXCEPTION_MSG, e)
++      }
++      e.printStackTrace()
++    }
++    // error occurred
++    return null
++  }
++
++  override fun onPostExecute(response: Bundle?) {
++    super.onPostExecute(response)
++
++    // If the response is not null everything went well and we can resolve the promise.
++    if (response != null) {
++      if (options.fastMode) {
++        val wrapper = Bundle()
++        wrapper.putInt(ID_KEY, requireNotNull(options.id))
++        wrapper.putBundle(DATA_KEY, response)
++        pictureSavedDelegate.onPictureSaved(wrapper)
++      } else {
++        promise.resolve(response)
++      }
++    }
++  }
++
++  // Write stream to file in cache directory
++  @Throws(Exception::class)
++  private fun writeStreamToFile(inputStream: ByteArrayOutputStream): String? {
++    try {
++      val outputPath = FileSystemUtils.generateOutputPath(directory, DIRECTORY_NAME, EXTENSION)
++      FileOutputStream(outputPath).use { outputStream ->
++        inputStream.writeTo(outputStream)
++      }
++      return outputPath
++    } catch (e: IOException) {
++      e.printStackTrace()
++    }
++    return null
++  }
++
++  private fun rotateBitmap(source: Bitmap, angle: Int): Bitmap {
++    val matrix = Matrix()
++    matrix.postRotate(angle.toFloat())
++    return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
++  }
++
++  // Get rotation degrees from Exif orientation enum
++  private fun getImageRotation(orientation: Int) = when (orientation) {
++    ExifInterface.ORIENTATION_ROTATE_90 -> 90
++    ExifInterface.ORIENTATION_ROTATE_180 -> 180
++    ExifInterface.ORIENTATION_ROTATE_270 -> 270
++    else -> 0
++  }
++}
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/utils/BarCodeScannerListMappers.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/utils/BarCodeScannerListMappers.kt
+new file mode 100644
+index 0000000..c8c631b
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/utils/BarCodeScannerListMappers.kt
+@@ -0,0 +1,13 @@
++package expo.modules.camera.utils
++
++inline fun MutableList<Int>.mapY(block: (it: Int) -> Int) {
++  for (it in 0 until this.size step 2) {
++    this[it] = block(it)
++  }
++}
++
++inline fun MutableList<Int>.mapX(block: (it: Int) -> Int) {
++  for (it in 1 until this.size step 2) {
++    this[it] = block(it)
++  }
++}
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/utils/FileSystemUtils.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/utils/FileSystemUtils.kt
+new file mode 100644
+index 0000000..83de3f9
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/utils/FileSystemUtils.kt
+@@ -0,0 +1,23 @@
++package expo.modules.camera.utils
++
++import java.io.File
++import java.io.IOException
++import java.util.*
++
++object FileSystemUtils {
++  @Throws(IOException::class)
++  fun ensureDirExists(dir: File): File {
++    if (!(dir.isDirectory || dir.mkdirs())) {
++      throw IOException("Couldn't create directory '$dir'")
++    }
++    return dir
++  }
++
++  @Throws(IOException::class)
++  fun generateOutputPath(internalDirectory: File, dirName: String, extension: String): String {
++    val directory = File(internalDirectory.toString() + File.separator + dirName)
++    ensureDirExists(directory)
++    val filename = UUID.randomUUID().toString()
++    return directory.toString() + File.separator + filename + extension
++  }
++}
+diff --git a/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/utils/ImageDimensions.kt b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/utils/ImageDimensions.kt
+new file mode 100644
+index 0000000..dc09362
+--- /dev/null
++++ b/node_modules/expo-camera/android/bin/src/main/java/expo/modules/camera/utils/ImageDimensions.kt
+@@ -0,0 +1,14 @@
++package expo.modules.camera.utils
++
++data class ImageDimensions @JvmOverloads constructor(private val mWidth: Int, private val mHeight: Int, val rotation: Int = 0, val facing: Int = -1) {
++  private val isLandscape: Boolean
++    get() = rotation % 180 == 90
++  val width: Int
++    get() = if (isLandscape) {
++      mHeight
++    } else mWidth
++  val height: Int
++    get() = if (isLandscape) {
++      mWidth
++    } else mHeight
++}
+diff --git a/node_modules/expo-camera/android/build.gradle b/node_modules/expo-camera/android/build.gradle
+index 549d7c5..7f7aa91 100644
+--- a/node_modules/expo-camera/android/build.gradle
++++ b/node_modules/expo-camera/android/build.gradle
+@@ -37,7 +37,7 @@ buildscript {
+ 
+ // Creating sources with comments
+ task androidSourcesJar(type: Jar) {
+-  classifier = 'sources'
++  archiveClassifier.set('sources')
+   from android.sourceSets.main.java.srcDirs
+ }
+ 

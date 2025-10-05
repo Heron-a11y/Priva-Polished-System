@@ -15,12 +15,12 @@ const requiredAssets = [
   'assets/favicon.png'
 ];
 
-const assetSizes = {
-  'assets/icon.png': { minSize: 1024, description: 'App icon (1024x1024)' },
-  'assets/splash.png': { minSize: 1242, description: 'Splash screen (1242x2436)' },
-  'assets/adaptive-icon.png': { minSize: 1024, description: 'Adaptive icon (1024x1024)' },
-  'assets/favicon.png': { minSize: 48, description: 'Favicon (48x48)' }
-};
+  // const assetSizes = {
+  //   'assets/icon.png': { minSize: 1024, description: 'App icon (1024x1024)' },
+  //   'assets/splash.png': { minSize: 1242, description: 'Splash screen (1242x2436)' },
+  //   'assets/adaptive-icon.png': { minSize: 1024, description: 'Adaptive icon (1024x1024)' },
+  //   'assets/favicon.png': { minSize: 48, description: 'Favicon (48x48)' }
+  // };
 
 function validateAssets() {
   console.log('🔍 Validating assets...');

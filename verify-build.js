@@ -6,13 +6,13 @@
  */
 
 const fs = require('fs');
-const path = require('path');
+  // const path = require('path');
 
 const criticalFiles = [
   'validate-assets.js',
   'android/gradle.properties',
   'android/app/build.gradle',
-  'android/app/src/main/java/com/anonymous/arbodymeasurements/ARSessionManagerModule.kt',
+  'android/app/src/main/java/com/reedewree/arbodymeasurements/ARSessionManagerModule.kt',
   'ios/ARSessionManager.swift',
   'ios/Podfile',
   'package.json',
@@ -39,10 +39,10 @@ const criticalChecks = [
   {
     file: 'package.json',
     checks: [
-      '"react": "19.1.0"',
-      '"react-native": "0.81.4"',
-      '"expo-asset": "~12.0.8"',
-      '"expo": "~54.0.9"'
+      '"react": "18.2.0"',
+      '"react-native": "0.73.6"',
+      '"expo-asset": "~9.0.0"',
+      '"expo": "~50.0.0"'
     ]
   },
   {

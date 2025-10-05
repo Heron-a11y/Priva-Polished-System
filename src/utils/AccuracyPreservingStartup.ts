@@ -92,10 +92,10 @@ class AccuracyPreservingStartup {
       
     } catch (error) {
       console.error('AccuracyPreservingStartup: Initialization failed:', error);
-      result.warnings.push(`Initialization failed: ${error.message}`);
+      result.warnings.push(`Initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       
       // Try to preserve accuracy even with errors
-      result.accuracyPreserved = await this.preserveAccuracyOnError(error);
+      result.accuracyPreserved = await this.preserveAccuracyOnError(error instanceof Error ? error : new Error('Unknown error'));
     }
     
     return result;
@@ -185,7 +185,7 @@ class AccuracyPreservingStartup {
     this.config = { ...this.config, ...updates };
   }
   
-  isInitialized(): boolean {
+  getInitializationStatus(): boolean {
     return this.isInitialized;
   }
 }

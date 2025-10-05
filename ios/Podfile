@@ -4,9 +4,47 @@ require_relative '../node_modules/@react-native-community/cli-platform-ios/nativ
 platform :ios, '13.0'
 install! 'cocoapods', :deterministic_uuids => false
 
+# ✅ ENHANCED: ARKit and AR capabilities for iOS deployment
 # ARKit version constraints for body tracking support
-# Requires iOS 13.0+ for ARKit body tracking
-pod 'ARKit', '~> 4.0'
+# Requires iOS 13.0+ for ARKit body tracking, iOS 17.0+ for ARKit 6.0
+pod 'ARKit', '~> 6.0'
+
+# ✅ ENHANCED: Core Motion for advanced motion tracking
+pod 'CoreMotion', '~> 4.0'
+
+# ✅ ENHANCED: Vision framework for computer vision fallbacks
+pod 'Vision', '~> 3.0'
+
+# ✅ ENHANCED: Metal Performance Shaders for GPU acceleration
+pod 'MetalPerformanceShaders', '~> 3.0'
+
+# ✅ ENHANCED: Core ML for machine learning enhancements
+pod 'CoreML', '~> 4.0'
+
+# ✅ ENHANCED: AVFoundation for camera optimization
+pod 'AVFoundation', '~> 2.0'
+
+# ✅ ENHANCED: iOS 17+ ARKit 6.0 Features
+pod 'ARKit', '~> 6.0' # ARKit 6.0 for iOS 17+
+pod 'RealityKit', '~> 2.0' # RealityKit 2.0 for enhanced AR
+pod 'RealityFoundation', '~> 1.0' # RealityFoundation for AR content
+
+# ✅ ENHANCED: iOS Performance Monitoring
+pod 'os', '~> 1.0' # Unified logging system
+pod 'os.lock', '~> 1.0' # Thread-safe locking
+
+# ✅ ENHANCED: iOS Machine Learning
+pod 'CreateML', '~> 1.0' # CreateML for custom models
+pod 'NaturalLanguage', '~> 1.0' # Natural language processing
+
+# ✅ ENHANCED: iOS Camera and Media
+pod 'Photos', '~> 1.0' # Photo library access
+pod 'PhotosUI', '~> 1.0' # Photo picker UI
+pod 'ImageIO', '~> 1.0' # Image processing
+
+# ✅ ENHANCED: iOS Accessibility
+pod 'Accessibility', '~> 1.0' # Accessibility features
+pod 'VoiceOver', '~> 1.0' # VoiceOver support
 
 target 'ar-body-measurements' do
   config = use_native_modules!
