@@ -20,9 +20,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import apiService from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
-import { getConfig } from '../../src/ar/config/ARConfig';
-import { logger, logInfo, logError, logPerformance, logWarn } from '../../src/ar/utils/ARLogger';
-import { deviceCapabilities } from '../../src/ar/utils/DeviceCapabilities';
+import { getConfig } from '../../src/config/ARConfig';
+import { logger, logInfo, logError, logPerformance, logWarn } from '../../src/utils/ARLogger';
+import { deviceCapabilities } from '../../src/utils/DeviceCapabilities';
 
 // Advanced AR interfaces from App.tsx
 interface CameraFrame {
@@ -93,7 +93,7 @@ const getARSessionManager = async () => {
   }
   
   try {
-    const { default: ARSessionManager } = await import('../../src/ar/ARSessionManager');
+    const { default: ARSessionManager } = await import('../../src/ARSessionManager');
     arSessionManager = new ARSessionManager();
     return arSessionManager;
   } catch (error) {

@@ -11,10 +11,10 @@ try {
 } catch (error) {
   console.log('⚠️ MediaLibrary not available in development mode');
 }
-import ARSessionManager from '../../src/ar/ARSessionManager';
-import { getConfig } from '../../src/ar/config/ARConfig';
-import { logger, logInfo, logError, logPerformance, logWarn } from '../../src/ar/utils/ARLogger';
-import { deviceCapabilities } from '../../src/ar/utils/DeviceCapabilities';
+import ARSessionManager from '../../src/ARSessionManager';
+import { getConfig } from '../../src/config/ARConfig';
+import { logger, logInfo, logError, logPerformance, logWarn } from '../../src/utils/ARLogger';
+import { deviceCapabilities } from '../../src/utils/DeviceCapabilities';
 import { Colors } from '../../constants/Colors';
 import { ARMeasurement, ARSessionState, ARCapabilities } from '../../types/ARTypes';
 

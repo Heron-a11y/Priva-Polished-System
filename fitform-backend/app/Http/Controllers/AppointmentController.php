@@ -30,15 +30,17 @@ class AppointmentController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'appointment_date' => 'required|date',
-            'service_type' => 'required|string|max:255',
-            'notes' => 'nullable|string',
+            'appointment_date' => 'required|date|after:now',
+            'service_type' => 'required|string|max:255|in:measurement,consultation,fitting,alteration',
+            'notes' => 'nullable|string|max:1000',
         ]);
 
-        // Check if appointment date is in the past
+        // Enhanced date validation
         $appointmentDate = Carbon::parse($validated['appointment_date']);
         $today = Carbon::today();
+        $maxFutureDate = Carbon::today()->addMonths(3); // 3 months in advance
         
+        // Check if appointment date is in the past
         if ($appointmentDate->lt($today)) {
             return response()->json([
                 'success' => false,
@@ -47,13 +49,43 @@ class AppointmentController extends Controller
             ], 422);
         }
 
-        // Check if appointment time is within business hours (10 AM to 7 PM, last slot at 6 PM)
-        $appointmentHour = $appointmentDate->hour;
-        if ($appointmentHour < 10 || $appointmentHour >= 19) { // 10 AM to 7 PM (19:00), last slot at 6 PM (18:00)
+        // Check if appointment is too far in the future
+        if ($appointmentDate->gt($maxFutureDate)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Appointments can only be scheduled between 10:00 AM and 7:00 PM. Please select a time within business hours.',
+                'message' => 'Appointments cannot be scheduled more than 3 months in advance.',
+                'error' => 'too_far_future'
+            ], 422);
+        }
+
+        // Check if appointment is on a weekend
+        if ($appointmentDate->isWeekend()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Appointments are not available on weekends. Please select a weekday.',
+                'error' => 'weekend_not_allowed'
+            ], 422);
+        }
+
+        // Enhanced business hours validation (10 AM to 6 PM, 30-minute slots)
+        $appointmentHour = $appointmentDate->hour;
+        $appointmentMinute = $appointmentDate->minute;
+        
+        // Check if time is within business hours
+        if ($appointmentHour < 10 || $appointmentHour >= 18) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Appointments can only be scheduled between 10:00 AM and 6:00 PM.',
                 'error' => 'outside_business_hours'
+            ], 422);
+        }
+        
+        // Check if time is on a 30-minute slot
+        if ($appointmentMinute !== 0 && $appointmentMinute !== 30) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Appointments must be scheduled on the hour or half-hour (e.g., 10:00, 10:30, 11:00).',
+                'error' => 'invalid_time_slot'
             ], 422);
         }
 
@@ -95,16 +127,43 @@ class AppointmentController extends Controller
             ], 422);
         }
 
-        // Check if the daily limit of 5 appointments has been reached
+        // Enhanced capacity validation
         $dailyAppointmentCount = Appointment::whereDate('appointment_date', $validated['appointment_date'])
             ->where('status', '!=', 'cancelled')
             ->count();
 
-        if ($dailyAppointmentCount >= 5) {
+        // Dynamic daily limit based on day of week
+        $dayOfWeek = $appointmentDate->dayOfWeek;
+        $maxDailyAppointments = ($dayOfWeek === 1 || $dayOfWeek === 5) ? 8 : 6; // Monday and Friday: 8, others: 6
+
+        if ($dailyAppointmentCount >= $maxDailyAppointments) {
             return response()->json([
                 'success' => false,
-                'message' => 'Daily appointment limit reached. Maximum 5 appointments per day allowed. Please select another date.',
+                'message' => "Daily appointment limit reached. Maximum {$maxDailyAppointments} appointments per day.",
                 'error' => 'daily_limit_reached'
+            ], 422);
+        }
+
+        // Check for time slot conflicts with buffer time
+        $appointmentStart = $appointmentDate->copy();
+        $appointmentEnd = $appointmentDate->copy()->addMinutes(30);
+        $bufferTime = 15; // 15 minutes buffer between appointments
+
+        $conflictingAppointments = Appointment::whereDate('appointment_date', $validated['appointment_date'])
+            ->where('status', '!=', 'cancelled')
+            ->where(function ($query) use ($appointmentStart, $appointmentEnd, $bufferTime) {
+                $query->whereBetween('appointment_date', [
+                    $appointmentStart->subMinutes($bufferTime),
+                    $appointmentEnd->addMinutes($bufferTime)
+                ]);
+            })
+            ->exists();
+
+        if ($conflictingAppointments) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This time slot conflicts with another appointment. Please select a different time.',
+                'error' => 'time_slot_conflict'
             ], 422);
         }
 
@@ -186,15 +245,30 @@ class AppointmentController extends Controller
         ]);
         
         $appointments->transform(function ($appointment) {
-            $appointment->customer_name = $appointment->user ? $appointment->user->name : null;
-            $appointment->customer_profile_image = $appointment->user ? $appointment->user->profile_image : null;
+            $appointment->customer_name = $appointment->user ? $appointment->user->name : 'Unknown Customer';
+            
+            // Enhanced profile image handling
+            if ($appointment->user && $appointment->user->profile_image) {
+                // Ensure the profile image URL is properly formatted
+                $profileImage = $appointment->user->profile_image;
+                
+                // If it's a relative path, make it absolute
+                if (!filter_var($profileImage, FILTER_VALIDATE_URL)) {
+                    $profileImage = url('storage/' . $profileImage);
+                }
+                
+                $appointment->customer_profile_image = $profileImage;
+            } else {
+                $appointment->customer_profile_image = null;
+            }
             
             // Debug logging for each appointment
             \Log::info('Processing appointment:', [
                 'appointment_id' => $appointment->id,
                 'customer_name' => $appointment->customer_name,
                 'customer_profile_image' => $appointment->customer_profile_image,
-                'user_data' => $appointment->user ? $appointment->user->toArray() : null
+                'user_id' => $appointment->user ? $appointment->user->id : null,
+                'has_user' => $appointment->user ? true : false
             ]);
             
             unset($appointment->user);
@@ -237,9 +311,36 @@ class AppointmentController extends Controller
         $validated = $request->validate([
             'status' => 'required|in:pending,confirmed,cancelled',
         ]);
+        // Enhanced validation for status updates
+        $currentStatus = $appointment->status;
+        $newStatus = $validated['status'];
+        
+        // Prevent invalid status transitions
+        if ($currentStatus === 'cancelled' && $newStatus !== 'cancelled') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot change status of a cancelled appointment',
+                'error' => 'invalid_status_transition'
+            ], 422);
+        }
+
+        // Check if appointment is in the past and trying to confirm
+        if ($newStatus === 'confirmed' && $appointment->appointment_date < Carbon::now()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot confirm past appointments',
+                'error' => 'past_appointment_confirmation'
+            ], 422);
+        }
+
         $appointment->status = $validated['status'];
         $appointment->save();
-        return response()->json($appointment);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Appointment status updated successfully',
+            'appointment' => $appointment
+        ]);
     }
 
     // Get appointment statistics for admin dashboard

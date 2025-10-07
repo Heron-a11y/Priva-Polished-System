@@ -15,7 +15,7 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
-import com.fitform.app.arbodymeasurements.ARSessionManagerPackage
+import com.fitform.app.ARSessionManagerPackage
 
 class MainApplication : Application(), ReactApplication {
 

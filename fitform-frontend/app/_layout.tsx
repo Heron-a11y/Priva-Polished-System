@@ -6,7 +6,6 @@ import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { NotificationProvider } from '../contexts/NotificationContext';
 import * as Font from 'expo-font';
-import '../web-font-config'; // Import web font configuration
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const isMobile = SCREEN_WIDTH < 768; // More reliable mobile detection

@@ -38,7 +38,8 @@ class Rental extends Model
      */
     public function calculateDelayPenalties()
     {
-        if (!$this->return_date || $this->status !== 'rented') {
+        // Delay applies when item is currently with customer (picked up)
+        if (!$this->return_date || $this->status !== 'picked_up') {
             return 0;
         }
 
@@ -50,13 +51,14 @@ class Rental extends Model
         }
 
         $delayDays = $today->diffInDays($returnDate);
-        return $delayDays * $this->daily_delay_fee;
+        $dailyFee = $this->daily_delay_fee ?? 100; // Default ₱100/day if not set
+        return $delayDays * $dailyFee;
     }
 
     /**
      * Calculate total penalties including delay and damage
      */
-    public function calculateTotalPenalties($damageLevel = 'none')
+    public function calculateTotalPenalties($damageLevel = 'none', $includeCancellation = false)
     {
         $total = 0;
         
@@ -74,6 +76,11 @@ class Rental extends Model
             case 'severe':
                 $total += $this->quotation_amount ?? 0; // Full payment
                 break;
+        }
+        
+        // Add cancellation fee if applicable
+        if ($includeCancellation) {
+            $total += $this->cancellation_fee ?? 500; // Default ₱500 if not set
         }
         
         return $total;

@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import networkConfig from './network-config';
 
 // Base API configuration - will be dynamically set based on network mode
-let API_BASE_URL = 'http://localhost:8000/api'; // Default local URL
+let API_BASE_URL = 'http://192.168.1.59:8000/api'; // Updated to current IP
 
 class ApiService {
     constructor() {
@@ -14,14 +14,15 @@ class ApiService {
     // Initialize network configuration
     async initializeNetwork() {
         try {
-            const mode = await networkConfig.getNetworkMode();
-            console.log('🌐 Current network mode:', mode);
+            // Auto-detect network configuration
+            const mode = await networkConfig.autoDetectNetwork();
+            console.log('🌐 Auto-detected network mode:', mode);
             this.updateBaseURL();
             
             // Test current connection
             const connectionTest = await this.testApiConnection();
             if (!connectionTest.success) {
-                console.log('🔄 Current network mode failed, trying local mode...');
+                console.log('🔄 Auto-detected network failed, trying local mode...');
                 await networkConfig.setNetworkMode('local');
                 this.updateBaseURL();
                 
@@ -103,17 +104,22 @@ class ApiService {
         };
     }
 
-    // Make API request
-    async request(endpoint, options = {}) {
+    // Make API request with retry logic
+    async request(endpoint, options = {}, retryCount = 0) {
+        const maxRetries = 2;
+        
         try {
             const headers = await this.getHeaders();
             const url = `${this.baseURL}${endpoint}`;
 
-            console.log(`🌐 Making API request to: ${url}`);
+            // Only log on first attempt to reduce spam
+            if (retryCount === 0) {
+                console.log(`🌐 Making API request to: ${url}`);
+            }
 
             // Create AbortController for timeout
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
             const response = await fetch(url, {
                 ...options,
@@ -138,11 +144,11 @@ class ApiService {
                 
                 // If we're not using local mode and get a non-JSON response, try local mode
                 const currentMode = await networkConfig.getNetworkMode();
-                if (currentMode !== 'local') {
+                if (currentMode !== 'local' && retryCount === 0) {
                     console.log('🔄 Non-JSON response detected, trying local mode...');
                     await networkConfig.fallbackToLocal();
                     this.updateBaseURL();
-                    return this.request(endpoint, options); // Retry with local mode
+                    return this.request(endpoint, options, retryCount + 1); // Retry with local mode
                 }
                 
                 throw new Error(`Server returned non-JSON response (${response.status}): ${textResponse.substring(0, 100)}`);
@@ -178,6 +184,13 @@ class ApiService {
             if (error.message.includes('Failed to fetch')) {
                 console.error('❌ Failed to fetch - check LAN connection');
                 throw new Error('Cannot connect to server - please check your LAN connection');
+            }
+            
+            // Retry logic for network errors
+            if (retryCount < maxRetries && (error.message.includes('network') || error.message.includes('timeout'))) {
+                console.log(`🔄 Retrying request (${retryCount + 1}/${maxRetries})...`);
+                await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
+                return this.request(endpoint, options, retryCount + 1);
             }
             
             throw error;
@@ -418,7 +431,10 @@ class ApiService {
         return this.request(`/rentals/${rentalId}/penalties`);
     }
     async calculatePenalties(rentalId, data) {
-        return this.request(`/rentals/${rentalId}/calculate-penalties`, { method: 'POST', data });
+        return this.request(`/rentals/${rentalId}/calculate-penalties`, { 
+            method: 'POST', 
+            body: JSON.stringify(data) 
+        });
     }
     async markPenaltiesPaid(rentalId) {
         return this.request(`/rentals/${rentalId}/mark-penalties-paid`, { method: 'POST' });

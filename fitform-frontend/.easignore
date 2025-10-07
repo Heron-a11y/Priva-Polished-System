@@ -1,15 +1,21 @@
 # EAS Build ignore file
 # This file tells EAS Build which files and directories to exclude from the build
 
-# Ignore backend and AR directories completely
-../fitform-backend/
-../fitform-AR/
-../fitform-backend
-../fitform-AR
-
-# Ignore all parent directories
+# Ignore all parent directories completely
 ../*
 ../**/
+../fitform-backend
+../fitform-AR
+../fitform-backend/
+../fitform-AR/
+../fitform-backend/**
+../fitform-AR/**
+
+# Ignore any symlinks anywhere
+**/storage/**
+**/public/storage/**
+../**/storage/**
+../**/public/storage/**
 
 # Ignore any Laravel storage symlinks
 storage/

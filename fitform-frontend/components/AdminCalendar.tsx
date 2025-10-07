@@ -15,13 +15,13 @@ import apiService from '../services/api';
 
 const STATUS_COLORS = {
   confirmed: '#4CAF50',
-  pending: '#FFA000',
+  pending: '#FF9800',
   cancelled: '#F44336',
 };
 
 const STATUS_ICONS = {
   confirmed: 'checkmark-circle',
-  pending: 'time',
+  pending: 'hourglass',
   cancelled: 'close-circle',
 };
 
@@ -44,6 +44,14 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
 
+  // Utility function to get today's date in YYYY-MM-DD format
+  const getTodayString = () => {
+    const now = new Date();
+    return now.getFullYear() + '-' + 
+           String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+           String(now.getDate()).padStart(2, '0');
+  };
+
   useEffect(() => {
     fetchAppointments();
   }, []);
@@ -60,10 +68,48 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
       const appointmentsData = Array.isArray(data) ? data : (data?.data || []);
       console.log('Processed appointments:', appointmentsData);
       
-      setAppointments(appointmentsData);
+      // Validate and filter appointments data
+        const validatedAppointments = appointmentsData.filter((appointment: any) => {
+        // Check if appointment has required fields
+        if (!appointment.id || !appointment.appointment_date || !appointment.status) {
+          console.warn('Invalid appointment data:', appointment);
+          return false;
+        }
+        
+        // Validate appointment date format
+        const appointmentDate = new Date(appointment.appointment_date);
+        if (isNaN(appointmentDate.getTime())) {
+          console.warn('Invalid appointment date:', appointment.appointment_date);
+          return false;
+        }
+        
+        // Validate status
+        const validStatuses = ['pending', 'confirmed', 'cancelled'];
+        if (!validStatuses.includes(appointment.status)) {
+          console.warn('Invalid appointment status:', appointment.status);
+          return false;
+        }
+        
+        return true;
+      });
+      
+      console.log('Validated appointments:', validatedAppointments);
+      setAppointments(validatedAppointments);
     } catch (error) {
       console.error('Error fetching appointments:', error);
-      Alert.alert('Error', 'Failed to load appointments');
+      
+      // Enhanced error handling
+      let errorMessage = 'Failed to load appointments';
+        if ((error as any).response?.data?.message) {
+          errorMessage = (error as any).response.data.message;
+        } else if ((error as any).message) {
+          errorMessage = (error as any).message;
+        }
+      
+      Alert.alert('Error', errorMessage, [
+        { text: 'Retry', onPress: fetchAppointments },
+        { text: 'Cancel', style: 'cancel' }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -87,23 +133,42 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
     console.log('Filtering appointments for date:', dateString);
     console.log('All appointments:', appointments);
     
+    // Validate input date string format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(dateString)) {
+      console.warn('Invalid date string format:', dateString);
+      return [];
+    }
+    
     const filteredAppointments = appointments.filter(appointment => {
       console.log('Checking appointment:', appointment);
       console.log('Appointment date:', appointment.appointment_date);
       console.log('Date string:', dateString);
       
-      // Handle different date formats
+      // Handle different date formats with enhanced validation
       let appointmentDate;
-      if (appointment.appointment_date.includes('T')) {
-        appointmentDate = appointment.appointment_date.split('T')[0];
-      } else {
-        appointmentDate = appointment.appointment_date.split(' ')[0];
+      try {
+        if (appointment.appointment_date.includes('T')) {
+          appointmentDate = appointment.appointment_date.split('T')[0];
+        } else {
+          appointmentDate = appointment.appointment_date.split(' ')[0];
+        }
+        
+        // Validate the extracted date
+        const parsedDate = new Date(appointmentDate);
+        if (isNaN(parsedDate.getTime())) {
+          console.warn('Invalid appointment date format:', appointment.appointment_date);
+          return false;
+        }
+        
+        console.log('Processed appointment date:', appointmentDate);
+        console.log('Matches:', appointmentDate === dateString);
+        
+        return appointmentDate === dateString;
+      } catch (error) {
+        console.warn('Error processing appointment date:', error);
+        return false;
       }
-      
-      console.log('Processed appointment date:', appointmentDate);
-      console.log('Matches:', appointmentDate === dateString);
-      
-      return appointmentDate === dateString;
     });
     
     console.log('Filtered appointments:', filteredAppointments);
@@ -145,29 +210,142 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
 
   const handleAppointmentStatusUpdate = async (appointmentId: number, newStatus: 'pending' | 'confirmed' | 'cancelled') => {
     try {
+      // Validate appointment date before status update
+      const appointment = appointments.find(apt => apt.id === appointmentId);
+      if (appointment) {
+        const appointmentDate = new Date(appointment.appointment_date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // Also set appointment date to start of day for accurate comparison
+        appointmentDate.setHours(0, 0, 0, 0);
+        
+        console.log('📅 Comparing dates:', {
+          appointmentDate: appointmentDate.toISOString(),
+          today: today.toISOString(),
+          isPast: appointmentDate < today
+        });
+        
+        // Check if appointment is in the past and trying to confirm
+        if (appointmentDate < today && newStatus === 'confirmed') {
+          Alert.alert(
+            'Cannot Confirm Past Appointment',
+            'This appointment is in the past and cannot be confirmed. Please contact the customer to reschedule.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        
+        // Check if appointment is too far in the future for cancellation
+        const maxFutureDays = 30;
+        const maxFutureDate = new Date();
+        maxFutureDate.setDate(maxFutureDate.getDate() + maxFutureDays);
+        
+        if (appointmentDate > maxFutureDate && newStatus === 'cancelled') {
+          Alert.alert(
+            'Future Appointment Cancellation',
+            'This appointment is more than 30 days in the future. Please contact the customer directly for cancellation.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+      }
+      
       await apiService.updateAppointmentStatus(appointmentId, newStatus);
       await fetchAppointments(); // Refresh the appointments
       setShowAppointmentModal(false);
-      Alert.alert('Success', `Appointment ${newStatus === 'confirmed' ? 'confirmed' : newStatus === 'cancelled' ? 'cancelled' : 'set to pending'}.`);
+      
+      // Enhanced success message with appointment details
+      const statusMessage = newStatus === 'confirmed' 
+        ? 'confirmed successfully' 
+        : newStatus === 'cancelled' 
+        ? 'cancelled successfully' 
+        : 'set to pending';
+      
+      Alert.alert('Success', `Appointment ${statusMessage}.`, [
+        { text: 'OK', onPress: () => {
+          // Optional: Trigger any additional actions after status update
+          console.log(`Appointment ${appointmentId} status updated to ${newStatus}`);
+        }}
+      ]);
     } catch (error) {
       console.error('Error updating appointment status:', error);
-      Alert.alert('Error', 'Failed to update appointment status');
+      
+      // Enhanced error handling with specific error messages
+      let errorMessage = 'Failed to update appointment status';
+      
+        if ((error as any).response?.data?.message) {
+          errorMessage = (error as any).response.data.message;
+        } else if ((error as any).message) {
+          errorMessage = (error as any).message;
+        }
+      
+      Alert.alert('Error', errorMessage, [
+        { text: 'Retry', onPress: () => handleAppointmentStatusUpdate(appointmentId, newStatus) },
+        { text: 'Cancel', style: 'cancel' }
+      ]);
     }
   };
 
   const getMarkedDates = () => {
     const marked: { [date: string]: any } = {};
-    const today = new Date().toISOString().split('T')[0];
     
-    // Mark today's date with special highlighting
-    marked[today] = {
-      selected: true,
-      selectedColor: '#007AFF',
-      selectedTextColor: '#FFFFFF',
-      marked: true,
-      dotColor: '#007AFF',
-    };
+    // Get today's date using utility function
+    const today = getTodayString();
     
+    console.log('📅 Today date for calendar:', today);
+    console.log('📅 Current date object:', new Date());
+    console.log('📅 Appointments for marking:', appointments);
+    
+    // Mark past dates as disabled (but allow today to be tappable)
+    const todayDate = new Date();
+    const pastDates: string[] = [];
+    
+    // Generate past dates for the last 30 days
+    for (let i = 1; i <= 30; i++) {
+      const pastDate = new Date(todayDate);
+      pastDate.setDate(todayDate.getDate() - i);
+      const pastDateString = pastDate.getFullYear() + '-' + 
+                            String(pastDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                            String(pastDate.getDate()).padStart(2, '0');
+      pastDates.push(pastDateString);
+    }
+    
+    // Track booked dates (dates with appointments)
+    const bookedDates: string[] = [];
+    
+    // Mark past dates as disabled
+    pastDates.forEach((date) => {
+      marked[date] = {
+        selected: false,
+        disabled: true,
+        disableTouchEvent: true,
+        textColor: '#ccc',
+        backgroundColor: '#f5f5f5',
+      };
+    });
+    
+    // Mark today with special highlighting (but keep it tappable)
+    if (!marked[today]) {
+      marked[today] = {
+        selected: true,
+        selectedColor: '#007AFF',
+        selectedTextColor: '#FFFFFF',
+        marked: true,
+        dotColor: '#007AFF',
+        disabled: false,
+        disableTouchEvent: false,
+      };
+    } else {
+      // If today already has appointments, keep the appointment styling but ensure it's tappable
+      marked[today] = {
+        ...marked[today],
+        disabled: false,
+        disableTouchEvent: false,
+      };
+    }
+    
+    // Mark appointments with their status colors
     appointments.forEach((appointment) => {
       // Handle different date formats
       let date;
@@ -178,28 +356,54 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
         date = appointment.appointment_date.split(' ')[0];
       }
       
-      let color = getStatusColor(appointment.status);
+      console.log(`Processing appointment ${appointment.id} for date: ${date}, status: ${appointment.status}`);
       
-      // If this date already has today's highlighting, merge the properties
-      if (date === today && marked[date]) {
+      // Track this date as booked
+      if (!bookedDates.includes(date)) {
+        bookedDates.push(date);
+      }
+      
+      let color = '#FF9800'; // pending
+      if (appointment.status === 'confirmed') color = '#4CAF50';
+      if (appointment.status === 'cancelled') color = '#F44336';
+      
+      // Check if this date is in the past
+      const isPastDate = pastDates.includes(date);
+      
+      // Mark appointment dates with status colors
+      marked[date] = {
+        selected: true,
+        selectedColor: color,
+        selectedTextColor: '#fff',
+        marked: true,
+        dotColor: color,
+        // Disable past dates, but keep today tappable
+        disabled: isPastDate ? true : (date === today ? false : false),
+        disableTouchEvent: isPastDate ? true : (date === today ? false : false),
+        // For past dates, use muted colors
+        textColor: isPastDate ? '#999' : undefined,
+        backgroundColor: isPastDate ? '#f8f8f8' : undefined,
+      };
+    });
+    
+    // Mark booked dates that don't have appointments with a special indicator
+    // This helps admin see which dates are already booked
+    bookedDates.forEach((date) => {
+      if (!marked[date]) {
+        // This date has appointments but no specific status marking
         marked[date] = {
-          ...marked[date],
           selected: true,
-          selectedColor: color,
+          selectedColor: '#9C27B0', // Purple for booked
           selectedTextColor: '#fff',
           marked: true,
-          dotColor: color,
-        };
-      } else {
-        marked[date] = {
-          selected: true,
-          selectedColor: color,
-          selectedTextColor: '#fff',
-          marked: true,
-          dotColor: color,
+          dotColor: '#9C27B0',
+          disabled: false,
+          disableTouchEvent: false,
         };
       }
     });
+    
+    console.log('📅 Booked dates:', bookedDates);
     
     return marked;
   };
@@ -220,7 +424,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
         <Calendar
           onDayPress={handleDatePress}
           markedDates={getMarkedDates()}
-          minDate={new Date().toISOString().split('T')[0]}
+          minDate={getTodayString()}
           theme={{
             backgroundColor: '#fff',
             calendarBackground: '#fff',
@@ -266,11 +470,19 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
               <Text style={styles.legendText}>Pending</Text>
             </View>
           </View>
-          {/* Second Row: Cancelled */}
+          {/* Second Row: Cancelled, Booked, Past Dates */}
           <View style={styles.legendRow}>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: '#F44336' }]} />
               <Text style={styles.legendText}>Cancelled</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#9C27B0' }]} />
+              <Text style={styles.legendText}>Booked</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#ccc' }]} />
+              <Text style={styles.legendText}>Past Dates</Text>
             </View>
           </View>
         </View>
@@ -288,8 +500,6 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            {console.log('Modal rendering - selectedAppointment:', selectedAppointment)}
-            {console.log('Modal visible:', showAppointmentModal)}
             {selectedAppointment ? (
               <>
                 <View style={styles.modalHeader}>
@@ -339,9 +549,11 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Status:</Text>
-                    <Text style={styles.detailValue}>
-                      {getStatusText(selectedAppointment.status || 'unknown')}
-                    </Text>
+                    <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[selectedAppointment.status as keyof typeof STATUS_COLORS] || '#9E9E9E' }]}>
+                      <Text style={styles.statusText}>
+                        {getStatusText(selectedAppointment.status || 'unknown')}
+                      </Text>
+                    </View>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Estimated Wait Time:</Text>
@@ -384,8 +596,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
                         style={[styles.actionButton, styles.cancelButton]}
                         onPress={() => handleAppointmentStatusUpdate(selectedAppointment.id, 'cancelled')}
                       >
-                        <Ionicons name="close" size={20} color="#fff" />
-                        <Text style={styles.actionButtonText}>Cancel</Text>
+                        <Ionicons name="close" size={20} color="#014D40" />
+                        <Text style={styles.cancelButtonText}>Cancel</Text>
                       </TouchableOpacity>
                     </>
                   )}
@@ -394,8 +606,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
                       style={[styles.actionButton, styles.cancelButton]}
                       onPress={() => handleAppointmentStatusUpdate(selectedAppointment.id, 'cancelled')}
                     >
-                      <Ionicons name="close" size={20} color="#fff" />
-                      <Text style={styles.actionButtonText}>Cancel</Text>
+                      <Ionicons name="close" size={20} color="#014D40" />
+                      <Text style={styles.cancelButtonText}>Cancel</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -410,7 +622,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
                     setSelectedAppointment(null);
                   }}
                 >
-                  <Text style={styles.closeButtonText}>Close</Text>
+                  <Text style={styles.closeButton}>Close</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -570,10 +782,23 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   confirmButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#014D40',
   },
   cancelButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cancelButtonText: {
+    color: '#014D40',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
   },
   actionButtonText: {
     color: '#fff',
@@ -586,6 +811,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 20,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+  },
+  statusText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
 });
 

@@ -24,7 +24,7 @@ const ARTestScreen = () => {
   // Lazy import ARSessionManager to avoid immediate instantiation
   const getARSessionManager = async () => {
     try {
-      const { default: ARSessionManager } = await import('./src/ar/ARSessionManager');
+      const { default: ARSessionManager } = await import('./src/ARSessionManager');
       return new ARSessionManager();
     } catch (error) {
       addLog(`❌ Failed to load ARSessionManager: ${error.message}`);

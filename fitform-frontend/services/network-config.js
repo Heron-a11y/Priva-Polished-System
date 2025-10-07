@@ -1,27 +1,32 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import dynamicNetworkConfig from './dynamic-network-config';
 
 // Network configuration for LAN access
 const NETWORK_CONFIG = {
     // Local development
     local: {
         backendUrl: 'http://localhost:8000/api',
-        expoUrl: 'exp://localhost:8082',
+        expoUrl: 'exp://localhost:8081',
         description: 'Local development (localhost)',
         priority: 1
     },
-    // LAN access (auto-detect local IP)
+    // LAN access (dynamic IP detection)
     lan: {
-        backendUrl: 'http://192.168.1.105:8000/api', // Updated to match your current IP
-        expoUrl: 'exp://192.168.1.105:8082', // Updated to match Metro port
-        description: 'LAN access (accessible from same network)',
+        get backendUrl() {
+            return dynamicNetworkConfig.getBackendUrl();
+        },
+        get expoUrl() {
+            return dynamicNetworkConfig.getExpoUrl();
+        },
+        description: 'LAN access (auto-detected IP)',
         priority: 2
     }
 };
 
 class NetworkConfig {
     constructor() {
-        this.currentMode = 'local'; // Default to local mode since backend is running on localhost
-        console.log('🌐 NetworkConfig initialized with local mode');
+        this.currentMode = 'lan'; // Default to LAN mode since backend is now accessible via network IP
+        console.log('🌐 NetworkConfig initialized with LAN mode');
     }
 
     // Get current network configuration
@@ -68,17 +73,14 @@ class NetworkConfig {
     }
 
     // Update LAN IP dynamically
-    updateLanIp(newIp) {
-        if (NETWORK_CONFIG.lan) {
-            NETWORK_CONFIG.lan.backendUrl = `http://${newIp}:8000/api`;
-            NETWORK_CONFIG.lan.expoUrl = `exp://${newIp}:8082`;
-            console.log(`🌐 Updated LAN IP to: ${newIp}`);
-        }
+    async updateLanIp(newIp) {
+        await dynamicNetworkConfig.updateIP(newIp);
+        console.log(`🌐 Updated LAN IP to: ${newIp}`);
     }
 
     // Get current LAN IP
     getCurrentLanIp() {
-        return NETWORK_CONFIG.lan ? NETWORK_CONFIG.lan.backendUrl.replace('http://', '').replace(':8000/api', '') : null;
+        return dynamicNetworkConfig.getCurrentIP();
     }
 
     // Test network connectivity
@@ -123,17 +125,19 @@ class NetworkConfig {
     async autoDetectNetwork() {
         console.log('🔍 Auto-detecting network configuration...');
         
-        // For mobile devices, prioritize LAN over localhost
-        // First try LAN connection
+        // Initialize dynamic network config
+        await dynamicNetworkConfig.initializeNetwork();
+        
+        // Try to find a working IP
         try {
-            const lanIp = await this.detectLanIp();
-            if (lanIp) {
-                console.log(`✅ Auto-detected LAN IP: ${lanIp}`);
+            const workingIP = await dynamicNetworkConfig.findWorkingIP();
+            if (workingIP) {
+                console.log(`✅ Auto-detected working IP: ${workingIP}`);
                 await this.setNetworkMode('lan');
                 return 'lan';
             }
         } catch (error) {
-            console.log('❌ Error detecting LAN IP:', error.message);
+            console.log('❌ Error detecting working IP:', error.message);
         }
         
         // If LAN fails, try local connection
@@ -244,11 +248,11 @@ class NetworkConfig {
             
             // Fallback: Use the configured LAN IP even if detection failed
             console.log('⚠️ Could not auto-detect LAN IP, using configured IP');
-            return currentLanIp || '192.168.1.105';
+            return currentLanIp || '192.168.1.59';
         } catch (error) {
             console.log('⚠️ Could not detect LAN IP:', error.message);
             // Return configured IP as fallback
-            return this.getCurrentLanIp() || '192.168.1.105';
+            return this.getCurrentLanIp() || '192.168.1.59';
         }
     }
 

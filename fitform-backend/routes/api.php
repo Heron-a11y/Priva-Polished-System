@@ -61,6 +61,7 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
         Route::get('/booked-dates', [AppointmentController::class, 'getBookedDates']);
         Route::get('/appointments/daily-capacity', [AppointmentController::class, 'getDailyCapacity']);
+        Route::get('/appointments/available-slots', [AppointmentController::class, 'getAvailableSlots']);
         // Admin appointments
         Route::get('/admin/appointments', [AppointmentController::class, 'indexAdmin']);
         Route::post('/admin/appointments/{id}/status', [AppointmentController::class, 'adminUpdateStatus']);

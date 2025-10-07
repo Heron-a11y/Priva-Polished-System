@@ -72,7 +72,7 @@ class RentalController extends Controller
             'customer_email' => 'required|email',
             'clothing_type' => 'required|string',
             'measurements' => 'required|array',
-            'agreement_accepted' => 'required|boolean',
+            'agreement_accepted' => 'nullable|boolean',
         ]);
         
         $data['user_id'] = $request->user()->id;
@@ -94,8 +94,8 @@ class RentalController extends Controller
             'notes' => $data['special_requests'],
             'customer_name' => $data['customer_name'],
             'customer_email' => $data['customer_email'],
-            'agreement_accepted' => $data['agreement_accepted'],
-            'agreement_accepted_at' => $data['agreement_accepted'] ? now() : null,
+            'agreement_accepted' => $data['agreement_accepted'] ?? false,
+            'agreement_accepted_at' => ($data['agreement_accepted'] ?? false) ? now() : null,
         ];
         
         $rental = Rental::create($rentalData);
@@ -293,15 +293,41 @@ class RentalController extends Controller
         $data = $request->validate([
             'damage_level' => 'required|in:none,minor,major,severe',
             'penalty_notes' => 'nullable|string',
+            'include_cancellation' => 'nullable|boolean',
         ]);
 
-        $totalPenalties = $rental->calculateTotalPenalties($data['damage_level']);
+        $totalPenalties = $rental->calculateTotalPenalties($data['damage_level'], (bool)($data['include_cancellation'] ?? false));
         
         $rental->total_penalties = $totalPenalties;
         $rental->penalty_status = 'pending';
         $rental->penalty_notes = $data['penalty_notes'] ?? null;
         $rental->penalty_calculated_at = now();
         $rental->save();
+
+        // Update history entry to reflect penalty information
+        $this->updateRentalHistory($rental);
+
+        // Notify customer with specific context (delay vs damage)
+        $hasDelay = $rental->calculateDelayPenalties() > 0;
+        $hasDamage = ($data['damage_level'] ?? 'none') !== 'none';
+        if ($hasDelay && $hasDamage) {
+            $message = 'Delay and damage penalties calculated for your rental order #' . $rental->id . ' — Total: ₱' . number_format((float)$totalPenalties, 2);
+        } elseif ($hasDelay) {
+            $message = 'Delay penalties calculated for your rental order #' . $rental->id . ' — Total: ₱' . number_format((float)$totalPenalties, 2);
+        } elseif ($hasDamage) {
+            $message = 'Damage penalties calculated for your rental order #' . $rental->id . ' — Total: ₱' . number_format((float)$totalPenalties, 2);
+        } else {
+            $message = 'Penalties calculated for your rental order #' . $rental->id . ' — Total: ₱' . number_format((float)$totalPenalties, 2);
+        }
+
+        Notification::create([
+            'user_id' => $rental->user_id,
+            'sender_role' => 'admin',
+            'message' => $message,
+            'read' => false,
+            'order_id' => $rental->id,
+            'order_type' => 'Rental',
+        ]);
 
         return response()->json([
             'success' => true,

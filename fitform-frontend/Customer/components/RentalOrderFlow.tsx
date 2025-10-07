@@ -58,8 +58,10 @@ interface RentalOrder {
     delay_days: number;
     delay_fee: number;
   };
-  total_penalties: number;
+  total_penalties?: number;
   penalty_status: string;
+  penalty_notes?: string;
+  penalty_calculated_at?: string;
 }
 
 interface RentalForm {
@@ -67,7 +69,6 @@ interface RentalForm {
   otherType: string;
   startDate: string;
   specialRequests: string;
-  agreementAccepted: boolean;
 }
 
 // Complete measurements interface for AR and manual input
@@ -92,8 +93,7 @@ export default function RentalOrderFlow() {
     rentalType: '',
     otherType: '',
     startDate: '',
-    specialRequests: '',
-    agreementAccepted: false
+    specialRequests: ''
   });
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [selectedOrder, setSelectedOrder] = useState<RentalOrder | null>(null);
@@ -105,6 +105,7 @@ export default function RentalOrderFlow() {
   const [showCounterOfferModal, setShowCounterOfferModal] = useState(false);
   const [counterOfferAmount, setCounterOfferAmount] = useState('');
   const [counterOfferNotes, setCounterOfferNotes] = useState('');
+  const [reviewAgreementAccepted, setReviewAgreementAccepted] = useState(false);
   
   // AR Measurement states
   const [showARMeasurement, setShowARMeasurement] = useState(false);
@@ -120,6 +121,12 @@ export default function RentalOrderFlow() {
     armLength: 0,
     neck: 0
   });
+
+  useEffect(() => {
+    if (showQuotationModal) {
+      setReviewAgreementAccepted(false);
+    }
+  }, [showQuotationModal]);
 
   const { user } = useAuth();
   const { selectedOrderForReview, clearOrderReview } = useNotificationContext();
@@ -154,14 +161,14 @@ export default function RentalOrderFlow() {
 
   // Complete measurement fields for manual input
   const COMPLETE_MEASUREMENT_FIELDS = [
-    { key: 'height', label: 'Height', description: 'Your total height in cm' },
-    { key: 'chest', label: 'Chest', description: 'Chest circumference at fullest point' },
-    { key: 'waist', label: 'Waist', description: 'Natural waistline circumference' },
-    { key: 'hips', label: 'Hips', description: 'Hip circumference at fullest point' },
-    { key: 'shoulders', label: 'Shoulders', description: 'Distance across shoulders' },
-    { key: 'inseam', label: 'Inseam', description: 'Inner leg length from crotch to ankle' },
-    { key: 'armLength', label: 'Arm Length', description: 'Shoulder to wrist length' },
-    { key: 'neck', label: 'Neck', description: 'Neck circumference' }
+    { key: 'height', label: 'Height' },
+    { key: 'chest', label: 'Chest' },
+    { key: 'waist', label: 'Waist' },
+    { key: 'hips', label: 'Hips' },
+    { key: 'shoulders', label: 'Shoulders' },
+    { key: 'inseam', label: 'Inseam' },
+    { key: 'armLength', label: 'Arm Length' },
+    { key: 'neck', label: 'Neck' }
   ];
 
 
@@ -250,7 +257,7 @@ export default function RentalOrderFlow() {
         }
       });
     }
-    if (!formData.agreementAccepted) newErrors.agreementAccepted = 'You must accept the rental agreement';
+    // Agreement validation moved to review quotation modal
 
     // Validate date formats
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -325,8 +332,7 @@ export default function RentalOrderFlow() {
         clothing_type: formData.rentalType === 'other' ? formData.otherType : 
                       RENTAL_TYPES.find(t => t.id === formData.rentalType)?.label,
         measurements: measurements,
-        measurement_method: measurementMethod, // Track measurement method
-        agreement_accepted: formData.agreementAccepted // Add agreement_accepted
+        measurement_method: measurementMethod // Track measurement method
       };
 
       console.log('Submitting rental order with payload:', payload);
@@ -350,8 +356,7 @@ export default function RentalOrderFlow() {
       rentalType: '',
       otherType: '',
       startDate: '',
-      specialRequests: '',
-      agreementAccepted: false
+      specialRequests: ''
     });
     setErrors({});
   };
@@ -413,6 +418,25 @@ export default function RentalOrderFlow() {
         return 'DECLINED';
       default:
         return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+  };
+
+  // Helper functions for penalty status display
+  const getPenaltyStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'paid': return '#4caf50';
+      case 'pending': return '#ff9800';
+      case 'none': return '#9e9e9e';
+      default: return '#9e9e9e';
+    }
+  };
+
+  const getPenaltyStatusText = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'paid': return 'PAID';
+      case 'pending': return 'PENDING';
+      case 'none': return 'NONE';
+      default: return 'NONE';
     }
   };
 
@@ -655,235 +679,183 @@ export default function RentalOrderFlow() {
 
 
             {/* Date Selection */}
-            <View style={styles.formSection}>
-              <Text style={styles.formSectionTitle}>Rental Date</Text>
-              
-              <View style={styles.dateInputRow}>
-                <View style={styles.dateInputContainer}>
-                  <Text style={styles.inputLabel}>Pickup Date</Text>
-                  <TouchableOpacity
-                    style={styles.datePickerButton}
-                    onPress={() => setShowStartDatePicker(true)}
-                  >
-                    <Ionicons name="calendar" size={20} color={Colors.primary} />
-                    <Text style={styles.datePickerButtonText}>
-                      {formData.startDate || 'Select Pickup Date'}
-                    </Text>
-                  </TouchableOpacity>
-                  {errors.startDate && <Text style={styles.errorText}>{errors.startDate}</Text>}
+            <View style={styles.styledSection}>
+              <View style={styles.formSection}>
+                <Text style={styles.formSectionTitle}>Rental Date</Text>
+                
+                <View style={styles.dateInputRow}>
+                  <View style={styles.dateInputContainer}>
+                    <Text style={styles.inputLabel}>Pickup Date</Text>
+                    <TouchableOpacity
+                      style={styles.datePickerButton}
+                      onPress={() => setShowStartDatePicker(true)}
+                    >
+                      <Ionicons name="calendar" size={20} color={Colors.primary} />
+                      <Text style={styles.datePickerButtonText}>
+                        {formData.startDate || 'Select Pickup Date'}
+                      </Text>
+                    </TouchableOpacity>
+                    {errors.startDate && <Text style={styles.errorText}>{errors.startDate}</Text>}
+                  </View>
+                </View>
+                
+                <View style={styles.rentalInfoBox}>
+                  <Ionicons name="information-circle" size={20} color={Colors.primary} />
+                  <Text style={styles.rentalInfoText}>
+                    <Text style={styles.rentalInfoBold}>Rental Period:</Text> 5 days from pickup date
+                  </Text>
                 </View>
               </View>
-              
-              <View style={styles.rentalInfoBox}>
-                <Ionicons name="information-circle" size={20} color={Colors.primary} />
-                <Text style={styles.rentalInfoText}>
-                  <Text style={styles.rentalInfoBold}>Rental Period:</Text> 5 days from pickup date
-                </Text>
+            </View>
+
+
+            {/* Special Requests */}
+            <View style={styles.styledSection}>
+              <View style={styles.formSection}>
+                <Text style={styles.formSectionTitle}>Special Requests</Text>
+                <TextInput
+                  style={[styles.textInput, styles.textArea]}
+                  placeholder="Any special requirements or notes..."
+                  value={formData.specialRequests}
+                  onChangeText={(text) => setFormData({...formData, specialRequests: text})}
+                  multiline
+                  numberOfLines={3}
+                />
               </View>
             </View>
 
             {/* Measurement Method Selection */}
-            <View style={styles.formSection}>
-              <Text style={styles.formSectionTitle}>Measurement Method</Text>
-              <Text style={styles.formSectionSubtitle}>
-                Choose how you'd like to provide your measurements
-              </Text>
-              
-              <View style={styles.measurementMethodContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.measurementMethodCard,
-                    measurementMethod === 'ar' && styles.selectedMeasurementMethod
-                  ]}
-                  onPress={() => handleMeasurementMethodSelect('ar')}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.measurementMethodIcon}>
-                    <Ionicons name="scan" size={32} color={measurementMethod === 'ar' ? Colors.primary : Colors.text.secondary} />
-                  </View>
-                  <Text style={[styles.measurementMethodTitle, measurementMethod === 'ar' && styles.selectedMeasurementMethodText]}>
-                    AR Measurement
-                  </Text>
-                  <Text style={styles.measurementMethodDescription}>
-                    Use your camera for accurate body measurements
-                  </Text>
-                  {measurementMethod === 'ar' && (
-                    <View style={styles.selectedIndicator}>
-                      <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
+            <View style={styles.styledSection}>
+              <View style={styles.formSection}>
+                <Text style={styles.formSectionTitle}>Measurement Method</Text>
+                <Text style={styles.formSectionSubtitle}>Choose how you'd like to provide your measurements</Text>
+                
+                <View style={styles.measurementMethodContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.measurementMethodCard,
+                      measurementMethod === 'ar' && styles.selectedMeasurementMethod
+                    ]}
+                    onPress={() => handleMeasurementMethodSelect('ar')}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.measurementMethodIcon}>
+                      <Ionicons name="scan" size={32} color={measurementMethod === 'ar' ? Colors.primary : Colors.text.secondary} />
                     </View>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.measurementMethodCard,
-                    measurementMethod === 'manual' && styles.selectedMeasurementMethod
-                  ]}
-                  onPress={() => handleMeasurementMethodSelect('manual')}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.measurementMethodIcon}>
-                    <Ionicons name="create-outline" size={32} color={measurementMethod === 'manual' ? Colors.primary : Colors.text.secondary} />
-                  </View>
-                  <Text style={[styles.measurementMethodTitle, measurementMethod === 'manual' && styles.selectedMeasurementMethodText]}>
-                    Manual Input
-                  </Text>
-                  <Text style={styles.measurementMethodDescription}>
-                    Enter measurements manually
-                  </Text>
-                  {measurementMethod === 'manual' && (
-                    <View style={styles.selectedIndicator}>
-                      <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              {/* Show AR Measurement Results */}
-              {measurementMethod === 'ar' && arMeasurements && (
-                <View style={styles.arResultsContainer}>
-                  <Text style={styles.arResultsTitle}>AR Measurement Results</Text>
-                  <View style={styles.arResultsGrid}>
-                    {Object.entries(arMeasurements).map(([key, value]) => (
-                      <View key={key} style={styles.arResultItem}>
-                        <Text style={styles.arResultLabel}>{key.replace('_', ' ').toUpperCase()}</Text>
-                        <Text style={styles.arResultValue}>{value} cm</Text>
+                    <Text style={[styles.measurementMethodTitle, measurementMethod === 'ar' && styles.selectedMeasurementMethodText]}>
+                      AR Measurement
+                    </Text>
+                    <Text style={styles.measurementMethodDescription}>
+                      Use your camera for accurate body measurements
+                    </Text>
+                    {measurementMethod === 'ar' && (
+                      <View style={styles.selectedIndicator}>
+                        <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
                       </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Manual Input Fields */}
-              {measurementMethod === 'manual' && (
-                <View style={styles.manualInputContainer}>
-                  <Text style={styles.manualInputTitle}>Manual Measurement Input</Text>
-                  <Text style={styles.manualInputSubtitle}>Enter your measurements in centimeters</Text>
-                  
-                  <View style={styles.measurementGrid}>
-                    {COMPLETE_MEASUREMENT_FIELDS.map(field => (
-                      <View key={field.key} style={styles.measurementGridItem}>
-                        <Text style={styles.measurementFieldLabel}>{field.label}</Text>
-                        <Text style={styles.measurementFieldDescription}>{field.description}</Text>
-                        <TextInput
-                          style={styles.measurementInput}
-                          placeholder={`${field.label} (cm)`}
-                          value={manualMeasurements[field.key as keyof CompleteMeasurements] && manualMeasurements[field.key as keyof CompleteMeasurements]! > 0 ? 
-                                 manualMeasurements[field.key as keyof CompleteMeasurements]!.toString() : ''}
-                          onChangeText={(text) => {
-                            const value = parseFloat(text) || 0;
-                            setManualMeasurements(prev => ({
-                              ...prev,
-                              [field.key]: value
-                            }));
-                          }}
-                          keyboardType="numeric"
-                        />
-                        {errors[field.key] && (
-                          <Text style={styles.measurementError}>{errors[field.key]}</Text>
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Change Measurement Method Button */}
-              {measurementMethod && (
-                <TouchableOpacity
-                  style={styles.changeMethodButton}
-                  onPress={() => {
-                    setMeasurementMethod(null);
-                    setArMeasurements(null);
-                    setManualMeasurements({
-                      height: 0,
-                      chest: 0,
-                      waist: 0,
-                      hips: 0,
-                      shoulders: 0,
-                      inseam: 0,
-                      armLength: 0,
-                      neck: 0
-                    });
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="arrow-back" size={16} color={Colors.primary} />
-                  <Text style={styles.changeMethodButtonText}>Change Measurement Method</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Special Requests */}
-            <View style={styles.formSection}>
-              <Text style={styles.formSectionTitle}>Special Requests</Text>
-              <TextInput
-                style={[styles.textInput, styles.textArea]}
-                placeholder="Any special requirements or notes..."
-                value={formData.specialRequests}
-                onChangeText={(text) => setFormData({...formData, specialRequests: text})}
-                multiline
-                numberOfLines={3}
-              />
-            </View>
-
-            {/* User Agreement */}
-            <View style={styles.formSection}>
-              <Text style={styles.formSectionTitle}>Rental Agreement</Text>
-              
-              <View style={styles.agreementContainer}>
-                <View style={styles.agreementHeader}>
-                  <Ionicons name="shield-checkmark" size={24} color={Colors.primary} />
-                  <Text style={styles.agreementHeaderText}>Terms & Conditions</Text>
-                </View>
-                
-                <TouchableOpacity
-                  style={styles.viewAgreementButton}
-                  onPress={() => setShowAgreementModal(true)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="document-text-outline" size={20} color={Colors.primary} />
-                  <Text style={styles.viewAgreementButtonText}>View Complete Terms</Text>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
-                </TouchableOpacity>
-                
-                
-                <TouchableOpacity
-                  style={[
-                    styles.agreementCheckbox,
-                    formData.agreementAccepted && styles.agreementCheckboxAccepted
-                  ]}
-                  onPress={() => setFormData({...formData, agreementAccepted: !formData.agreementAccepted})}
-                  activeOpacity={0.8}
-                >
-                  <View style={[
-                    styles.checkboxContainer,
-                    formData.agreementAccepted && styles.checkboxContainerAccepted
-                  ]}>
-                    {formData.agreementAccepted && (
-                      <Ionicons name="checkmark" size={18} color={Colors.text.inverse} />
                     )}
-                  </View>
-                  <View style={styles.agreementTextContainer}>
-                    <Text style={styles.agreementCheckboxText}>
-                      I have read and agree to the{' '}
-                      <Text style={styles.agreementLink}>terms and conditions</Text>
-                      {' '}of the rental agreement
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.measurementMethodCard,
+                      measurementMethod === 'manual' && styles.selectedMeasurementMethod
+                    ]}
+                    onPress={() => handleMeasurementMethodSelect('manual')}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.measurementMethodIcon}>
+                      <Ionicons name="create-outline" size={32} color={measurementMethod === 'manual' ? Colors.primary : Colors.text.secondary} />
+                    </View>
+                    <Text style={[styles.measurementMethodTitle, measurementMethod === 'manual' && styles.selectedMeasurementMethodText]}>
+                      Manual Input
                     </Text>
-                    <Text style={styles.agreementNote}>
-                      This includes understanding all penalty fees and return requirements
+                    <Text style={styles.measurementMethodDescription}>
+                      Enter measurements manually
                     </Text>
+                    {measurementMethod === 'manual' && (
+                      <View style={styles.selectedIndicator}>
+                        <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {/* Show AR Measurement Results */}
+                {measurementMethod === 'ar' && arMeasurements && (
+                  <View style={styles.arResultsContainer}>
+                    <Text style={styles.arResultsTitle}>AR Measurement Results</Text>
+                    <View style={styles.arResultsGrid}>
+                      {Object.entries(arMeasurements).map(([key, value]) => (
+                        <View key={key} style={styles.arResultItem}>
+                          <Text style={styles.arResultLabel}>{key.replace('_', ' ').toUpperCase()}</Text>
+                          <Text style={styles.arResultValue}>{value} cm</Text>
+                        </View>
+                      ))}
+                    </View>
                   </View>
-                </TouchableOpacity>
-                
-                {errors.agreementAccepted && (
-                  <View style={styles.errorContainer}>
-                    <Ionicons name="alert-circle" size={16} color={Colors.error} />
-                    <Text style={styles.errorText}>{errors.agreementAccepted}</Text>
+                )}
+
+                {/* Manual Input Fields */}
+                {measurementMethod === 'manual' && (
+                  <View style={styles.manualInputContainer}>
+                    <Text style={styles.manualInputTitle}>Manual Measurement Input</Text>
+                    <Text style={styles.manualInputSubtitle}>Enter your measurements in centimeters</Text>
+                    
+                    <View style={styles.measurementGrid}>
+                      {COMPLETE_MEASUREMENT_FIELDS.map(field => (
+                        <View key={field.key} style={styles.measurementGridItem}>
+                          <Text style={styles.measurementFieldLabel}>{field.label}</Text>
+                          <TextInput
+                            style={styles.measurementInput}
+                            placeholder={`${field.label} (cm)`}
+                            value={manualMeasurements[field.key as keyof CompleteMeasurements] && manualMeasurements[field.key as keyof CompleteMeasurements]! > 0 ? 
+                                   manualMeasurements[field.key as keyof CompleteMeasurements]!.toString() : ''}
+                            onChangeText={(text) => {
+                              const value = parseFloat(text) || 0;
+                              setManualMeasurements(prev => ({
+                                ...prev,
+                                [field.key]: value
+                              }));
+                            }}
+                            keyboardType="numeric"
+                          />
+                          {errors[field.key] && (
+                            <Text style={styles.measurementError}>{errors[field.key]}</Text>
+                          )}
+                        </View>
+                      ))}
+                    </View>
                   </View>
+                )}
+
+                {/* Change Measurement Method Button */}
+                {measurementMethod && (
+                  <TouchableOpacity
+                    style={styles.changeMethodButton}
+                    onPress={() => {
+                      setMeasurementMethod(null);
+                      setArMeasurements(null);
+                      setManualMeasurements({
+                        height: 0,
+                        chest: 0,
+                        waist: 0,
+                        hips: 0,
+                        shoulders: 0,
+                        inseam: 0,
+                        armLength: 0,
+                        neck: 0
+                      });
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="arrow-back" size={16} color={Colors.primary} />
+                    <Text style={styles.changeMethodButtonText}>Change Measurement Method</Text>
+                  </TouchableOpacity>
                 )}
               </View>
             </View>
+
+            {/* Rental Agreement moved to Review Quotation modal */}
 
             {/* Measurement Method Error */}
             {errors.measurementMethod && (
@@ -1040,12 +1012,15 @@ export default function RentalOrderFlow() {
                   </View>
                 )}
 
-                {/* Penalty Information */}
-                {selectedOrder.penalty_breakdown && (
+                {/* Enhanced Penalty Information */}
+                {(selectedOrder.penalty_breakdown || selectedOrder.penalty_status !== 'none' || selectedOrder.total_penalties > 0) && (
                   <View style={styles.penaltySection}>
-                    <Text style={styles.penaltySectionTitle}>Penalty Information</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                      <Ionicons name="warning" size={20} color="#ff9800" />
+                      <Text style={styles.penaltySectionTitle}>Penalty Information</Text>
+                    </View>
                     
-                    {selectedOrder.penalty_breakdown.delay_days > 0 && (
+                    {selectedOrder.penalty_breakdown && selectedOrder.penalty_breakdown.delay_days > 0 && (
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Delay Penalty:</Text>
                         <Text style={[styles.detailValue, styles.penaltyValue]}>
@@ -1054,22 +1029,40 @@ export default function RentalOrderFlow() {
                       </View>
                     )}
                     
-                    {selectedOrder.total_penalties > 0 && (
+                    {selectedOrder.total_penalties && selectedOrder.total_penalties > 0 && (
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Total Penalties:</Text>
                         <Text style={[styles.detailValue, styles.penaltyValue]}>
-                          ₱{selectedOrder.total_penalties}
+                          ₱{(selectedOrder.total_penalties || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </Text>
                       </View>
                     )}
                     
-                    {selectedOrder.penalty_status !== 'none' && (
+                    {selectedOrder.penalty_status && selectedOrder.penalty_status !== 'none' && (
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Penalty Status:</Text>
-                        <Text style={[styles.detailValue, 
-                          selectedOrder.penalty_status === 'paid' ? styles.paidStatus : styles.pendingStatus
-                        ]}>
-                          {selectedOrder.penalty_status === 'paid' ? 'Paid' : 'Pending Payment'}
+                        <View style={[styles.statusBadge, { backgroundColor: getPenaltyStatusColor(selectedOrder.penalty_status) + '20', alignSelf: 'flex-start' }]}>
+                          <Text style={[styles.statusText, { color: getPenaltyStatusColor(selectedOrder.penalty_status) }]}>
+                            {getPenaltyStatusText(selectedOrder.penalty_status)}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {selectedOrder.penalty_notes && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Penalty Notes:</Text>
+                        <Text style={[styles.detailValue, { fontStyle: 'italic', color: '#666' }]}>
+                          {selectedOrder.penalty_notes}
+                        </Text>
+                      </View>
+                    )}
+
+                    {selectedOrder.penalty_calculated_at && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Calculated On:</Text>
+                        <Text style={styles.detailValue}>
+                          {new Date(selectedOrder.penalty_calculated_at).toLocaleDateString()}
                         </Text>
                       </View>
                     )}
@@ -1108,7 +1101,11 @@ export default function RentalOrderFlow() {
           </View>
 
           {/* Enhanced Content */}
-          <ScrollView style={styles.enhancedModalContent} showsVerticalScrollIndicator={false}>
+          <ScrollView 
+            style={styles.enhancedModalContent} 
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.enhancedModalScrollContent}
+          >
             {/* Quotation Summary Card */}
             <View style={styles.quotationSummaryCard}>
               <View style={styles.quotationSummaryHeader}>
@@ -1189,16 +1186,56 @@ export default function RentalOrderFlow() {
               <Text style={styles.counterOfferCardDescription}>
                 You can make a counter offer to negotiate the rental price with our team.
               </Text>
-              <TouchableOpacity 
-                style={styles.enhancedCounterOfferButton}
-                onPress={() => {
-                  setShowQuotationModal(false);
-                  setShowCounterOfferModal(true);
-                }}
-              >
+            <TouchableOpacity 
+              style={styles.enhancedCounterOfferButton}
+              onPress={() => {
+                setShowQuotationModal(false);
+                setShowCounterOfferModal(true);
+              }}
+            >
                 <Ionicons name="swap-horizontal" size={20} color={Colors.text.primary} />
                 <Text style={styles.enhancedCounterOfferButtonText}>Make Counter Offer</Text>
               </TouchableOpacity>
+            </View>
+
+            {/* Agreement Section moved here */}
+            <View style={styles.agreementSection}>
+              <View style={styles.agreementContainer}>
+                <View style={styles.agreementHeader}>
+                  <Ionicons name="shield-checkmark" size={24} color={Colors.primary} />
+                  <Text style={styles.agreementHeaderText}>Terms & Conditions</Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.viewAgreementButton}
+                  onPress={() => setShowAgreementModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="document-text-outline" size={20} color={Colors.primary} />
+                  <Text style={styles.viewAgreementButtonText}>View Complete Terms</Text>
+                  <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.agreementCheckbox, reviewAgreementAccepted && styles.agreementCheckboxAccepted]}
+                  onPress={() => setReviewAgreementAccepted(!reviewAgreementAccepted)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.checkboxContainer, reviewAgreementAccepted && styles.checkboxContainerAccepted]}>
+                    {reviewAgreementAccepted && (
+                      <Ionicons name="checkmark" size={18} color={Colors.text.inverse} />
+                    )}
+                  </View>
+                  <View style={styles.agreementTextContainer}>
+                    <Text style={styles.agreementCheckboxText}>
+                      I have read and agree to the <Text style={styles.agreementLink}>terms and conditions</Text> of the rental agreement
+                    </Text>
+                    <Text style={styles.agreementNote}>
+                      This includes understanding all penalty fees and return requirements
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
             </View>
           </ScrollView>
 
@@ -1228,7 +1265,8 @@ export default function RentalOrderFlow() {
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.enhancedAcceptButton}
+              style={[styles.enhancedAcceptButton, !reviewAgreementAccepted && { opacity: 0.6 }]}
+              disabled={!reviewAgreementAccepted}
               onPress={async () => { 
                 try {
                   await apiService.request(`/rentals/${selectedOrder?.id}/accept-quotation`, { method: 'POST' }); 
@@ -1273,14 +1311,18 @@ export default function RentalOrderFlow() {
             </View>
             <TouchableOpacity 
               style={styles.enhancedCloseButton}
-              onPress={() => setShowCounterOfferModal(false)}
+              onPress={() => { setShowCounterOfferModal(false); setShowQuotationModal(true); }}
             >
               <Ionicons name="close" size={24} color={Colors.text.primary} />
             </TouchableOpacity>
           </View>
 
           {/* Enhanced Content */}
-          <ScrollView style={styles.enhancedModalContent} showsVerticalScrollIndicator={false}>
+          <ScrollView 
+            style={styles.enhancedModalContent} 
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.enhancedModalScrollContent}
+          >
             {/* Original Quotation Card */}
             <View style={styles.originalQuotationCard}>
               <View style={styles.originalQuotationHeader}>
@@ -1294,8 +1336,10 @@ export default function RentalOrderFlow() {
                 </Text>
               </View>
               <View style={styles.originalQuotationDetails}>
-                <Text style={styles.originalQuotationDetail}>Order ID: #{selectedOrder?.id}</Text>
-                <Text style={styles.originalQuotationDetail}>Type: {selectedOrder?.item_name || 'N/A'}</Text>
+                <View style={styles.originalQuotationDetailsRow}>
+                  <Text style={styles.originalQuotationDetail}>Order ID: #{selectedOrder?.id}</Text>
+                  <Text style={styles.originalQuotationDetail}>Type: {selectedOrder?.item_name || 'N/A'}</Text>
+                </View>
               </View>
             </View>
 
@@ -1366,7 +1410,7 @@ export default function RentalOrderFlow() {
           <View style={styles.enhancedModalFooter}>
             <TouchableOpacity 
               style={styles.enhancedCancelButton}
-              onPress={() => setShowCounterOfferModal(false)}
+              onPress={() => { setShowCounterOfferModal(false); setShowQuotationModal(true); }}
             >
               <Ionicons name="close-circle" size={20} color={Colors.text.primary} />
               <Text style={styles.enhancedCancelButtonText}>Cancel</Text>
@@ -1726,7 +1770,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 24,
+    paddingTop: 32,
     paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border.light,
@@ -1739,11 +1783,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalTitle: {
-    fontSize: Platform.OS === 'ios' ? 22 : 20,
-    fontWeight: '800',
-    color: Colors.text.primary,
-    letterSpacing: 0.5,
-    marginLeft: 8,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#014D40',
+    marginTop: 8,
   },
   closeButton: {
     width: 40,
@@ -1764,6 +1807,19 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     paddingTop: 24,
+  },
+  styledSection: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.border.light + '30',
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   formSection: {
     marginBottom: 32,
@@ -2271,16 +2327,17 @@ const styles = StyleSheet.create({
   },
   agreementContainer: {
     marginTop: 16,
+    marginBottom: 20,
   },
   agreementHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   agreementHeaderText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text.primary,
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.primary,
     marginLeft: 8,
   },
   viewAgreementButton: {
@@ -2676,6 +2733,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
+    paddingTop: 28,
     backgroundColor: Colors.background.card,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border.light,
@@ -2693,6 +2751,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    marginTop: 8,
   },
   enhancedModalTitleContainer: {
     flex: 1,
@@ -2701,7 +2760,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: Colors.text.primary,
-    marginTop: 16,
+    marginTop: 8,
   },
   enhancedModalSubtitle: {
     fontSize: 14,
@@ -2725,6 +2784,11 @@ const styles = StyleSheet.create({
   enhancedModalContent: {
     flex: 1,
     padding: 20,
+    paddingBottom: 120,
+  },
+  enhancedModalScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 130,
   },
   quotationSummaryCard: {
     backgroundColor: Colors.background.card,
@@ -3103,10 +3167,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 20,
+    paddingBottom: 32,
     borderTopWidth: 1,
     borderTopColor: Colors.border.light,
     backgroundColor: Colors.background.light,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   quotationStatusContainer: {
     alignItems: 'center',
@@ -3120,6 +3189,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.primary + '30',
   },
+  agreementSection: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.border.light + '30',
+  },
   quotationStatusText: {
     fontSize: 14,
     color: Colors.primary,
@@ -3128,13 +3206,18 @@ const styles = StyleSheet.create({
   originalQuotationDetails: {
     gap: 12,
   },
-  originalQuotationDetail: {
+  originalQuotationDetailsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border.light,
+  },
+  originalQuotationDetail: {
+    fontSize: 14,
+    color: Colors.text.primary,
+    fontWeight: '700',
   },
   enhancedInputContainer: {
     flexDirection: 'row',

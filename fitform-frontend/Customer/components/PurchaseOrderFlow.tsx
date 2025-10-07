@@ -120,6 +120,8 @@ export default function PurchaseOrderFlow() {
   const [showCounterOfferModal, setShowCounterOfferModal] = useState(false);
   const [counterOfferAmount, setCounterOfferAmount] = useState('');
   const [counterOfferNotes, setCounterOfferNotes] = useState('');
+  const [reviewAgreementAccepted, setReviewAgreementAccepted] = useState(false);
+  const [showAgreementModal, setShowAgreementModal] = useState(false);
 
   // AR Measurement states
   const [showARMeasurement, setShowARMeasurement] = useState(false);
@@ -139,6 +141,12 @@ export default function PurchaseOrderFlow() {
   const { selectedOrderForReview, clearOrderReview } = useNotificationContext();
   const { user } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (showQuotationModal) {
+      setReviewAgreementAccepted(false);
+    }
+  }, [showQuotationModal]);
 
   // AR Measurement handlers
   const handleARMeasurementComplete = (measurements: any) => {
@@ -162,14 +170,14 @@ export default function PurchaseOrderFlow() {
 
   // Complete measurement fields for manual input
   const COMPLETE_MEASUREMENT_FIELDS = [
-    { key: 'height', label: 'Height', description: 'Your total height in cm' },
-    { key: 'chest', label: 'Chest', description: 'Chest circumference at fullest point' },
-    { key: 'waist', label: 'Waist', description: 'Natural waistline circumference' },
-    { key: 'hips', label: 'Hips', description: 'Hip circumference at fullest point' },
-    { key: 'shoulders', label: 'Shoulders', description: 'Distance across shoulders' },
-    { key: 'inseam', label: 'Inseam', description: 'Inner leg length from crotch to ankle' },
-    { key: 'armLength', label: 'Arm Length', description: 'Shoulder to wrist length' },
-    { key: 'neck', label: 'Neck', description: 'Neck circumference' }
+    { key: 'height', label: 'Height' },
+    { key: 'chest', label: 'Chest' },
+    { key: 'waist', label: 'Waist' },
+    { key: 'hips', label: 'Hips' },
+    { key: 'shoulders', label: 'Shoulders' },
+    { key: 'inseam', label: 'Inseam' },
+    { key: 'armLength', label: 'Arm Length' },
+    { key: 'neck', label: 'Neck' }
   ];
 
   // Helper functions for status display
@@ -578,6 +586,96 @@ export default function PurchaseOrderFlow() {
         </View>
       )}
 
+      {/* Purchase Agreement Full Terms Modal */}
+      <Modal
+        visible={showAgreementModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowAgreementModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { fontSize: 18 }]}>Purchase Agreement & Terms</Text>
+            <TouchableOpacity
+              onPress={() => setShowAgreementModal(false)}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color={Colors.text.primary} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.orderDetailCard}>
+              <View style={[styles.orderDetailHeader, { alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }]}>
+                <View style={styles.agreementIconContainer}>
+                  <Ionicons name="shield-checkmark" size={40} color={Colors.primary} />
+                </View>
+                <Text style={[styles.orderDetailTitle, { textAlign: 'center', marginRight: 0 }]}>Purchase Agreement</Text>
+                <Text style={styles.agreementSubtitle}>
+                  Please read and understand the following terms before proceeding
+                </Text>
+              </View>
+
+              <View style={styles.agreementTermsContainer}>
+                <View style={styles.agreementTermCard}>
+                  <View style={styles.agreementTermHeader}>
+                    <Ionicons name="card" size={20} color={Colors.primary} />
+                    <Text style={styles.agreementTermTitle}>Down Payment</Text>
+                  </View>
+                  <Text style={styles.agreementTermDescription}>
+                    A 50% down payment is required to secure your order and begin production.
+                  </Text>
+                </View>
+
+                <View style={styles.agreementTermCard}>
+                  <View style={styles.agreementTermHeader}>
+                    <Ionicons name="cash" size={20} color={Colors.success} />
+                    <Text style={styles.agreementTermTitle}>Final Payment</Text>
+                  </View>
+                  <Text style={styles.agreementTermDescription}>
+                    Full payment is required upon pickup. No partial payments will be accepted.
+                  </Text>
+                </View>
+
+                <View style={styles.agreementTermCard}>
+                  <View style={styles.agreementTermHeader}>
+                    <Ionicons name="person" size={20} color={Colors.primary} />
+                    <Text style={styles.agreementTermTitle}>Valid ID Requirement</Text>
+                  </View>
+                  <Text style={styles.agreementTermDescription}>
+                    Please bring any valid government-issued ID upon pickup.
+                  </Text>
+                </View>
+
+                <View style={styles.agreementTermCard}>
+                  <View style={styles.agreementTermHeader}>
+                    <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+                    <Text style={styles.agreementTermTitle}>Quality Assurance</Text>
+                  </View>
+                  <Text style={styles.agreementTermDescription}>
+                    All garments undergo quality inspection before pickup to ensure satisfaction.
+                  </Text>
+                </View>
+              </View>
+              
+              <View style={styles.agreementFooter}>
+                <Ionicons name="alert-circle" size={18} color={Colors.warning} />
+                <Text style={styles.agreementFooterText}>
+                  Payment terms must be agreed upon before order processing begins.
+                </Text>
+              </View>
+            </View>
+          </ScrollView>
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={() => setShowAgreementModal(false)}
+            >
+              <Text style={styles.saveButtonText}>Got It</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Enhanced Quotation Modal */}
       {showQuotationModal && selectedOrder && (
         <Modal
@@ -606,7 +704,11 @@ export default function PurchaseOrderFlow() {
             </View>
 
             {/* Enhanced Content */}
-            <ScrollView style={styles.enhancedModalContent} showsVerticalScrollIndicator={false}>
+            <ScrollView 
+              style={styles.enhancedModalContent} 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.enhancedModalScrollContent}
+            >
               {/* Quotation Summary Card */}
               <View style={styles.quotationSummaryCard}>
                 <View style={styles.quotationSummaryHeader}>
@@ -692,6 +794,46 @@ export default function PurchaseOrderFlow() {
                   <Text style={styles.enhancedCounterOfferButtonText}>Make Counter Offer</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Purchase Agreement Section */}
+              <View style={styles.agreementSection}>
+                <View style={styles.agreementContainer}>
+                  <View style={styles.agreementHeader}>
+                    <Ionicons name="shield-checkmark" size={24} color={Colors.primary} />
+                    <Text style={styles.agreementHeaderText}>Terms & Conditions</Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.viewAgreementButton}
+                    onPress={() => setShowAgreementModal(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="document-text-outline" size={20} color={Colors.primary} />
+                    <Text style={styles.viewAgreementButtonText}>View Complete Terms</Text>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.agreementCheckbox, reviewAgreementAccepted && styles.agreementCheckboxAccepted]}
+                    onPress={() => setReviewAgreementAccepted(!reviewAgreementAccepted)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.checkboxContainer, reviewAgreementAccepted && styles.checkboxContainerAccepted]}>
+                      {reviewAgreementAccepted && (
+                        <Ionicons name="checkmark" size={18} color={Colors.text.inverse} />
+                      )}
+                    </View>
+                    <View style={styles.agreementTextContainer}>
+                      <Text style={styles.agreementCheckboxText}>
+                        I have read and agree to the <Text style={styles.agreementLink}>terms and conditions</Text> of the purchase agreement
+                      </Text>
+                      <Text style={styles.agreementNote}>
+                        This includes understanding the payment terms and pickup requirements
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </ScrollView>
 
             {/* Enhanced Action Buttons */}
@@ -720,7 +862,8 @@ export default function PurchaseOrderFlow() {
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={styles.enhancedAcceptButton}
+                style={[styles.enhancedAcceptButton, !reviewAgreementAccepted && { opacity: 0.6 }]}
+                disabled={!reviewAgreementAccepted}
                 onPress={async () => { 
                   try {
                     await apiService.request(`/purchases/${selectedOrder?.id}/accept-quotation`, { method: 'POST' }); 
@@ -796,8 +939,10 @@ export default function PurchaseOrderFlow() {
                   </Text>
                 </View>
                 <View style={styles.originalQuotationDetails}>
-                  <Text style={styles.originalQuotationDetail}>Order ID: #{selectedOrder?.id}</Text>
-                  <Text style={styles.originalQuotationDetail}>Clothing: {selectedOrder?.clothing_type || 'N/A'}</Text>
+                  <View style={styles.originalQuotationDetailsRow}>
+                    <Text style={styles.originalQuotationDetail}>Order ID: #{selectedOrder?.id}</Text>
+                    <Text style={styles.originalQuotationDetail}>Clothing: {selectedOrder?.clothing_type || 'N/A'}</Text>
+                  </View>
                 </View>
               </View>
 
@@ -1084,7 +1229,6 @@ export default function PurchaseOrderFlow() {
                     {COMPLETE_MEASUREMENT_FIELDS.map(field => (
                       <View key={field.key} style={styles.measurementGridItem}>
                         <Text style={styles.measurementFieldLabel}>{field.label}</Text>
-                        <Text style={styles.measurementFieldDescription}>{field.description}</Text>
               <TextInput 
                           style={styles.measurementInput}
                           placeholder={`${field.label} (cm)`}
@@ -1892,6 +2036,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
   },
+  modalFooter: {
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
+  },
+  saveButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  saveButtonText: {
+    color: Colors.text.inverse,
+    fontSize: 16,
+    fontWeight: '600',
+  },
   formSection: {
     marginBottom: 32,
   },
@@ -2062,7 +2231,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
   },
@@ -2075,6 +2246,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#014D40',
+    marginTop: 8,
   },
   closeButton: {
     padding: 10,
@@ -2480,6 +2652,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
+    paddingTop: 28,
     backgroundColor: Colors.background.card,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border.light,
@@ -2497,6 +2670,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    marginTop: 8,
   },
   enhancedModalTitleContainer: {
     flex: 1,
@@ -2505,7 +2679,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: Colors.text.primary,
-    marginTop: 16,
+    marginTop: 8,
     marginBottom: 2,
   },
   enhancedModalSubtitle: {
@@ -2530,6 +2704,11 @@ const styles = StyleSheet.create({
   enhancedModalContent: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingBottom: 120,
+  },
+  enhancedModalScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 40,
   },
   enhancedModalFooter: {
     flexDirection: 'row',
@@ -2803,12 +2982,20 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   originalQuotationDetails: {
+    gap: 12,
+  },
+  originalQuotationDetailsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light,
   },
   originalQuotationDetail: {
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: Colors.text.primary,
+    fontWeight: '700',
   },
 
   // Counter Offer Form Card
@@ -2955,5 +3142,169 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
+  },
+
+  // Purchase Agreement Styles
+  agreementSection: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.border.light + '30',
+  },
+  agreementContainer: {
+    marginTop: 16,
+    marginBottom: 20,
+  },
+  agreementHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  agreementHeaderText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginLeft: 8,
+  },
+  viewAgreementButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background.card,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  viewAgreementButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginLeft: 8,
+  },
+  agreementIconContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: Colors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  agreementSubtitle: {
+    fontSize: 16,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 22,
+  },
+  agreementTermsContainer: {
+    gap: 12,
+  },
+  agreementTermCard: {
+    backgroundColor: Colors.background.light,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.border.light + '20',
+  },
+  agreementTermHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  agreementTermTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginLeft: 8,
+  },
+  agreementTermItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  agreementTermText: {
+    fontSize: 14,
+    color: Colors.text.primary,
+    marginLeft: 8,
+  },
+  agreementTermDescription: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    lineHeight: 20,
+  },
+  agreementFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.warning + '10',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.warning + '30',
+    marginTop: 20,
+  },
+  agreementFooterText: {
+    fontSize: 14,
+    color: Colors.warning,
+    fontWeight: '500',
+    marginLeft: 12,
+    flex: 1,
+    lineHeight: 20,
+  },
+  agreementCheckbox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
+  },
+  agreementCheckboxAccepted: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + '10',
+  },
+  checkboxContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: Colors.border.light,
+    backgroundColor: Colors.background.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  checkboxContainerAccepted: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  agreementTextContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  agreementCheckboxText: {
+    fontSize: 14,
+    color: Colors.text.primary,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  agreementLink: {
+    color: Colors.primary,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  agreementNote: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
 }); 

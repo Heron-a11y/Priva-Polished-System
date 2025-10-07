@@ -796,7 +796,7 @@ const OrdersScreen = () => {
                       </TouchableOpacity>
                       
                       <TouchableOpacity
-                        style={{ backgroundColor: '#f44336', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 16, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 48 }}
+                        style={{ backgroundColor: Colors.background.light, borderRadius: 12, paddingVertical: 16, paddingHorizontal: 16, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 48, borderWidth: 1, borderColor: Colors.border.light, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3 }}
                         onPress={async () => {
                           try {
                             const endpoint = selectedOrder.type === 'Purchase' 
@@ -846,8 +846,8 @@ const OrdersScreen = () => {
                           }
                         }}
                       >
-                        <Ionicons name="close-circle" size={18} color="#fff" />
-                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15, flexShrink: 0 }}>Reject</Text>
+                        <Ionicons name="close-circle" size={18} color={Colors.text.primary} />
+                        <Text style={{ color: Colors.text.primary, fontWeight: 'bold', fontSize: 15, flexShrink: 0 }}>Reject</Text>
                       </TouchableOpacity>
                     </View>
                   </>

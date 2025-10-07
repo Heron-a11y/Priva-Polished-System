@@ -68,9 +68,9 @@ const ManageAppointmentsScreen = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('cards');
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [imageLoadErrors, setImageLoadErrors] = useState<{ [id: number]: boolean }>({});
 
   useEffect(() => {
     fetchData();
@@ -92,6 +92,9 @@ const ManageAppointmentsScreen = () => {
       
       setAppointments(Array.isArray(appointmentsRes) ? appointmentsRes : appointmentsRes.data || []);
       setStats(statsRes);
+      
+      // Reset image load errors when fetching new data
+      setImageLoadErrors({});
     } catch (e) {
       console.error('Error fetching data:', e);
       setAppointments([]);
@@ -236,7 +239,7 @@ const ManageAppointmentsScreen = () => {
       <View key={appointment.id} style={styles.appointmentCard}>
         <View style={styles.cardHeader}>
           <View style={styles.customerInfo}>
-            {appointment.customer_profile_image ? (
+            {appointment.customer_profile_image && !imageLoadErrors[appointment.id] ? (
               <Image 
                 source={{ 
                   uri: appointment.customer_profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.105:8000'),
@@ -244,10 +247,16 @@ const ManageAppointmentsScreen = () => {
                 }} 
                 style={styles.customerProfileImage}
                 resizeMode="cover"
-                onError={(error) => console.log('❌ Customer profile image error:', error)}
+                onError={(error) => {
+                  console.log('❌ Customer profile image error for appointment', appointment.id, ':', error);
+                  setImageLoadErrors(prev => ({ ...prev, [appointment.id]: true }));
+                }}
+                onLoad={() => console.log('✅ Customer profile image loaded successfully for appointment', appointment.id)}
               />
             ) : (
-              <Ionicons name="person-circle" size={20} color="#014D40" />
+              <View style={styles.profileIconFallback}>
+                <Ionicons name="person-circle" size={20} color="#014D40" />
+              </View>
             )}
             <Text style={styles.customerName}>
               {appointment.customer_name || appointment.customer || 'Unknown Customer'}
@@ -332,60 +341,6 @@ const ManageAppointmentsScreen = () => {
     );
   };
 
-  const renderTableView = () => (
-    <ScrollView 
-      style={styles.tableScroll} 
-      horizontal={true} 
-      contentContainerStyle={{ minWidth: isTablet ? 900 : 700 }}
-      showsHorizontalScrollIndicator={false}
-    >
-      <View style={styles.table}>
-        <View style={styles.tableHeader}>
-          <Text style={[styles.headerCell, { width: 50 }]}>ID</Text>
-          <Text style={[styles.headerCell, { width: 120 }]}>Customer</Text>
-          <Text style={[styles.headerCell, { width: 140 }]}>Date</Text>
-          <Text style={[styles.headerCell, { width: 120 }]}>Service</Text>
-          <Text style={[styles.headerCell, { width: 180 }]}>Notes</Text>
-          <Text style={[styles.headerCell, { width: 90 }]}>Status</Text>
-          <Text style={[styles.headerCell, { width: 120 }]}>Actions</Text>
-        </View>
-        {filteredAppointments.map((a) => (
-          <View key={a.id} style={styles.tableRow}>
-            <Text style={[styles.cell, { width: 50 }]}>{a.id}</Text>
-            <Text style={[styles.cell, { width: 120 }]}>{a.customer_name || a.customer || '-'}</Text>
-            <Text style={[styles.cell, { width: 140 }]}>
-              {formatDate(a.appointment_date).date} {formatDate(a.appointment_date).time}
-            </Text>
-            <Text style={[styles.cell, { width: 120 }]}>{a.service_type}</Text>
-            <Text style={[styles.cell, { width: 180 }]}>{a.notes || '-'}</Text>
-            <Text style={[styles.cell, { width: 90, color: STATUS_COLORS[a.status as keyof typeof STATUS_COLORS] || '#333', fontWeight: 'bold' }]}>
-              {a.status}
-            </Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', width: 120 }}>
-              {a.status === 'pending' && (
-                <>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: '#4CAF50' }]}
-                    disabled={actionLoading[a.id]}
-                    onPress={() => handleStatus(a.id, 'confirmed')}
-                  >
-                    <Text style={styles.actionBtnText}>Confirm</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: '#F44336', marginLeft: 6 }]}
-                    disabled={actionLoading[a.id]}
-                    onPress={() => handleStatus(a.id, 'cancelled')}
-                  >
-                    <Text style={styles.actionBtnText}>Cancel</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
-          </View>
-        ))}
-      </View>
-    </ScrollView>
-  );
 
   if (loading) {
     return (
@@ -410,20 +365,6 @@ const ManageAppointmentsScreen = () => {
           <Text style={styles.title}>Manage Appointments</Text>
         </View>
         
-        <View style={styles.viewToggle}>
-          <TouchableOpacity
-            style={[styles.toggleButton, viewMode === 'cards' && styles.toggleButtonActive]}
-            onPress={() => setViewMode('cards')}
-          >
-            <Ionicons name="grid" size={20} color={viewMode === 'cards' ? '#fff' : '#014D40'} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.toggleButton, viewMode === 'table' && styles.toggleButtonActive]}
-            onPress={() => setViewMode('table')}
-          >
-            <Ionicons name="list" size={20} color={viewMode === 'table' ? '#fff' : '#014D40'} />
-          </TouchableOpacity>
-        </View>
       </View>
       
       {/* Statistics Cards */}
@@ -508,12 +449,10 @@ const ManageAppointmentsScreen = () => {
             }
           </Text>
         </View>
-      ) : viewMode === 'cards' ? (
+      ) : (
         <View style={styles.cardsContainer}>
           {filteredAppointments.map(renderAppointmentCard)}
         </View>
-      ) : (
-        renderTableView()
       )}
       
       {/* Appointment Details Modal */}
@@ -549,9 +488,29 @@ const ManageAppointmentsScreen = () => {
                 </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Customer:</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedAppointment.customer_name || selectedAppointment.customer || 'Unknown Customer'}
-                    </Text>
+                    <View style={styles.customerDetailContainer}>
+                      {selectedAppointment.customer_profile_image && !imageLoadErrors[selectedAppointment.id] ? (
+                        <Image 
+                          source={{ 
+                            uri: selectedAppointment.customer_profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.105:8000'),
+                            cache: 'force-cache'
+                          }} 
+                          style={styles.modalCustomerProfileImage}
+                          resizeMode="cover"
+                          onError={(error) => {
+                            console.log('❌ Modal customer profile image error:', error);
+                            setImageLoadErrors(prev => ({ ...prev, [selectedAppointment.id]: true }));
+                          }}
+                        />
+                      ) : (
+                        <View style={styles.modalProfileIconFallback}>
+                          <Ionicons name="person-circle" size={20} color="#014D40" />
+                        </View>
+                      )}
+                      <Text style={styles.detailValue}>
+                        {selectedAppointment.customer_name || selectedAppointment.customer || 'Unknown Customer'}
+                      </Text>
+                    </View>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Date:</Text>
@@ -685,26 +644,13 @@ const styles = StyleSheet.create({
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 12,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#014D40',
-  },
-  viewToggle: {
-    flexDirection: 'row',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: 4,
-  },
-  toggleButton: {
-    padding: 8,
-    borderRadius: 6,
-    marginHorizontal: 2,
-  },
-  toggleButtonActive: {
-    backgroundColor: '#014D40',
   },
   statsContainer: {
     paddingHorizontal: 20,
@@ -899,9 +845,43 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   customerProfileImage: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#014D40',
+    backgroundColor: '#f0f0f0',
+  },
+  profileIconFallback: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#014D40',
+  },
+  customerDetailContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalCustomerProfileImage: {
     width: 20,
     height: 20,
     borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#014D40',
+    backgroundColor: '#f0f0f0',
+  },
+  modalProfileIconFallback: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#014D40',
   },
@@ -951,61 +931,6 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
     lineHeight: 20,
-  },
-  // Table styles (existing)
-  tableScroll: { 
-    flex: 1,
-    marginHorizontal: 20,
-  },
-  table: { 
-    backgroundColor: '#fff', 
-    borderRadius: 12, 
-    padding: 8, 
-    shadowColor: '#000', 
-    shadowOpacity: 0.04, 
-    shadowRadius: 4, 
-    elevation: 1, 
-    minWidth: isTablet ? 900 : 700 
-  },
-  tableHeader: { 
-    flexDirection: 'row', 
-    backgroundColor: '#014D40', 
-    borderRadius: 8, 
-    marginBottom: 6, 
-    paddingVertical: 7 
-  },
-  headerCell: { 
-    color: '#FFD700', 
-    fontWeight: 'bold', 
-    fontSize: 13, 
-    textAlign: 'center' 
-  },
-  tableRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    borderRadius: 8, 
-    backgroundColor: '#fcfce6', 
-    marginBottom: 5, 
-    paddingVertical: 7 
-  },
-  cell: { 
-    fontSize: 12, 
-    color: '#014D40', 
-    textAlign: 'center', 
-    paddingHorizontal: 2 
-  },
-  actionBtn: { 
-    borderRadius: 6, 
-    paddingVertical: 4, 
-    paddingHorizontal: 10, 
-    minWidth: 60, 
-    alignItems: 'center', 
-    justifyContent: 'center' 
-  },
-  actionBtnText: { 
-    color: '#fff', 
-    fontWeight: 'bold', 
-    fontSize: 12 
   },
   // View Details Button
   viewDetailsButton: {
