@@ -18,6 +18,9 @@ interface PasswordInputProps {
   style?: any;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   autoCorrect?: boolean;
+  returnKeyType?: 'done' | 'go' | 'next' | 'search' | 'send';
+  onSubmitEditing?: () => void;
+  blurOnSubmit?: boolean;
 }
 
 const PasswordInput: React.FC<PasswordInputProps> = ({
@@ -29,6 +32,9 @@ const PasswordInput: React.FC<PasswordInputProps> = ({
   style,
   autoCapitalize = 'none',
   autoCorrect = false,
+  returnKeyType = 'done',
+  onSubmitEditing,
+  blurOnSubmit = true,
 }) => {
   const [showPassword, setShowPassword] = useState(false);
 
@@ -53,6 +59,9 @@ const PasswordInput: React.FC<PasswordInputProps> = ({
           autoCapitalize={autoCapitalize}
           autoCorrect={autoCorrect}
           placeholderTextColor="#999"
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
+          blurOnSubmit={blurOnSubmit}
         />
         <TouchableOpacity
           style={styles.eyeButton}

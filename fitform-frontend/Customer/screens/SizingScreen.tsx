@@ -17,6 +17,8 @@ import { Colors } from '../../constants/Colors';
 import apiService from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
+import { MeasurementData, measurementsToStrings, normalizeMeasurementData, mapMeasurementsToCategory } from '../../types/measurements';
 
 const { width } = Dimensions.get('window');
 
@@ -43,35 +45,211 @@ export default function SizingScreen() {
   const [activeTab, setActiveTab] = useState<'recommendations' | 'charts' | 'measurements'>('recommendations');
   const [recommendations, setRecommendations] = useState<SizeRecommendation[]>([]);
   const [standards, setStandards] = useState<SizingStandard[]>([]);
+  const [allStandards, setAllStandards] = useState<SizingStandard[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedGender, setSelectedGender] = useState('all');
   const [customCategory, setCustomCategory] = useState('');
   const [showCustomCategoryModal, setShowCustomCategoryModal] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isCategoryExpanded, setIsCategoryExpanded] = useState(false);
+  const [isGenderExpanded, setIsGenderExpanded] = useState(false);
+  const [isMeasurementsCategoryExpanded, setIsMeasurementsCategoryExpanded] = useState(false);
+  const [isMeasurementsGenderExpanded, setIsMeasurementsGenderExpanded] = useState(false);
   
   // Measurement form state
   const [measurements, setMeasurements] = useState<Record<string, string>>({});
+  const [latestMeasurements, setLatestMeasurements] = useState<MeasurementData | null>(null);
+  const [loadingLatestMeasurements, setLoadingLatestMeasurements] = useState(false);
+  const [measurementsPopulated, setMeasurementsPopulated] = useState(false);
 
   // Update measurements when category changes
   const updateMeasurementsForCategory = (newCategory: string) => {
     console.log('🔄 updateMeasurementsForCategory called with:', newCategory);
     console.log('📊 Current measurements before update:', measurements);
+    console.log('📊 Measurements populated flag:', measurementsPopulated);
     
     if (newCategory === 'all' || newCategory === 'custom') {
       // Reset to empty measurements for 'all' or 'custom'
       console.log('🔄 Resetting measurements for generic category');
       setMeasurements({});
+      setMeasurementsPopulated(false);
     } else {
+      // If measurements were just populated, don't override them
+      if (measurementsPopulated) {
+        console.log('🔄 Skipping category update - measurements already populated');
+        return;
+      }
+      
       // Get category-specific measurements
       const categoryMeasurements = getDefaultMeasurements(newCategory);
       console.log('🔄 Setting category measurements for', newCategory, ':', categoryMeasurements);
-      setMeasurements(categoryMeasurements);
+      
+      // Preserve existing measurements that have values, only set empty fields
+      const updatedMeasurements = { ...categoryMeasurements };
+      Object.keys(measurements).forEach(key => {
+        if (measurements[key] && measurements[key].trim() !== '') {
+          updatedMeasurements[key] = measurements[key];
+        }
+      });
+      
+      // Ensure all required fields are present
+      const requiredFields = getRequiredFieldsForCategory(newCategory);
+      requiredFields.forEach(field => {
+        if (!updatedMeasurements[field]) {
+          updatedMeasurements[field] = '';
+        }
+      });
+      
+      console.log('🔄 Preserving existing measurements:', updatedMeasurements);
+      setMeasurements(updatedMeasurements);
+    }
+  };
+
+  // Handle category selection with dynamic filtering
+  const handleCategorySelect = (category: string) => {
+    console.log('🎯 Category selected:', category);
+    
+    if (category === 'custom') {
+      setShowCustomCategoryModal(true);
+      console.log('📝 Opening custom category modal');
+    } else {
+      console.log('🔄 Setting predefined category:', category);
+      setSelectedCategory(category);
+      setCustomCategory('');
+      updateMeasurementsForCategory(category);
+      
+      // If a specific category is selected, filter available genders
+      if (category !== 'all') {
+        const availableGenders = getAvailableGenders(category);
+        // If current selected gender is not available for this category, reset to 'all'
+        if (!availableGenders.includes(selectedGender) && selectedGender !== 'all') {
+          setSelectedGender('all');
+        }
+      }
+    }
+  };
+
+  // Handle gender selection with dynamic filtering
+  const handleGenderSelect = (gender: string) => {
+    setSelectedGender(gender);
+    
+    // If a specific gender is selected, filter available categories
+    if (gender !== 'all') {
+      const availableCategories = getAvailableCategories(gender);
+      // If current selected category is not available for this gender, reset to 'all'
+      if (!availableCategories.includes(selectedCategory) && selectedCategory !== 'all') {
+        setSelectedCategory('all');
+        updateMeasurementsForCategory('all');
+      }
     }
   };
 
   const categories = ['all', 'shirts', 'pants', 'dresses', 'jackets', 'skirts', 'shoes', 'hats', 'suits', 'activewear', 'custom'];
   const genders = ['all', 'male', 'female', 'unisex'];
+
+  // Dynamic availability mappings based on actual size chart data
+  const getDynamicCategoryGenderAvailability = () => {
+    const availability: Record<string, string[]> = {};
+    
+    // Initialize with all categories
+    categories.forEach(category => {
+      if (category !== 'all') {
+        availability[category] = [];
+      }
+    });
+    
+    // Populate based on actual size chart data
+    allStandards.forEach(standard => {
+      if (standard.category && standard.gender) {
+        if (!availability[standard.category]) {
+          availability[standard.category] = [];
+        }
+        if (!availability[standard.category].includes(standard.gender)) {
+          availability[standard.category].push(standard.gender);
+        }
+      }
+    });
+    
+    return availability;
+  };
+
+  const getDynamicGenderCategoryAvailability = () => {
+    const availability: Record<string, string[]> = {};
+    
+    // Initialize with all genders
+    genders.forEach(gender => {
+      if (gender !== 'all') {
+        availability[gender] = [];
+      }
+    });
+    
+    // Populate based on actual size chart data
+    allStandards.forEach(standard => {
+      if (standard.category && standard.gender) {
+        if (!availability[standard.gender]) {
+          availability[standard.gender] = [];
+        }
+        if (!availability[standard.gender].includes(standard.category)) {
+          availability[standard.gender].push(standard.category);
+        }
+      }
+    });
+    
+    return availability;
+  };
+
+  // Get current dynamic availability mappings
+  const categoryGenderAvailability = getDynamicCategoryGenderAvailability();
+  const genderCategoryAvailability = getDynamicGenderCategoryAvailability();
+
+  // Get available categories based on selected gender
+  const getAvailableCategories = (gender: string) => {
+    if (gender === 'all') {
+      // Return all categories that have at least one size chart available
+      return categories.filter(cat => 
+        cat !== 'all' && allStandards.some(standard => standard.category === cat)
+      );
+    }
+    
+    // Return categories that have size charts for this specific gender
+    const availableCategories = allStandards
+      .filter(standard => standard.gender === gender)
+      .map(standard => standard.category)
+      .filter((category, index, array) => array.indexOf(category) === index); // Remove duplicates
+    
+    return availableCategories;
+  };
+
+  // Get available genders based on selected category
+  const getAvailableGenders = (category: string) => {
+    if (category === 'all') {
+      // Return all genders that have at least one size chart available
+      return genders.filter(gender => 
+        gender !== 'all' && allStandards.some(standard => standard.gender === gender)
+      );
+    }
+    
+    // Return genders that have size charts for this specific category
+    const availableGenders = allStandards
+      .filter(standard => standard.category === category)
+      .map(standard => standard.gender)
+      .filter((gender, index, array) => array.indexOf(gender) === index); // Remove duplicates
+    
+    return availableGenders;
+  };
+
+  // Check if a category-gender combination is available
+  const isCombinationAvailable = (category: string, gender: string) => {
+    if (category === 'all' || gender === 'all') return true;
+    
+    // Check if there are actual size charts available for this combination
+    const hasSizeCharts = allStandards.some(standard => 
+      standard.category === category && standard.gender === gender
+    );
+    
+    return hasSizeCharts;
+  };
 
   // Get category icon
   const getCategoryIcon = (category: string): string => {
@@ -182,6 +360,141 @@ export default function SizingScreen() {
     }
   };
 
+  // Load all size charts on component mount for dynamic filtering
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      loadAllSizeCharts();
+      loadLatestMeasurements();
+    }
+  }, [isAuthenticated, isLoading]);
+
+  // Load latest measurements for the user
+  const loadLatestMeasurements = async () => {
+    if (!isAuthenticated) {
+      return;
+    }
+    
+    try {
+      setLoadingLatestMeasurements(true);
+      console.log('🔄 Loading latest measurements...');
+      const response = await apiService.getLatestMeasurements();
+      console.log('🔍 API Response:', response);
+      if (response.success && response.data) {
+        console.log('✅ Latest measurements loaded:', response.data);
+        console.log('📊 Available fields:', Object.keys(response.data));
+        
+        // Handle nested measurements structure
+        const measurementsData = response.data.measurements || response.data;
+        console.log('📏 Nested measurements:', measurementsData);
+        console.log('📊 Measurement fields:', Object.keys(measurementsData));
+        
+        setLatestMeasurements(response.data);
+      } else {
+        console.log('ℹ️ No latest measurements found');
+        setLatestMeasurements(null);
+      }
+    } catch (error) {
+      console.error('❌ Error loading latest measurements:', error);
+      setLatestMeasurements(null);
+    } finally {
+      setLoadingLatestMeasurements(false);
+    }
+  };
+
+  // Use latest measurements to populate current form
+  const useLatestMeasurements = () => {
+    try {
+      if (!latestMeasurements) {
+        Alert.alert('No Latest Measurements', 'No previous measurements found. Please enter your measurements manually.');
+        return;
+      }
+
+      if (selectedCategory === 'all' || selectedCategory === 'custom') {
+        Alert.alert('Select Category', 'Please select a specific category first to use latest measurements.');
+        return;
+      }
+
+      // Validate measurements data
+      if (typeof latestMeasurements !== 'object' || Array.isArray(latestMeasurements)) {
+        console.error('❌ Invalid measurements data type:', typeof latestMeasurements);
+        Alert.alert('Error', 'Invalid measurement data. Please try again.');
+        return;
+      }
+
+    // Map API measurements to category-specific form fields with intelligent calculations
+    console.log('🔄 Mapping measurements for category:', selectedCategory);
+    console.log('📊 Available measurements:', latestMeasurements);
+    
+    // Extract measurements from the nested structure
+    const actualMeasurements = latestMeasurements.measurements || latestMeasurements;
+    console.log('📏 Extracted measurements:', actualMeasurements);
+    
+    // Ensure we have a proper measurements object
+    let newMeasurements: Record<string, string> = {};
+    if (typeof actualMeasurements === 'object' && actualMeasurements !== null && !Array.isArray(actualMeasurements)) {
+      console.log('📏 Base measurements - Height:', actualMeasurements.height, 'Chest:', actualMeasurements.chest, 'Waist:', actualMeasurements.waist);
+      console.log('📏 Unit system from API:', latestMeasurements.unit_system);
+      newMeasurements = mapMeasurementsToCategory(actualMeasurements, selectedCategory, latestMeasurements.unit_system?.toString());
+    } else {
+      console.error('❌ Invalid measurements structure:', actualMeasurements);
+      Alert.alert('Error', 'Invalid measurement data structure. Please try again.');
+      return;
+    }
+    
+    // Ensure all required fields for the category are present
+    const requiredFields = getRequiredFieldsForCategory(selectedCategory);
+    const completeMeasurements = { ...newMeasurements };
+    
+    // Add any missing required fields with empty values
+    requiredFields.forEach(field => {
+      if (!completeMeasurements[field]) {
+        completeMeasurements[field] = '';
+      }
+    });
+    
+    console.log('🧮 Calculated measurements for', selectedCategory, ':', completeMeasurements);
+    console.log('📐 Calculation details:');
+    Object.entries(completeMeasurements).forEach(([field, value]) => {
+      console.log(`  ${field}: ${value}cm`);
+    });
+    
+    setMeasurements(completeMeasurements);
+    setMeasurementsPopulated(true); // Mark measurements as populated
+    
+    // Show success message with calculation details
+    const filledFields = Object.keys(completeMeasurements).filter(key => 
+      completeMeasurements[key] && completeMeasurements[key].trim() !== ''
+    );
+    
+    // Determine the original unit system for the message
+    const unitSystemStr = latestMeasurements.unit_system?.toString() || '';
+    const isInches = unitSystemStr === 'inches';
+    const unitLabel = isInches ? 'inches' : 'cm';
+    
+    const calculationDetails = filledFields.map(field => {
+      const value = completeMeasurements[field];
+      return `${field}: ${value}${unitLabel}`;
+    }).join('\n');
+    
+    const unitMessage = isInches ? 
+      '\n📏 Applied with proper allowances (in inches)' : 
+      '\n📏 Applied with proper allowances (in cm)';
+    
+      Alert.alert(
+        'Smart Measurements Applied! 🧮', 
+        `Intelligent calculations completed for ${selectedCategory}:\n\n${calculationDetails}${unitMessage}\n\n✨ All measurements include proper allowances for comfortable fit!`,
+        [{ text: 'OK', style: 'default' }]
+      );
+    } catch (error) {
+      console.error('❌ Error in useLatestMeasurements:', error);
+      Alert.alert(
+        'Error', 
+        'Failed to apply latest measurements. Please try again or enter measurements manually.',
+        [{ text: 'OK', style: 'default' }]
+      );
+    }
+  };
+
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
       if (activeTab === 'recommendations') {
@@ -236,6 +549,24 @@ export default function SizingScreen() {
     }
   };
 
+  // Load all available size charts to determine dynamic filtering
+  const loadAllSizeCharts = async () => {
+    if (!isAuthenticated) {
+      return;
+    }
+    
+    try {
+      console.log('🔄 Loading all available size charts for dynamic filtering...');
+      const response = await apiService.getSizeCharts('all', 'all');
+      if (response.success) {
+        console.log('✅ All size charts loaded:', response.data.length, 'standards found');
+        setAllStandards(response.data);
+      }
+    } catch (error) {
+      console.error('❌ Error loading all size charts:', error);
+    }
+  };
+
   const loadSizeCharts = async () => {
     if (!isAuthenticated) {
       Alert.alert('Error', 'Please log in to view size charts');
@@ -267,19 +598,6 @@ export default function SizingScreen() {
     }
   };
 
-  const handleCategorySelect = (category: string) => {
-    console.log('🎯 Category selected:', category);
-    if (category === 'custom') {
-      setShowCustomCategoryModal(true);
-      console.log('📝 Opening custom category modal');
-    } else {
-      console.log('🔄 Setting predefined category:', category);
-      setSelectedCategory(category);
-      setCustomCategory('');
-      // Update measurements for the selected category
-      updateMeasurementsForCategory(category);
-    }
-  };
 
   const handleCustomCategorySubmit = () => {
     if (customCategory.trim()) {
@@ -320,6 +638,11 @@ export default function SizingScreen() {
       Object.entries(measurements).forEach(([key, value]) => {
         numericMeasurements[key] = parseFloat(value);
       });
+      
+      // Ensure chest field is always present for API compatibility
+      if (!numericMeasurements.hasOwnProperty('chest')) {
+        numericMeasurements.chest = 0;
+      }
       
       // Debug logging
       console.log('🔍 Debug - Measurements being sent to API:');
@@ -418,86 +741,146 @@ export default function SizingScreen() {
     </View>
   );
 
-   const renderSizeCharts = () => (
-     <View style={styles.tabContent}>
-       <View style={styles.filterContainer}>
-         <View style={styles.filterRow}>
-           <ThemedText style={styles.filterLabel}>Category:</ThemedText>
-           <View style={styles.scrollContainer}>
-             <ScrollView 
-               horizontal 
-               showsHorizontalScrollIndicator={false} 
-               style={styles.filterScroll}
-               contentContainerStyle={styles.scrollContent}
+   const renderSizeCharts = () => {
+     // Get available options based on current selections
+     const availableCategories = selectedGender === 'all' 
+       ? categories.filter(cat => cat !== 'all') // Remove 'all' from the list
+       : getAvailableCategories(selectedGender);
+     
+     const availableGenders = selectedCategory === 'all'
+       ? genders.filter(gender => gender !== 'all')
+       : getAvailableGenders(selectedCategory);
+
+     return (
+       <View style={styles.tabContent}>
+         <View style={styles.filterContainer}>
+           {/* Category Selection - Collapsible */}
+           <View style={styles.collapsibleSection}>
+             <TouchableOpacity 
+               style={styles.collapsibleHeader}
+               onPress={() => setIsCategoryExpanded(!isCategoryExpanded)}
              >
-               {categories.map((cat) => (
-                 <TouchableOpacity
-                   key={cat}
-                   style={[
-                     styles.filterChip,
-                     selectedCategory === cat && styles.filterChipActive
-                   ]}
-                   onPress={() => handleCategorySelect(cat)}
-                 >
-                   <Ionicons 
-                     name={getCategoryIcon(cat) as any} 
-                     size={16} 
-                     color={selectedCategory === cat ? Colors.text.inverse : Colors.text.secondary}
-                     style={styles.chipIcon}
-                   />
-                   <ThemedText style={[
-                     styles.filterChipText,
-                     selectedCategory === cat && styles.filterChipTextActive
-                   ]}>
-                     {cat === 'custom' ? 'Custom' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+               <View style={styles.collapsibleHeaderContent}>
+                 <ThemedText style={styles.filterLabel}>Category:</ThemedText>
+                 <View style={styles.selectedValueContainer}>
+                   <ThemedText style={styles.selectedValue}>
+                     {selectedCategory === 'all' ? 'All Categories' : selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)}
                    </ThemedText>
-                 </TouchableOpacity>
-               ))}
-             </ScrollView>
-             <View style={styles.scrollIndicator}>
-               <Ionicons name="chevron-forward" size={16} color={Colors.text.muted} />
-             </View>
+                   <Ionicons 
+                     name={isCategoryExpanded ? "chevron-up" : "chevron-down"} 
+                     size={20} 
+                     color={Colors.text.secondary} 
+                   />
+                 </View>
+               </View>
+             </TouchableOpacity>
+             
+             {isCategoryExpanded && (
+               <View style={styles.collapsibleContent}>
+                 <View style={styles.optionsGrid}>
+                   {availableCategories.map((cat) => {
+                     const isAvailable = isCombinationAvailable(cat, selectedGender);
+                     const isSelected = selectedCategory === cat;
+                     
+                     return (
+                       <TouchableOpacity
+                         key={cat}
+                         style={[
+                           styles.filterChip,
+                           isSelected && styles.filterChipActive,
+                           !isAvailable && styles.filterChipDisabled
+                         ]}
+                         onPress={() => isAvailable && handleCategorySelect(cat)}
+                         disabled={!isAvailable}
+                       >
+                         <Ionicons 
+                           name={getCategoryIcon(cat) as any} 
+                           size={16} 
+                           color={
+                             isSelected ? Colors.text.inverse : 
+                             !isAvailable ? Colors.text.muted : 
+                             Colors.text.secondary
+                           }
+                           style={styles.chipIcon}
+                         />
+                         <ThemedText style={[
+                           styles.filterChipText,
+                           isSelected && styles.filterChipTextActive,
+                           !isAvailable && styles.filterChipTextDisabled
+                         ]}>
+                           {cat === 'custom' ? 'Custom' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                         </ThemedText>
+                       </TouchableOpacity>
+                     );
+                   })}
+                 </View>
+               </View>
+             )}
            </View>
-         </View>
-        
-        <View style={styles.filterRow}>
-          <ThemedText style={styles.filterLabel}>Gender:</ThemedText>
-          <View style={styles.scrollContainer}>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false} 
-              style={styles.filterScroll}
-              contentContainerStyle={styles.scrollContent}
-            >
-              {genders.map((gender) => (
-                <TouchableOpacity
-                  key={gender}
-                  style={[
-                    styles.filterChip,
-                    selectedGender === gender && styles.filterChipActive
-                  ]}
-                  onPress={() => setSelectedGender(gender)}
-                >
-                  <Ionicons 
-                    name={getGenderIcon(gender) as any} 
-                    size={16} 
-                    color={selectedGender === gender ? Colors.text.inverse : Colors.text.secondary}
-                    style={styles.chipIcon}
-                  />
-                  <ThemedText style={[
-                    styles.filterChipText,
-                    selectedGender === gender && styles.filterChipTextActive
-                  ]}>
-                    {gender.charAt(0).toUpperCase() + gender.slice(1)}
-                  </ThemedText>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <View style={styles.scrollIndicator}>
-              <Ionicons name="chevron-forward" size={16} color={Colors.text.muted} />
-            </View>
-          </View>
-        </View>
+           
+           {/* Gender Selection - Collapsible */}
+           <View style={styles.collapsibleSection}>
+             <TouchableOpacity 
+               style={styles.collapsibleHeader}
+               onPress={() => setIsGenderExpanded(!isGenderExpanded)}
+             >
+               <View style={styles.collapsibleHeaderContent}>
+                 <ThemedText style={styles.filterLabel}>Gender:</ThemedText>
+                 <View style={styles.selectedValueContainer}>
+                   <ThemedText style={styles.selectedValue}>
+                     {selectedGender === 'all' ? 'All Genders' : selectedGender.charAt(0).toUpperCase() + selectedGender.slice(1)}
+                   </ThemedText>
+                   <Ionicons 
+                     name={isGenderExpanded ? "chevron-up" : "chevron-down"} 
+                     size={20} 
+                     color={Colors.text.secondary} 
+                   />
+                 </View>
+               </View>
+             </TouchableOpacity>
+             
+             {isGenderExpanded && (
+               <View style={styles.collapsibleContent}>
+                 <View style={styles.optionsGrid}>
+                   {availableGenders.map((gender) => {
+                     const isAvailable = isCombinationAvailable(selectedCategory, gender);
+                     const isSelected = selectedGender === gender;
+                     
+                     return (
+                       <TouchableOpacity
+                         key={gender}
+                         style={[
+                           styles.filterChip,
+                           isSelected && styles.filterChipActive,
+                           !isAvailable && styles.filterChipDisabled
+                         ]}
+                         onPress={() => isAvailable && handleGenderSelect(gender)}
+                         disabled={!isAvailable}
+                       >
+                         <Ionicons 
+                           name={getGenderIcon(gender) as any} 
+                           size={16} 
+                           color={
+                             isSelected ? Colors.text.inverse : 
+                             !isAvailable ? Colors.text.muted : 
+                             Colors.text.secondary
+                           }
+                           style={styles.chipIcon}
+                         />
+                         <ThemedText style={[
+                           styles.filterChipText,
+                           isSelected && styles.filterChipTextActive,
+                           !isAvailable && styles.filterChipTextDisabled
+                         ]}>
+                           {gender.charAt(0).toUpperCase() + gender.slice(1)}
+                         </ThemedText>
+                       </TouchableOpacity>
+                     );
+                   })}
+                 </View>
+               </View>
+             )}
+           </View>
 
         {selectedCategory !== 'all' && (
           <View style={styles.selectedCategoryInfo}>
@@ -554,88 +937,139 @@ export default function SizingScreen() {
       )}
     </View>
   );
+};
 
   const renderMeasurements = () => (
     <View style={styles.tabContent}>
       <ThemedText style={styles.sectionTitle}>Get Your Size Recommendation</ThemedText>
       
       <View style={styles.filterContainer}>
-        <View style={styles.filterRow}>
-          <ThemedText style={styles.filterLabel}>Category:</ThemedText>
-          <View style={styles.scrollContainer}>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false} 
-              style={styles.filterScroll}
-              contentContainerStyle={styles.scrollContent}
-            >
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[
-                    styles.filterChip,
-                    selectedCategory === cat && styles.filterChipActive
-                  ]}
-                  onPress={() => handleCategorySelect(cat)}
-                >
-                  <Ionicons 
-                    name={getCategoryIcon(cat) as any} 
-                    size={16} 
-                    color={selectedCategory === cat ? Colors.text.inverse : Colors.text.secondary}
-                    style={styles.chipIcon}
-                  />
-                  <ThemedText style={[
-                    styles.filterChipText,
-                    selectedCategory === cat && styles.filterChipTextActive
-                  ]}>
-                    {cat === 'custom' ? 'Custom' : cat.charAt(0).toUpperCase() + cat.slice(1)}
-                  </ThemedText>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <View style={styles.scrollIndicator}>
-              <Ionicons name="chevron-forward" size={16} color={Colors.text.muted} />
+        {/* Category Selection - Collapsible */}
+        <View style={styles.collapsibleSection}>
+          <TouchableOpacity 
+            style={styles.collapsibleHeader}
+            onPress={() => setIsMeasurementsCategoryExpanded(!isMeasurementsCategoryExpanded)}
+          >
+            <View style={styles.collapsibleHeaderContent}>
+              <ThemedText style={styles.filterLabel}>Category:</ThemedText>
+              <View style={styles.selectedValueContainer}>
+                <ThemedText style={styles.selectedValue}>
+                  {selectedCategory === 'all' ? 'All Categories' : selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)}
+                </ThemedText>
+                <Ionicons 
+                  name={isMeasurementsCategoryExpanded ? "chevron-up" : "chevron-down"} 
+                  size={20} 
+                  color={Colors.text.secondary} 
+                />
+              </View>
             </View>
-          </View>
+          </TouchableOpacity>
+          
+          {isMeasurementsCategoryExpanded && (
+            <View style={styles.collapsibleContent}>
+              <View style={styles.optionsGrid}>
+                {categories.map((cat) => {
+                  const isAvailable = isCombinationAvailable(cat, selectedGender);
+                  const isSelected = selectedCategory === cat;
+                  
+                  return (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[
+                        styles.filterChip,
+                        isSelected && styles.filterChipActive,
+                        !isAvailable && styles.filterChipDisabled
+                      ]}
+                      onPress={() => isAvailable && handleCategorySelect(cat)}
+                      disabled={!isAvailable}
+                    >
+                      <Ionicons 
+                        name={getCategoryIcon(cat) as any} 
+                        size={16} 
+                        color={
+                          isSelected ? Colors.text.inverse : 
+                          !isAvailable ? Colors.text.muted : 
+                          Colors.text.secondary
+                        }
+                        style={styles.chipIcon}
+                      />
+                      <ThemedText style={[
+                        styles.filterChipText,
+                        isSelected && styles.filterChipTextActive,
+                        !isAvailable && styles.filterChipTextDisabled
+                      ]}>
+                        {cat === 'custom' ? 'Custom' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
         </View>
         
-        <View style={styles.filterRow}>
-          <ThemedText style={styles.filterLabel}>Gender:</ThemedText>
-          <View style={styles.scrollContainer}>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false} 
-              style={styles.filterScroll}
-              contentContainerStyle={styles.scrollContent}
-            >
-              {genders.map((gender) => (
-                <TouchableOpacity
-                  key={gender}
-                  style={[
-                    styles.filterChip,
-                    selectedGender === gender && styles.filterChipActive
-                  ]}
-                  onPress={() => setSelectedGender(gender)}
-                >
-                  <Ionicons 
-                    name={getGenderIcon(gender) as any} 
-                    size={16} 
-                    color={selectedGender === gender ? Colors.text.inverse : Colors.text.secondary}
-                    style={styles.chipIcon}
-                  />
-                  <ThemedText style={[
-                    styles.filterChipText,
-                    selectedGender === gender && styles.filterChipTextActive
-                  ]}>
-                    {gender.charAt(0).toUpperCase() + gender.slice(1)}
-                  </ThemedText>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <View style={styles.scrollIndicator}>
-              <Ionicons name="chevron-forward" size={16} color={Colors.text.muted} />
+        {/* Gender Selection - Collapsible */}
+        <View style={styles.collapsibleSection}>
+          <TouchableOpacity 
+            style={styles.collapsibleHeader}
+            onPress={() => setIsMeasurementsGenderExpanded(!isMeasurementsGenderExpanded)}
+          >
+            <View style={styles.collapsibleHeaderContent}>
+              <ThemedText style={styles.filterLabel}>Gender:</ThemedText>
+              <View style={styles.selectedValueContainer}>
+                <ThemedText style={styles.selectedValue}>
+                  {selectedGender === 'all' ? 'All Genders' : selectedGender.charAt(0).toUpperCase() + selectedGender.slice(1)}
+                </ThemedText>
+                <Ionicons 
+                  name={isMeasurementsGenderExpanded ? "chevron-up" : "chevron-down"} 
+                  size={20} 
+                  color={Colors.text.secondary} 
+                />
+              </View>
             </View>
-          </View>
+          </TouchableOpacity>
+          
+          {isMeasurementsGenderExpanded && (
+            <View style={styles.collapsibleContent}>
+              <View style={styles.optionsGrid}>
+                {genders.map((gender) => {
+                  const isAvailable = isCombinationAvailable(selectedCategory, gender);
+                  const isSelected = selectedGender === gender;
+                  
+                  return (
+                    <TouchableOpacity
+                      key={gender}
+                      style={[
+                        styles.filterChip,
+                        isSelected && styles.filterChipActive,
+                        !isAvailable && styles.filterChipDisabled
+                      ]}
+                      onPress={() => isAvailable && handleGenderSelect(gender)}
+                      disabled={!isAvailable}
+                    >
+                      <Ionicons 
+                        name={getGenderIcon(gender) as any} 
+                        size={16} 
+                        color={
+                          isSelected ? Colors.text.inverse : 
+                          !isAvailable ? Colors.text.muted : 
+                          Colors.text.secondary
+                        }
+                        style={styles.chipIcon}
+                      />
+                      <ThemedText style={[
+                        styles.filterChipText,
+                        isSelected && styles.filterChipTextActive,
+                        !isAvailable && styles.filterChipTextDisabled
+                      ]}>
+                        {gender.charAt(0).toUpperCase() + gender.slice(1)}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
         </View>
 
         {selectedCategory !== 'all' && (
@@ -652,6 +1086,30 @@ export default function SizingScreen() {
           <ThemedText style={styles.formTitle}>Enter Your Measurements</ThemedText>
           <ThemedText style={styles.formSubtitle}>All measurements should be in inches</ThemedText>
         </View>
+
+        {/* Use Latest Measurements Button */}
+        {latestMeasurements && selectedCategory !== 'all' && selectedCategory !== 'custom' && (
+          <View style={styles.latestMeasurementsContainer}>
+            <TouchableOpacity
+              style={styles.useLatestButton}
+              onPress={useLatestMeasurements}
+              disabled={loadingLatestMeasurements}
+            >
+              <Ionicons 
+                name="refresh" 
+                size={16} 
+                color={Colors.primary} 
+                style={styles.buttonIcon}
+              />
+              <ThemedText style={styles.useLatestButtonText}>
+                {loadingLatestMeasurements ? 'Loading...' : 'Use Latest Measurements'}
+              </ThemedText>
+            </TouchableOpacity>
+            <ThemedText style={styles.latestMeasurementsHint}>
+              💡 Tap to auto-fill with your most recent measurements
+            </ThemedText>
+          </View>
+        )}
         
         {/* Category Info Section */}
         {selectedCategory !== 'all' && selectedCategory !== 'custom' && (
@@ -690,7 +1148,16 @@ export default function SizingScreen() {
           {selectedCategory !== 'all' && selectedCategory !== 'custom' ? (
             // Dynamic measurement fields based on selected category
             (() => {
-              const measurementEntries = Object.entries(measurements);
+              // Get required fields for the category and ensure they exist in measurements
+              const requiredFields = getRequiredFieldsForCategory(selectedCategory);
+              console.log('📋 Required fields for', selectedCategory, ':', requiredFields);
+              console.log('📊 Current measurements state:', measurements);
+              
+              const measurementEntries = requiredFields.map(field => [
+                field, 
+                measurements[field] || ''
+              ]);
+              console.log('📝 Measurement entries to render:', measurementEntries);
               const rows = [];
               
               // Create rows with 2 fields each
@@ -712,7 +1179,12 @@ export default function SizingScreen() {
                         style={styles.input}
                         placeholder="0"
                         value={firstField[1]}
-                        onChangeText={(text) => setMeasurements({...measurements, [firstField[0]]: text})}
+                        onChangeText={(text) => {
+                          setMeasurements({...measurements, [firstField[0]]: text});
+                          if (measurementsPopulated) {
+                            setMeasurementsPopulated(false);
+                          }
+                        }}
                         keyboardType="numeric"
                         placeholderTextColor="#999"
                       />
@@ -732,7 +1204,12 @@ export default function SizingScreen() {
                           style={styles.input}
                           placeholder="0"
                           value={secondField[1]}
-                          onChangeText={(text) => setMeasurements({...measurements, [secondField[0]]: text})}
+                          onChangeText={(text) => {
+                            setMeasurements({...measurements, [secondField[0]]: text});
+                            if (measurementsPopulated) {
+                              setMeasurementsPopulated(false);
+                            }
+                          }}
                           keyboardType="numeric"
                           placeholderTextColor="#999"
                         />
@@ -743,7 +1220,15 @@ export default function SizingScreen() {
                 );
               }
               
-              return rows;
+              return rows.length > 0 ? rows : (
+                // Fallback: Show a message if no fields are rendered
+                <View style={styles.warningContainer}>
+                  <ThemedText style={styles.warningIcon}>⚠️</ThemedText>
+                  <ThemedText style={styles.warningText}>
+                    No measurement fields available for {selectedCategory}. Please try selecting a different category.
+                  </ThemedText>
+                </View>
+              );
             })()
           ) : (
             // Show generic message when no specific category is selected
@@ -906,7 +1391,7 @@ export default function SizingScreen() {
   }
 
   return (
-    <ThemedView style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
       <ThemedText style={styles.title}>Garment Sizing</ThemedText>
       
       {/* Tab Navigation */}
@@ -957,7 +1442,7 @@ export default function SizingScreen() {
 
       {/* Custom Category Modal */}
       {renderCustomCategoryModal()}
-    </ThemedView>
+    </KeyboardAvoidingWrapper>
   );
 }
 
@@ -1661,4 +2146,89 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
+
+  // Collapsible Interface Styles
+  collapsibleSection: {
+    marginBottom: 16,
+    backgroundColor: Colors.background.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    overflow: 'hidden',
+  },
+  collapsibleHeader: {
+    padding: 16,
+    backgroundColor: Colors.background.light,
+  },
+  collapsibleHeaderContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  selectedValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectedValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  collapsibleContent: {
+    padding: 16,
+    backgroundColor: Colors.background.card,
+  },
+  optionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  filterChipDisabled: {
+    opacity: 0.4,
+    backgroundColor: Colors.background.light,
+    borderColor: Colors.border.light,
+  },
+  filterChipTextDisabled: {
+    color: Colors.text.muted,
+  },
+  // Latest Measurements Button Styles
+  latestMeasurementsContainer: {
+    backgroundColor: Colors.background.light,
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 16,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    alignItems: 'center',
+  },
+  useLatestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    marginBottom: 8,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  buttonIcon: {
+    marginRight: 8,
+  },
+  useLatestButtonText: {
+    color: Colors.text.inverse,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  latestMeasurementsHint: {
+    fontSize: 12,
+    color: Colors.text.muted,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
 });
+

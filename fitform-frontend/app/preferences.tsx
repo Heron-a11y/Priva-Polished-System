@@ -18,6 +18,10 @@ import apiService from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
 import networkConfig from '../services/network-config';
+import KeyboardAvoidingWrapper from '../components/KeyboardAvoidingWrapper';
+import EditModal from '../components/EditModal';
+import ReadOnlyField from '../components/ReadOnlyField';
+import GroupedReadOnlyField from '../components/GroupedReadOnlyField';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isTablet = screenWidth > 768;
@@ -43,6 +47,9 @@ export default function PreferencesScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [imageLoadError, setImageLoadError] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingField, setEditingField] = useState<string>('');
+  const [editingGroup, setEditingGroup] = useState<string>('');
 
   // Convert profile image URL to use current API base URL
   const getCorrectProfileImageUrl = (profileImageUrl: string | null) => {
@@ -143,6 +150,157 @@ export default function PreferencesScreen() {
     }
   };
 
+  const handleEditField = (field: string) => {
+    setEditingField(field);
+    setEditingGroup('');
+    setShowEditModal(true);
+  };
+
+  const handleEditGroup = (group: string) => {
+    setEditingGroup(group);
+    setEditingField('');
+    setShowEditModal(true);
+  };
+
+  const handleSaveField = async (data: Record<string, string>) => {
+    try {
+      setSaving(true);
+      
+      if (editingGroup) {
+        // Handle group editing - update multiple fields
+        const updatedPreferences = { ...preferences, ...data };
+        setPreferences(updatedPreferences);
+        Alert.alert('Success', 'Preferences updated successfully');
+      } else {
+        // Handle individual field editing
+        const fieldValue = data[editingField];
+        const updatedPreferences = { ...preferences, [editingField]: fieldValue };
+        setPreferences(updatedPreferences);
+        Alert.alert('Success', 'Preference updated successfully');
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating preference:', error);
+      Alert.alert('Error', 'Failed to update preference');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getEditFields = () => {
+    const fieldConfigs = {
+      preferred_style: {
+        key: 'preferred_style',
+        label: 'Preferred Style',
+        value: preferences.preferred_style,
+        type: 'text' as const,
+        placeholder: 'Modern, Classic, Vintage',
+        maxLength: 30,
+      },
+      preferred_color: {
+        key: 'preferred_color',
+        label: 'Preferred Color',
+        value: preferences.preferred_color,
+        type: 'text' as const,
+        placeholder: 'Navy Blue, Black, White',
+        maxLength: 30,
+      },
+      preferred_size: {
+        key: 'preferred_size',
+        label: 'Preferred Size',
+        value: preferences.preferred_size,
+        type: 'text' as const,
+        placeholder: 'Small, Medium, Large',
+        maxLength: 30,
+      },
+      preferred_material: {
+        key: 'preferred_material',
+        label: 'Preferred Material',
+        value: preferences.preferred_material,
+        type: 'text' as const,
+        placeholder: 'Cotton, Wool, Silk, Polyester',
+        maxLength: 30,
+      },
+      preferred_fit: {
+        key: 'preferred_fit',
+        label: 'Preferred Fit',
+        value: preferences.preferred_fit,
+        type: 'text' as const,
+        placeholder: 'Slim, Regular, Loose',
+        maxLength: 30,
+      },
+      preferred_pattern: {
+        key: 'preferred_pattern',
+        label: 'Preferred Pattern',
+        value: preferences.preferred_pattern,
+        type: 'text' as const,
+        placeholder: 'Solid, Striped, Checkered, Floral',
+        maxLength: 30,
+      },
+      preferred_budget: {
+        key: 'preferred_budget',
+        label: 'Preferred Budget',
+        value: preferences.preferred_budget,
+        type: 'text' as const,
+        placeholder: '5000-10000, 10000-20000, 20000+',
+        maxLength: 30,
+      },
+      preferred_season: {
+        key: 'preferred_season',
+        label: 'Preferred Season',
+        value: preferences.preferred_season,
+        type: 'text' as const,
+        placeholder: 'Spring, Summer, Fall, Winter',
+        maxLength: 30,
+      },
+      preferred_length: {
+        key: 'preferred_length',
+        label: 'Preferred Length',
+        value: preferences.preferred_length,
+        type: 'text' as const,
+        placeholder: 'Short, Medium, Long',
+        maxLength: 30,
+      },
+      preferred_sleeve: {
+        key: 'preferred_sleeve',
+        label: 'Preferred Sleeve',
+        value: preferences.preferred_sleeve,
+        type: 'text' as const,
+        placeholder: 'Short, Long, Sleeveless',
+        maxLength: 30,
+      },
+      notes: {
+        key: 'notes',
+        label: 'Notes',
+        value: preferences.notes,
+        type: 'multiline' as const,
+        placeholder: 'Special requirements, style notes',
+        multiline: true,
+        numberOfLines: 4,
+        maxLength: 300,
+      },
+    };
+
+    if (editingGroup) {
+      // Return fields for the specific group
+      const groupFields = {
+        basic: ['preferred_style', 'preferred_color', 'preferred_size', 'preferred_material'],
+        style: ['preferred_fit', 'preferred_pattern'],
+        budget: ['preferred_budget', 'preferred_season'],
+        length: ['preferred_length', 'preferred_sleeve'],
+        notes: ['notes']
+      };
+      
+      const groupFieldKeys = groupFields[editingGroup as keyof typeof groupFields] || [];
+      return groupFieldKeys.map(key => fieldConfigs[key as keyof typeof fieldConfigs]).filter(Boolean);
+    } else {
+      // Return single field for individual editing
+      return [fieldConfigs[editingField as keyof typeof fieldConfigs]].filter(Boolean);
+    }
+  };
+
   const clearPreferences = () => {
     console.log('Clear button pressed'); // Debug log
     // Since Alert doesn't work in this environment, clear directly
@@ -183,11 +341,8 @@ export default function PreferencesScreen() {
   }
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
+    <KeyboardAvoidingWrapper style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
         {/* Enhanced Header */}
         <View style={styles.enhancedHeader}>
           <View style={styles.headerCard}>
@@ -270,233 +425,83 @@ export default function PreferencesScreen() {
         <View style={styles.enhancedFormContainer}>
           {/* Basic Preferences Section */}
           <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="star" size={20} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>Basic Preferences</Text>
-            </View>
-            <View style={styles.sectionContent}>
-              {/* Style & Color Row */}
-              <View style={styles.enhancedRow}>
-                <View style={styles.enhancedInputGroup}>
-                  <View style={styles.inputLabelContainer}>
-                    <Ionicons name="shirt-outline" size={18} color={Colors.primary} />
-                    <Text style={styles.enhancedLabel}>Preferred Style</Text>
-                  </View>
-                  {errors.preferred_style && <Text style={styles.enhancedFieldError}>{errors.preferred_style}</Text>}
-                  <TextInput
-                    style={[styles.enhancedInput, errors.preferred_style && styles.enhancedInputError]}
-                    value={preferences.preferred_style}
-                    onChangeText={text => setPreferences({ ...preferences, preferred_style: text })}
-                    placeholder="e.g. Casual, Sporty, Formal"
-                    maxLength={30}
-                    placeholderTextColor={Colors.text.secondary}
-                  />
-                </View>
-                <View style={styles.enhancedInputGroup}>
-                  <View style={styles.inputLabelContainer}>
-                    <Ionicons name="color-palette-outline" size={18} color={Colors.primary} />
-                    <Text style={styles.enhancedLabel}>Preferred Color</Text>
-                  </View>
-                  {errors.preferred_color && <Text style={styles.enhancedFieldError}>{errors.preferred_color}</Text>}
-                  <TextInput
-                    style={[styles.enhancedInput, errors.preferred_color && styles.enhancedInputError]}
-                    value={preferences.preferred_color}
-                    onChangeText={text => setPreferences({ ...preferences, preferred_color: text })}
-                    placeholder="e.g. Blue, Red, Black"
-                    maxLength={30}
-                    placeholderTextColor={Colors.text.secondary}
-                  />
-                </View>
-              </View>
-              {/* Size & Material Row */}
-              <View style={styles.enhancedRow}>
-                <View style={styles.enhancedInputGroup}>
-                  <View style={styles.inputLabelContainer}>
-                    <Ionicons name="resize-outline" size={18} color={Colors.primary} />
-                    <Text style={styles.enhancedLabel}>Preferred Size</Text>
-                  </View>
-                  {errors.preferred_size && <Text style={styles.enhancedFieldError}>{errors.preferred_size}</Text>}
-                  <TextInput
-                    style={[styles.enhancedInput, errors.preferred_size && styles.enhancedInputError]}
-                    value={preferences.preferred_size}
-                    onChangeText={text => setPreferences({ ...preferences, preferred_size: text })}
-                    placeholder="e.g. S, M, L, XL"
-                    maxLength={30}
-                    placeholderTextColor={Colors.text.secondary}
-                  />
-                </View>
-                <View style={styles.enhancedInputGroup}>
-                  <View style={styles.inputLabelContainer}>
-                    <Ionicons name="leaf-outline" size={18} color={Colors.primary} />
-                    <Text style={styles.enhancedLabel}>Preferred Material</Text>
-                  </View>
-                  <TextInput
-                    style={styles.enhancedInput}
-                    value={preferences.preferred_material}
-                    onChangeText={text => setPreferences({ ...preferences, preferred_material: text })}
-                    placeholder="e.g. Cotton, Polyester"
-                    maxLength={30}
-                    placeholderTextColor={Colors.text.secondary}
-                  />
-                </View>
-              </View>
-            </View>
+            <GroupedReadOnlyField
+              title="Basic Preferences"
+              description="Your core style preferences"
+              fields={[
+                { label: 'Preferred Style', value: preferences.preferred_style || 'Not specified' },
+                { label: 'Preferred Color', value: preferences.preferred_color || 'Not specified' },
+                { label: 'Preferred Size', value: preferences.preferred_size || 'Not specified' },
+                { label: 'Preferred Material', value: preferences.preferred_material || 'Not specified' }
+              ]}
+              onEdit={() => handleEditGroup('basic')}
+              icon="star"
+              editButtonText="Edit Basic Preferences"
+            />
           </View>
 
           {/* Style Details Section */}
           <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="shirt" size={20} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>Style Details</Text>
-            </View>
-            <View style={styles.sectionContent}>
-
-              {/* Fit & Pattern Row */}
-              <View style={styles.enhancedRow}>
-                <View style={styles.enhancedInputGroup}>
-                  <View style={styles.inputLabelContainer}>
-                    <Ionicons name="body-outline" size={18} color={Colors.primary} />
-                    <Text style={styles.enhancedLabel}>Preferred Fit</Text>
-                  </View>
-                  <TextInput
-                    style={styles.enhancedInput}
-                    value={preferences.preferred_fit}
-                    onChangeText={text => setPreferences({ ...preferences, preferred_fit: text })}
-                    placeholder="e.g. Slim, Regular, Loose"
-                    maxLength={30}
-                    placeholderTextColor={Colors.text.secondary}
-                  />
-                </View>
-                <View style={styles.enhancedInputGroup}>
-                  <View style={styles.inputLabelContainer}>
-                    <Ionicons name="grid-outline" size={18} color={Colors.primary} />
-                    <Text style={styles.enhancedLabel}>Preferred Pattern</Text>
-                  </View>
-                  <TextInput
-                    style={styles.enhancedInput}
-                    value={preferences.preferred_pattern}
-                    onChangeText={text => setPreferences({ ...preferences, preferred_pattern: text })}
-                    placeholder="e.g. Solid, Striped, Checked"
-                    maxLength={30}
-                    placeholderTextColor={Colors.text.secondary}
-                  />
-                </View>
-              </View>
-            </View>
+            <GroupedReadOnlyField
+              title="Style Details"
+              description="Your specific style preferences"
+              fields={[
+                { label: 'Preferred Fit', value: preferences.preferred_fit || 'Not specified' },
+                { label: 'Preferred Pattern', value: preferences.preferred_pattern || 'Not specified' }
+              ]}
+              onEdit={() => handleEditGroup('style')}
+              icon="shirt"
+              editButtonText="Edit Style Details"
+            />
           </View>
 
           {/* Budget & Season Section */}
           <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="wallet" size={20} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>Budget & Season</Text>
-            </View>
-            <View style={styles.sectionContent}>
-
-              {/* Budget & Season Row */}
-              <View style={styles.enhancedRow}>
-                <View style={styles.enhancedInputGroup}>
-                  <View style={styles.inputLabelContainer}>
-                    <Ionicons name="wallet-outline" size={18} color={Colors.primary} />
-                    <Text style={styles.enhancedLabel}>Preferred Budget</Text>
-                  </View>
-                  <TextInput
-                    style={styles.enhancedInput}
-                    value={preferences.preferred_budget}
-                    onChangeText={text => setPreferences({ ...preferences, preferred_budget: text })}
-                    placeholder="e.g. Below ₱1000, ₱1000-₱3000"
-                    maxLength={30}
-                    placeholderTextColor={Colors.text.secondary}
-                  />
-                </View>
-                <View style={styles.enhancedInputGroup}>
-                  <View style={styles.inputLabelContainer}>
-                    <Ionicons name="sunny-outline" size={18} color={Colors.primary} />
-                    <Text style={styles.enhancedLabel}>Preferred Season</Text>
-                  </View>
-                  <TextInput
-                    style={styles.enhancedInput}
-                    value={preferences.preferred_season}
-                    onChangeText={text => setPreferences({ ...preferences, preferred_season: text })}
-                    placeholder="e.g. Dry, Wet, All-season"
-                    maxLength={30}
-                    placeholderTextColor={Colors.text.secondary}
-                  />
-                </View>
-              </View>
-            </View>
+            <GroupedReadOnlyField
+              title="Budget & Season"
+              description="Your budget and seasonal preferences"
+              fields={[
+                { label: 'Preferred Budget', value: preferences.preferred_budget || 'Not specified' },
+                { label: 'Preferred Season', value: preferences.preferred_season || 'Not specified' }
+              ]}
+              onEdit={() => handleEditGroup('budget')}
+              icon="wallet"
+              editButtonText="Edit Budget & Season"
+            />
           </View>
 
           {/* Length & Sleeve Section */}
           <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="resize" size={20} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>Length & Sleeve</Text>
-            </View>
-            <View style={styles.sectionContent}>
-
-              {/* Length & Sleeve Row */}
-              <View style={styles.enhancedRow}>
-                <View style={styles.enhancedInputGroup}>
-                  <View style={styles.inputLabelContainer}>
-                    <Ionicons name="resize-outline" size={18} color={Colors.primary} />
-                    <Text style={styles.enhancedLabel}>Preferred Length</Text>
-                  </View>
-                  <TextInput
-                    style={styles.enhancedInput}
-                    value={preferences.preferred_length}
-                    onChangeText={text => setPreferences({ ...preferences, preferred_length: text })}
-                    placeholder="e.g. Short, Medium, Long"
-                    maxLength={30}
-                    placeholderTextColor={Colors.text.secondary}
-                  />
-                </View>
-                <View style={styles.enhancedInputGroup}>
-                  <View style={styles.inputLabelContainer}>
-                    <Ionicons name="shirt-outline" size={18} color={Colors.primary} />
-                    <Text style={styles.enhancedLabel}>Preferred Sleeve</Text>
-                  </View>
-                  <TextInput
-                    style={styles.enhancedInput}
-                    value={preferences.preferred_sleeve}
-                    onChangeText={text => setPreferences({ ...preferences, preferred_sleeve: text })}
-                    placeholder="e.g. Sleeveless, Short, Long"
-                    maxLength={30}
-                    placeholderTextColor={Colors.text.secondary}
-                  />
-                </View>
-              </View>
-            </View>
+            <GroupedReadOnlyField
+              title="Length & Sleeve"
+              description="Your preferred garment dimensions"
+              fields={[
+                { label: 'Preferred Length', value: preferences.preferred_length || 'Not specified' },
+                { label: 'Preferred Sleeve', value: preferences.preferred_sleeve || 'Not specified' }
+              ]}
+              onEdit={() => handleEditGroup('length')}
+              icon="resize"
+              editButtonText="Edit Length & Sleeve"
+            />
           </View>
 
           {/* Additional Notes Section */}
           <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="document-text" size={20} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>Additional Notes</Text>
-            </View>
-            <View style={styles.sectionContent}>
-              <View style={styles.enhancedInputGroup}>
-                <View style={styles.inputLabelContainer}>
-                  <Ionicons name="document-text-outline" size={18} color={Colors.primary} />
-                  <Text style={styles.enhancedLabel}>Special Requirements</Text>
-                </View>
-                {errors.notes && <Text style={styles.enhancedFieldError}>{errors.notes}</Text>}
-                <TextInput
-                  style={[styles.enhancedTextArea, errors.notes && styles.enhancedInputError]}
-                  value={preferences.notes}
-                  onChangeText={text => setPreferences({ ...preferences, notes: text })}
-                  placeholder="Any additional preferences or special requirements..."
-                  multiline
-                  numberOfLines={4}
-                  maxLength={300}
-                  placeholderTextColor={Colors.text.secondary}
-                />
-                <View style={styles.charCountContainer}>
-                  <Text style={styles.enhancedCharCount}>{preferences.notes.length}/300</Text>
-                </View>
-              </View>
-            </View>
+            <GroupedReadOnlyField
+              title="Additional Notes"
+              description="Any special requirements or additional notes"
+              fields={[
+                { 
+                  label: 'Special Requirements', 
+                  value: preferences.notes || 'No additional notes',
+                  multiline: true,
+                  numberOfLines: 4
+                }
+              ]}
+              onEdit={() => handleEditGroup('notes')}
+              icon="document-text"
+              editButtonText="Edit Notes"
+            />
           </View>
         </View>
 
@@ -534,8 +539,22 @@ export default function PreferencesScreen() {
             </View>
           </TouchableOpacity>
         </View>
-    </ScrollView>
-    </KeyboardAvoidingView>
+      </ScrollView>
+
+      {/* Edit Modal */}
+      <EditModal
+        visible={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title={editingGroup ? 
+          `Edit ${editingGroup.charAt(0).toUpperCase() + editingGroup.slice(1)} Preferences` : 
+          `Edit ${editingField.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`
+        }
+        fields={getEditFields()}
+        onSave={handleSaveField}
+        loading={saving}
+        icon="create-outline"
+      />
+    </KeyboardAvoidingWrapper>
   );
 }
 

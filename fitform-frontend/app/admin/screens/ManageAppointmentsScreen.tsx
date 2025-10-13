@@ -16,6 +16,7 @@ import {
 import apiService from '../../../services/api';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/Colors';
+import { getLocalImageUrl } from '../../../utils/imageUrlHelper';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isTablet = screenWidth > 768;
@@ -71,6 +72,7 @@ const ManageAppointmentsScreen = () => {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [imageLoadErrors, setImageLoadErrors] = useState<{ [id: number]: boolean }>({});
+  const [imageRefreshKey, setImageRefreshKey] = useState(0);
 
   useEffect(() => {
     fetchData();
@@ -113,7 +115,7 @@ const ManageAppointmentsScreen = () => {
   const handleStatus = async (id: number, status: 'pending' | 'confirmed' | 'cancelled') => {
     setActionLoading((prev) => ({ ...prev, [id]: true }));
     try {
-      await apiService.updateAppointmentStatus(id, status);
+      await apiService.updateAdminAppointmentStatus(id, status);
       fetchData();
       Alert.alert('Success', `Appointment ${status === 'confirmed' ? 'confirmed' : status === 'cancelled' ? 'cancelled' : 'set to pending'}.`);
     } catch (e) {
@@ -121,6 +123,147 @@ const ManageAppointmentsScreen = () => {
     } finally {
       setActionLoading((prev) => ({ ...prev, [id]: false }));
     }
+  };
+
+  const handleRemoveAppointment = async (id: number) => {
+    Alert.alert(
+      'Remove Appointment',
+      'Are you sure you want to permanently remove this cancelled appointment?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Remove', 
+          style: 'destructive',
+          onPress: async () => {
+            setActionLoading(prev => ({ ...prev, [id]: true }));
+            try {
+              await apiService.deleteAppointment(id);
+              
+              // Remove the appointment from local state
+              setAppointments(prev => prev.filter(app => app.id !== id));
+              
+              // Update stats
+              const newStats = await apiService.getAppointmentStats();
+              setStats(newStats);
+              
+              Alert.alert('Success', 'Appointment removed successfully!');
+            } catch (error) {
+              console.error('Error removing appointment:', error);
+              Alert.alert('Error', 'Failed to remove appointment');
+            } finally {
+              setActionLoading(prev => ({ ...prev, [id]: false }));
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleRemoveAllCancelled = async () => {
+    const cancelledAppointments = appointments.filter(app => app.status === 'cancelled');
+    
+    if (cancelledAppointments.length === 0) {
+      Alert.alert('No Cancelled Appointments', 'There are no cancelled appointments to remove.');
+      return;
+    }
+
+    Alert.alert(
+      'Remove All Cancelled Appointments',
+      `Are you sure you want to permanently remove all ${cancelledAppointments.length} cancelled appointments?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Remove All', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Remove all cancelled appointments
+              const deletePromises = cancelledAppointments.map(app => 
+                apiService.deleteAppointment(app.id)
+              );
+              
+              await Promise.all(deletePromises);
+              
+              // Remove cancelled appointments from local state
+              setAppointments(prev => prev.filter(app => app.status !== 'cancelled'));
+              
+              // Update stats
+              const newStats = await apiService.getAppointmentStats();
+              setStats(newStats);
+              
+              Alert.alert('Success', `${cancelledAppointments.length} cancelled appointments removed successfully!`);
+            } catch (error) {
+              console.error('Error removing cancelled appointments:', error);
+              Alert.alert('Error', 'Failed to remove some appointments');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Test image URL accessibility
+  const testImageUrl = async (imageUrl: string) => {
+    try {
+      console.log('🧪 Testing image URL accessibility:', imageUrl);
+      const response = await fetch(imageUrl, { method: 'HEAD' });
+      console.log('🧪 Image URL test result:', {
+        url: imageUrl,
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+      return response.ok;
+    } catch (error) {
+      console.log('🧪 Image URL test failed:', error);
+      return false;
+    }
+  };
+
+  // Enhanced image component with multiple fallback strategies
+  const renderProfileImage = (imageUrl: string, appointmentId: number, isModal: boolean = false) => {
+    const processedUrl = getLocalImageUrl(imageUrl);
+    const imageStyle = isModal ? styles.modalCustomerProfileImage : styles.customerProfileImage;
+    const fallbackStyle = isModal ? styles.modalProfileIconFallback : styles.profileIconFallback;
+    const iconSize = isModal ? 12 : 24;
+
+    return (
+      <Image 
+        key={`${appointmentId}-${imageRefreshKey}`}
+        source={{ 
+          uri: processedUrl,
+          cache: 'reload'
+        }} 
+        style={imageStyle}
+        resizeMode="cover"
+          onError={(error) => {
+            console.log('❌ Profile image error occurred');
+            console.log('❌ Original URL:', imageUrl);
+            console.log('❌ Processed URL:', processedUrl);
+            console.log('❌ Error type:', typeof error);
+            console.log('❌ Error details:', error);
+            setImageLoadErrors(prev => ({ ...prev, [appointmentId]: true }));
+          }}
+        onLoad={() => {
+          console.log('✅ Profile image loaded successfully');
+          console.log('✅ Image URL:', processedUrl);
+        }}
+        onLoadStart={() => {
+          console.log('🔄 Starting to load profile image');
+          testImageUrl(processedUrl);
+        }}
+        onLoadEnd={() => {
+          console.log('🏁 Finished loading profile image');
+        }}
+      />
+    );
+  };
+
+  // Force refresh all images
+  const refreshAllImages = () => {
+    console.log('🔄 Refreshing all images...');
+    setImageLoadErrors({});
+    setImageRefreshKey(prev => prev + 1);
   };
 
   const getStatusIcon = (status: string): any => {
@@ -194,6 +337,39 @@ const ManageAppointmentsScreen = () => {
     return matchesStatus && matchesSearch;
   });
 
+  // Group appointments by status
+  const groupedAppointments = filteredAppointments.reduce((groups, appointment) => {
+    const status = appointment.status;
+    if (!groups[status]) {
+      groups[status] = [];
+    }
+    groups[status].push(appointment);
+    return groups;
+  }, {} as Record<string, typeof filteredAppointments>);
+
+  // Sort status groups by business priority (most important first)
+  const statusOrder = ['pending', 'confirmed', 'cancelled'];
+  const sortedStatusGroups = Object.keys(groupedAppointments).sort((a, b) => {
+    const aIndex = statusOrder.indexOf(a);
+    const bIndex = statusOrder.indexOf(b);
+    return aIndex - bIndex;
+  });
+
+  const renderStatusGroupHeader = (status: string, count: number) => (
+    <View style={styles.statusGroupHeader}>
+      <View style={[styles.statusGroupTitle, { borderLeftColor: STATUS_COLORS[status as keyof typeof STATUS_COLORS] }]}>
+        <Ionicons 
+          name={getStatusIcon(status)} 
+          size={20} 
+          color={STATUS_COLORS[status as keyof typeof STATUS_COLORS]} 
+        />
+        <Text style={[styles.statusGroupTitleText, { color: STATUS_COLORS[status as keyof typeof STATUS_COLORS] }]}>
+          {status.charAt(0).toUpperCase() + status.slice(1)} ({count})
+        </Text>
+      </View>
+    </View>
+  );
+
   const renderStatsCards = () => (
     <View style={styles.statsContainer}>
       <View style={styles.statsRow}>
@@ -240,22 +416,10 @@ const ManageAppointmentsScreen = () => {
         <View style={styles.cardHeader}>
           <View style={styles.customerInfo}>
             {appointment.customer_profile_image && !imageLoadErrors[appointment.id] ? (
-              <Image 
-                source={{ 
-                  uri: appointment.customer_profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.105:8000'),
-                  cache: 'force-cache'
-                }} 
-                style={styles.customerProfileImage}
-                resizeMode="cover"
-                onError={(error) => {
-                  console.log('❌ Customer profile image error for appointment', appointment.id, ':', error);
-                  setImageLoadErrors(prev => ({ ...prev, [appointment.id]: true }));
-                }}
-                onLoad={() => console.log('✅ Customer profile image loaded successfully for appointment', appointment.id)}
-              />
+              renderProfileImage(appointment.customer_profile_image, appointment.id, false)
             ) : (
               <View style={styles.profileIconFallback}>
-                <Ionicons name="person-circle" size={20} color="#014D40" />
+                <Ionicons name="person-circle" size={24} color="#014D40" />
               </View>
             )}
             <Text style={styles.customerName}>
@@ -336,6 +500,23 @@ const ManageAppointmentsScreen = () => {
               </TouchableOpacity>
             </>
           )}
+
+          {appointment.status === 'cancelled' && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.removeButton]}
+              disabled={actionLoading[appointment.id]}
+              onPress={() => handleRemoveAppointment(appointment.id)}
+            >
+              {actionLoading[appointment.id] ? (
+                <ActivityIndicator size="small" color="#DC2626" />
+              ) : (
+                <>
+                  <Ionicons name="trash" size={18} color="#DC2626" />
+                  <Text style={styles.removeButtonText}>Remove</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -363,6 +544,13 @@ const ManageAppointmentsScreen = () => {
         <View style={styles.titleContainer}>
           <Ionicons name="calendar" size={28} color="#014D40" />
           <Text style={styles.title}>Manage Appointments</Text>
+          <TouchableOpacity 
+            style={styles.refreshImagesButton}
+            onPress={refreshAllImages}
+          >
+            <Ionicons name="refresh" size={20} color="#014D40" />
+            <Text style={styles.refreshImagesText}>Refresh Images</Text>
+          </TouchableOpacity>
         </View>
         
       </View>
@@ -429,6 +617,21 @@ const ManageAppointmentsScreen = () => {
           </View>
         </View>
         
+        {/* Remove All Cancelled Button */}
+        {appointments.some(app => app.status === 'cancelled') && (
+          <View style={styles.removeAllContainer}>
+            <TouchableOpacity
+              style={styles.removeAllButton}
+              onPress={handleRemoveAllCancelled}
+            >
+              <Ionicons name="trash" size={18} color="#fff" />
+              <Text style={styles.removeAllButtonText}>
+                Remove All Cancelled Appointments ({appointments.filter(app => app.status === 'cancelled').length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
         {/* Results Count */}
         <View style={styles.resultsInfo}>
           <Text style={styles.resultsText}>
@@ -451,7 +654,12 @@ const ManageAppointmentsScreen = () => {
         </View>
       ) : (
         <View style={styles.cardsContainer}>
-          {filteredAppointments.map(renderAppointmentCard)}
+          {sortedStatusGroups.map((status) => (
+            <View key={status}>
+              {renderStatusGroupHeader(status, groupedAppointments[status].length)}
+              {groupedAppointments[status].map(renderAppointmentCard)}
+            </View>
+          ))}
         </View>
       )}
       
@@ -490,21 +698,10 @@ const ManageAppointmentsScreen = () => {
                     <Text style={styles.detailLabel}>Customer:</Text>
                     <View style={styles.customerDetailContainer}>
                       {selectedAppointment.customer_profile_image && !imageLoadErrors[selectedAppointment.id] ? (
-                        <Image 
-                          source={{ 
-                            uri: selectedAppointment.customer_profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.105:8000'),
-                            cache: 'force-cache'
-                          }} 
-                          style={styles.modalCustomerProfileImage}
-                          resizeMode="cover"
-                          onError={(error) => {
-                            console.log('❌ Modal customer profile image error:', error);
-                            setImageLoadErrors(prev => ({ ...prev, [selectedAppointment.id]: true }));
-                          }}
-                        />
+                        renderProfileImage(selectedAppointment.customer_profile_image, selectedAppointment.id, true)
                       ) : (
                         <View style={styles.modalProfileIconFallback}>
-                          <Ionicons name="person-circle" size={20} color="#014D40" />
+                          <Ionicons name="person-circle" size={18} color="#014D40" />
                         </View>
                       )}
                       <Text style={styles.detailValue}>
@@ -545,7 +742,7 @@ const ManageAppointmentsScreen = () => {
                         if (timeMatch) {
                           const hours = parseInt(timeMatch[1], 10);
                           const waitTimeHours = hours - 10; // Hours after 10 AM
-                          const validWaitTime = Math.max(0, Math.min(waitTimeHours, 6));
+                          const validWaitTime = Math.max(0, Math.min(waitTimeHours, 9));
                           
                           return validWaitTime === 0 ? 'No wait time (First appointment)' : `${validWaitTime} hours`;
                         }
@@ -835,60 +1032,66 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 16,
   },
   customerInfo: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 8,
     flex: 1,
   },
   customerProfileImage: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#014D40',
-    backgroundColor: '#f0f0f0',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 3,
+    borderColor: '#ff0000', // Red border to make it very visible
+    backgroundColor: '#e0e0e0', // Changed to make it more visible
+    marginTop: 2, // Slight offset to align with first line of text
   },
   profileIconFallback: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#f0f0f0',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#014D40',
+    borderWidth: 3,
+    borderColor: '#ff0000', // Red border to make it very visible
+    marginTop: 2, // Slight offset to align with first line of text
   },
   customerDetailContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    flex: 1,
   },
   modalCustomerProfileImage: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
     borderColor: '#014D40',
     backgroundColor: '#f0f0f0',
   },
   modalProfileIconFallback: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#f0f0f0',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#014D40',
   },
   customerName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#014D40',
+    flex: 1,
+    flexWrap: 'wrap',
+    maxWidth: '80%', // Limit width to leave space for status badge
   },
   cardContent: {
     gap: 12,
@@ -1008,6 +1211,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     gap: 6,
+    marginLeft: 12, // Add margin to prevent overlap
+    flexShrink: 0, // Prevent badge from shrinking
   },
   statusText: {
     color: '#fff',
@@ -1110,6 +1315,74 @@ const styles = StyleSheet.create({
   cancelledStatusText: {
     color: '#6B7280',
     fontSize: 16,
+    fontWeight: '500',
+  },
+  // Status group header styles
+  statusGroupHeader: {
+    marginTop: 20,
+    marginBottom: 12,
+    paddingHorizontal: 16,
+  },
+  statusGroupTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+  },
+  statusGroupTitleText: {
+    fontSize: 16,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  // Remove button styles
+  removeButton: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#DC2626',
+    flex: 1,
+  },
+  removeButtonText: {
+    color: '#DC2626',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Remove all cancelled button styles
+  removeAllContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  removeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DC2626',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  removeAllButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Refresh images button styles
+  refreshImagesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 4,
+  },
+  refreshImagesText: {
+    fontSize: 12,
+    color: '#014D40',
     fontWeight: '500',
   },
 });

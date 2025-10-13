@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, Acti
 import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 import PasswordInput from '../components/PasswordInput';
+import KeyboardAvoidingWrapper from '../components/KeyboardAvoidingWrapper';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -70,67 +71,73 @@ export default function LoginScreen() {
 
 
   return (
-    <View style={styles.container}>
-      <View style={styles.logoContainer}>
-        <Image
-          source={require('../assets/images/priva-logo.jpg')}
-          style={styles.logo}
-          resizeMode="contain"
+    <KeyboardAvoidingWrapper style={styles.container}>
+      <View style={styles.contentContainer}>
+        <View style={styles.logoContainer}>
+          <Image
+            source={require('../assets/images/priva-logo.jpg')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
+        <Text style={styles.title}>Sign In</Text>
+        
+        <Text style={styles.label}>Email Address</Text>
+        <TextInput
+          style={[styles.input, errors.email && styles.inputError]}
+          value={email}
+          onChangeText={(text) => {
+            setEmail(text);
+            if (errors.email) setErrors({ ...errors, email: undefined });
+          }}
+          placeholder="john@example.com"
+          placeholderTextColor="#999"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
         />
+        {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+        
+        <PasswordInput
+          label="Password"
+          value={password}
+          onChangeText={(text) => {
+            setPassword(text);
+            if (errors.password) setErrors({ ...errors, password: undefined });
+          }}
+          placeholder="Password (min. 8 characters)"
+          error={errors.password}
+        />
+        
+        <TouchableOpacity 
+          style={[styles.button, loading && styles.buttonDisabled]} 
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Login</Text>
+          )}
+        </TouchableOpacity>
+        
+        <TouchableOpacity onPress={() => router.push('/register')}>
+          <Text style={styles.linkText}>Don't have an account? Register</Text>
+        </TouchableOpacity>
       </View>
-      <Text style={styles.title}>Sign In</Text>
-      
-      <Text style={styles.label}>Email Address</Text>
-      <TextInput
-        style={[styles.input, errors.email && styles.inputError]}
-        value={email}
-        onChangeText={(text) => {
-          setEmail(text);
-          if (errors.email) setErrors({ ...errors, email: undefined });
-        }}
-        placeholder="Enter your email"
-        keyboardType="email-address"
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-      {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
-      
-      <PasswordInput
-        label="Password"
-        value={password}
-        onChangeText={(text) => {
-          setPassword(text);
-          if (errors.password) setErrors({ ...errors, password: undefined });
-        }}
-        placeholder="Enter your password"
-        error={errors.password}
-      />
-      
-      <TouchableOpacity 
-        style={[styles.button, loading && styles.buttonDisabled]} 
-        onPress={handleLogin}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Login</Text>
-        )}
-      </TouchableOpacity>
-      
-      <TouchableOpacity onPress={() => router.push('/register')}>
-        <Text style={styles.linkText}>Don't have an account? Register</Text>
-      </TouchableOpacity>
-    </View>
+    </KeyboardAvoidingWrapper>
   );
 }
 
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    justifyContent: 'center', 
-    padding: 24, 
     backgroundColor: '#f5f5f5' 
+  },
+  contentContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
   },
   logoContainer: { 
     alignItems: 'center', 

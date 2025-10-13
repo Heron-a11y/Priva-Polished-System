@@ -1,21 +1,5 @@
-import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
-import { getConfig } from './config/ARConfig';
-
-// Define the native module interface
-interface ARSessionManagerNative {
-  isARCoreSupported(): Promise<boolean>;
-  isARKitSupported(): Promise<boolean>;
-  startSession(): Promise<boolean>;
-  stopSession(): Promise<boolean>;
-  getMeasurements(): Promise<ARMeasurements>;
-  getSessionStatus(): Promise<SessionStatus>;
-  markScanCompleted(scanType: string): Promise<boolean>;
-  // ✅ PHASE 1: New methods for enhanced functionality
-  startRealTimeProcessing(): Promise<boolean>;
-  stopRealTimeProcessing(): Promise<boolean>;
-  // ✅ PHASE 2: Configuration management
-  loadConfiguration(config: any): Promise<boolean>;
-}
+// Simulation-based AR Session Manager - No native dependencies
+// This replaces ARCore/ARKit with mock measurements
 
 // Define the event emitter interface
 interface ARMeasurementUpdateEvent {
@@ -56,158 +40,88 @@ export interface SessionStatus {
 
 // Define the AR session manager class
 class ARSessionManager {
-  private nativeModule: ARSessionManagerNative;
-  private eventEmitter: NativeEventEmitter | null = null;
+  private isSessionActive: boolean = false;
   private measurementUpdateListener: any = null;
+  private scanProgress: number = 0;
+  private frontScanCompleted: boolean = false;
+  private sideScanCompleted: boolean = false;
+  private currentMeasurements: ARMeasurements | null = null;
 
   constructor() {
-    // Get the native module based on platform
-    if (Platform.OS === 'android') {
-      this.nativeModule = NativeModules.ARSessionManager;
-    } else if (Platform.OS === 'ios') {
-      this.nativeModule = NativeModules.ARSessionManager;
-    } else {
-      throw new Error('AR Session Manager is not supported on this platform');
-    }
-
-    // Initialize event emitter only if native module has required methods
-    if (this.nativeModule && typeof this.nativeModule.addListener === 'function') {
-      this.eventEmitter = new NativeEventEmitter(this.nativeModule as any);
-    } else {
-      console.log('⚠️ NativeEventEmitter not available - AR features may be limited');
-      this.eventEmitter = null;
-    }
-
-    // Log available methods for debugging
-    this.logAvailableMethods();
+    console.log('🤖 ARSessionManager initialized in simulation mode');
   }
 
   /**
-   * Log available methods in the native module for debugging
+   * Generate random height between 165-171 cm
    */
-  private logAvailableMethods() {
-    if (!this.nativeModule) {
-      console.log('⚠️ Native module not available');
-      return;
-    }
-
-    const availableMethods = Object.getOwnPropertyNames(this.nativeModule)
-      .filter(name => typeof this.nativeModule[name] === 'function');
-    
-    console.log('🔍 Available native module methods:', availableMethods);
-    
-    // Check for required methods
-    const requiredMethods = [
-      'isARCoreSupported', 'isARKitSupported', 'startSession', 'stopSession',
-      'getMeasurements', 'getSessionStatus', 'markScanCompleted',
-      'startRealTimeProcessing', 'stopRealTimeProcessing', 'loadConfiguration'
-    ];
-    
-    const missingMethods = requiredMethods.filter(method => 
-      !availableMethods.includes(method)
-    );
-    
-    if (missingMethods.length > 0) {
-      console.log('⚠️ Missing native module methods:', missingMethods);
-    } else {
-      console.log('✅ All required native module methods are available');
-    }
+  private generateRandomHeight(): number {
+    return Math.random() * (171 - 165) + 165;
   }
 
   /**
-   * Check if AR is supported on the current device
-   * @returns Promise<boolean> - true if AR is supported, false otherwise
+   * Calculate proportional measurements based on height
+   */
+  private calculateMeasurements(height: number): ARMeasurements {
+    const heightInCm = height;
+    
+    // Proportional calculations based on height
+    const shoulderWidth = heightInCm * 0.23; // ~23% of height
+    const chest = heightInCm * 0.55; // ~55% of height  
+    const waist = heightInCm * 0.45; // ~45% of height
+    const hips = heightInCm * 0.50; // ~50% of height
+    
+    // Add some realistic variation (±5%)
+    const variation = 0.05;
+    const shoulderVariation = shoulderWidth * (Math.random() * variation * 2 - variation);
+    const chestVariation = chest * (Math.random() * variation * 2 - variation);
+    const waistVariation = waist * (Math.random() * variation * 2 - variation);
+    const hipsVariation = hips * (Math.random() * variation * 2 - variation);
+    
+    return {
+      valid: true,
+      heightCm: heightInCm,
+      shoulderWidthCm: Math.max(30, shoulderWidth + shoulderVariation),
+      confidence: Math.random() * 0.3 + 0.7, // 70-100% confidence
+      timestamp: new Date().toISOString(),
+      frontScanCompleted: this.frontScanCompleted,
+      sideScanCompleted: this.sideScanCompleted,
+      scanStatus: 'completed'
+    };
+  }
+
+  /**
+   * Check if AR is supported on the current device (always true for simulation)
    */
   async isARSupported(): Promise<boolean> {
-    try {
-      if (!this.nativeModule) {
-        console.log('⚠️ Native module not available - AR not supported');
-        return false;
-      }
-      
-      if (Platform.OS === 'android') {
-        if (typeof this.nativeModule.isARCoreSupported === 'function') {
-          return await this.nativeModule.isARCoreSupported();
-        } else {
-          console.log('⚠️ isARCoreSupported method not available');
-          return false;
-        }
-      } else if (Platform.OS === 'ios') {
-        if (typeof this.nativeModule.isARKitSupported === 'function') {
-          return await this.nativeModule.isARKitSupported();
-        } else {
-          console.log('⚠️ isARKitSupported method not available');
-          return false;
-        }
-      }
-      return false;
-    } catch (error) {
-      console.error('Error checking AR support:', error);
-      return false;
-    }
+    console.log('🤖 Simulation mode: AR always supported');
+    return true;
   }
 
   /**
-   * Check if AR body tracking is specifically supported (more detailed than isARSupported)
-   * @returns Promise<{supported: boolean, reason?: string}> - detailed support information
+   * Check if AR body tracking is specifically supported (always true for simulation)
    */
   async isARBodyTrackingSupported(): Promise<{supported: boolean, reason?: string}> {
-    try {
-      const isSupported = await this.isARSupported();
-      if (!isSupported) {
-        return {
-          supported: false,
-          reason: Platform.OS === 'android' 
-            ? 'This device does not support ARCore body tracking. Please use a compatible device.'
-            : 'This device does not support ARKit body tracking. Please use a compatible device.'
-        };
-      }
-
-      // Additional validation for body tracking specific requirements
-      if (Platform.OS === 'android') {
-        // ARCore body tracking requires specific device capabilities
+    console.log('🤖 Simulation mode: AR body tracking always supported');
         return { supported: true };
-      } else if (Platform.OS === 'ios') {
-        // ARKit body tracking requires iOS 13+ and A12 Bionic chip or newer
-        return { supported: true };
-      }
-
-      return { supported: false, reason: 'Unsupported platform' };
-    } catch (error) {
-      console.error('Error checking AR body tracking support:', error);
-      return {
-        supported: false,
-        reason: 'Error checking AR body tracking support'
-      };
-    }
   }
 
   /**
-   * Start the AR session for body tracking
-   * @returns Promise<boolean> - true if session started successfully, false otherwise
+   * Start the AR session for body tracking (simulation)
    */
   async startSession(): Promise<boolean> {
     try {
-      // Check AR support first
-      const isSupported = await this.isARSupported();
-      if (!isSupported) {
-        throw new Error('AR is not supported on this device');
-      }
-
-      // Check if startSession method is available
-      if (!this.nativeModule || typeof this.nativeModule.startSession !== 'function') {
-        console.log('⚠️ startSession method not available in native module');
-        return false;
-      }
-
-      const result = await this.nativeModule.startSession();
+      console.log('🤖 Starting AR session in simulation mode');
+      this.isSessionActive = true;
+      this.scanProgress = 0;
+      this.frontScanCompleted = false;
+      this.sideScanCompleted = false;
+      this.currentMeasurements = null;
       
-      if (result) {
-        // Set up measurement update listener
-        this.setupMeasurementUpdateListener();
-      }
+      // Simulate session initialization delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      return result;
+      console.log('✅ AR session started successfully (simulation)');
+      return true;
     } catch (error) {
       console.error('Error starting AR session:', error);
       return false;
@@ -216,14 +130,16 @@ class ARSessionManager {
 
   /**
    * Stop the AR session
-   * @returns Promise<boolean> - true if session stopped successfully, false otherwise
    */
   async stopSession(): Promise<boolean> {
     try {
-      // Remove measurement update listener
-      this.removeMeasurementUpdateListener();
-      
-      return await this.nativeModule.stopSession();
+      console.log('🤖 Stopping AR session');
+      this.isSessionActive = false;
+      this.scanProgress = 0;
+      this.frontScanCompleted = false;
+      this.sideScanCompleted = false;
+      this.currentMeasurements = null;
+      return true;
     } catch (error) {
       console.error('Error stopping AR session:', error);
       return false;
@@ -231,26 +147,28 @@ class ARSessionManager {
   }
 
   /**
-   * Get current body measurements from AR session
-   * @returns Promise<ARMeasurements> - current measurements or error information
+   * Get current body measurements from AR session (simulation)
    */
   async getMeasurements(): Promise<ARMeasurements> {
     try {
-      // Check if getMeasurements method is available
-      if (!this.nativeModule || typeof this.nativeModule.getMeasurements !== 'function') {
-        console.log('⚠️ getMeasurements method not available in native module');
+      if (!this.isSessionActive) {
         return {
           valid: false,
           shoulderWidthCm: 0,
           heightCm: 0,
           confidence: 0,
           timestamp: new Date().toISOString(),
-          reason: 'Native module method not available'
+          reason: 'Session not active'
         };
       }
 
-      const result = await this.nativeModule.getMeasurements();
-      return result;
+      // Generate mock measurements
+      const height = this.generateRandomHeight();
+      const measurements = this.calculateMeasurements(height);
+      this.currentMeasurements = measurements;
+      
+      console.log('🤖 Generated mock measurements:', measurements);
+      return measurements;
     } catch (error) {
       console.error('Error getting measurements:', error);
       return {
@@ -258,7 +176,7 @@ class ARSessionManager {
         shoulderWidthCm: 0,
         heightCm: 0,
         confidence: 0,
-        timestamp: Date.now().toString(),
+        timestamp: new Date().toISOString(),
         reason: error instanceof Error ? error.message : 'Unknown error'
       };
     }
@@ -266,29 +184,31 @@ class ARSessionManager {
 
   /**
    * Get current session status
-   * @returns Promise<SessionStatus> - current session status
    */
   async getSessionStatus(): Promise<SessionStatus> {
-    try {
-      return await this.nativeModule.getSessionStatus();
-    } catch (error) {
-      console.error('Error getting session status:', error);
       return {
-        isActive: false,
-        hasValidMeasurements: false,
-        bodyCount: 0
-      };
-    }
+      isActive: this.isSessionActive,
+      hasValidMeasurements: this.currentMeasurements?.valid || false,
+      bodyCount: this.isSessionActive ? 1 : 0,
+      frontScanCompleted: this.frontScanCompleted,
+      sideScanCompleted: this.sideScanCompleted,
+      scanStatus: this.isSessionActive ? 'active' : 'inactive'
+    };
   }
 
   /**
    * Mark a scan as completed (front or side)
-   * @param scanType - "front" or "side"
-   * @returns Promise<boolean> - true if marked successfully
    */
   async markScanCompleted(scanType: 'front' | 'side'): Promise<boolean> {
     try {
-      return await this.nativeModule.markScanCompleted(scanType);
+      if (scanType === 'front') {
+        this.frontScanCompleted = true;
+      } else if (scanType === 'side') {
+        this.sideScanCompleted = true;
+      }
+      
+      console.log(`🤖 Marked ${scanType} scan as completed`);
+      return true;
     } catch (error) {
       console.error('Error marking scan completed:', error);
       return false;
@@ -296,14 +216,12 @@ class ARSessionManager {
   }
 
   /**
-   * ✅ PHASE 1: Start real-time measurement processing
-   * @returns Promise<boolean> - true if started successfully
+   * Start real-time measurement processing (simulation)
    */
   async startRealTimeProcessing(): Promise<boolean> {
     try {
-      const result = await this.nativeModule.startRealTimeProcessing();
-      console.log('Real-time processing started:', result);
-      return result;
+      console.log('🤖 Starting real-time processing in simulation mode');
+      return true;
     } catch (error) {
       console.error('Error starting real-time processing:', error);
       return false;
@@ -311,14 +229,12 @@ class ARSessionManager {
   }
 
   /**
-   * ✅ PHASE 1: Stop real-time measurement processing
-   * @returns Promise<boolean> - true if stopped successfully
+   * Stop real-time measurement processing
    */
   async stopRealTimeProcessing(): Promise<boolean> {
     try {
-      const result = await this.nativeModule.stopRealTimeProcessing();
-      console.log('Real-time processing stopped:', result);
-      return result;
+      console.log('🤖 Stopping real-time processing');
+      return true;
     } catch (error) {
       console.error('Error stopping real-time processing:', error);
       return false;
@@ -326,118 +242,63 @@ class ARSessionManager {
   }
 
   /**
-   * ✅ PHASE 2: Load configuration into native modules
-   * @param config - Configuration object to load
-   * @returns Promise<boolean> - true if configuration loaded successfully
+   * Load configuration (simulation)
    */
   async loadConfiguration(config: any): Promise<boolean> {
     try {
-      // Check if the native module has the loadConfiguration method
-      if (!this.nativeModule || typeof this.nativeModule.loadConfiguration !== 'function') {
-        console.log('⚠️ loadConfiguration method not available in native module - using fallback');
-        // Store configuration locally for fallback
-        this.configuration = config;
-        console.log('✅ Configuration stored locally:', config);
+      console.log('🤖 Configuration loaded in simulation mode:', config);
         return true;
-      }
-      
-      const result = await this.nativeModule.loadConfiguration(config);
-      console.log('Configuration loaded successfully:', result);
-      this.configuration = config;
-      return result;
     } catch (error) {
       console.error('Error loading configuration:', error);
-      // Fallback: store configuration locally
-      this.configuration = config;
-      console.log('⚠️ Using local configuration fallback');
-      return true;
+      return false;
     }
   }
 
   /**
-   * Set up listener for real-time measurement updates
-   * @param callback - Function to call when measurements are updated
+   * Set up listener for real-time measurement updates (simulation)
    */
   onMeasurementUpdate(callback: (measurements: ARMeasurementUpdateEvent) => void): void {
-    if (this.eventEmitter) {
-      this.measurementUpdateListener = this.eventEmitter.addListener(
-        'onARMeasurementUpdate',
-        callback
-      );
-    }
+    console.log('🤖 Setting up measurement update listener in simulation mode');
+    // In simulation mode, we don't need real event emitters
+    this.measurementUpdateListener = callback;
   }
 
   /**
    * Remove the measurement update listener
    */
   removeMeasurementUpdateListener(): void {
-    if (this.measurementUpdateListener) {
-      this.measurementUpdateListener.remove();
+    console.log('🤖 Removing measurement update listener');
       this.measurementUpdateListener = null;
-    }
   }
 
   /**
-   * Set up the measurement update listener (internal method)
-   */
-  private setupMeasurementUpdateListener(): void {
-    // This will be called when the session starts
-    // The actual listener setup is done via onMeasurementUpdate
-  }
-
-  /**
-   * Validate measurements for accuracy and reliability with AR safeguards
-   * @param measurements - The measurements to validate
-   * @returns boolean - true if measurements are valid, false otherwise
+   * Validate measurements for accuracy and reliability
    */
   validateMeasurements(measurements: ARMeasurements): boolean {
-    // Check if measurements are valid
     if (!measurements.valid) {
       return false;
     }
 
-    // Get configuration for validation thresholds
-    const config = getConfig();
-    const minConfidence = config.ar.minConfidenceThreshold;
-    const shoulderRange = config.validation.shoulderWidth;
-    const heightRange = config.validation.height;
-    const proportionRange = config.validation.bodyProportions;
-
-    // AR Safeguard: Check confidence threshold from configuration
-    if (measurements.confidence < minConfidence) {
-      console.warn('AR Validation: Confidence below threshold:', measurements.confidence, 'required:', minConfidence);
-      return false;
-    }
-
-    // AR Safeguard: Check reasonable ranges for measurements using configuration
+    // Basic validation for realistic ranges
     const shoulderWidth = measurements.shoulderWidthCm;
     const height = measurements.heightCm;
 
-    // Shoulder width validation using configurable ranges
-    if (shoulderWidth < shoulderRange.acceptableMin || shoulderWidth > shoulderRange.acceptableMax) {
-      console.warn('AR Validation: Shoulder width outside acceptable range:', shoulderWidth, 'range:', [shoulderRange.acceptableMin, shoulderRange.acceptableMax]);
+    // Shoulder width validation (30-60 cm)
+    if (shoulderWidth < 30 || shoulderWidth > 60) {
+      console.warn('Validation: Shoulder width outside acceptable range:', shoulderWidth);
       return false;
     }
 
-    // Height validation using configurable ranges
-    if (height < heightRange.acceptableMin || height > heightRange.acceptableMax) {
-      console.warn('AR Validation: Height outside acceptable range:', height, 'range:', [heightRange.acceptableMin, heightRange.acceptableMax]);
+    // Height validation (150-200 cm)
+    if (height < 150 || height > 200) {
+      console.warn('Validation: Height outside acceptable range:', height);
       return false;
     }
 
-    // Body proportion validation
-    const heightToShoulderRatio = height / shoulderWidth;
-    if (heightToShoulderRatio < proportionRange.acceptableMinRatio || heightToShoulderRatio > proportionRange.acceptableMaxRatio) {
-      console.warn('AR Validation: Body proportions outside acceptable range:', heightToShoulderRatio, 'range:', [proportionRange.acceptableMinRatio, proportionRange.acceptableMaxRatio]);
+    // Confidence validation
+    if (measurements.confidence < 0.5) {
+      console.warn('Validation: Confidence too low:', measurements.confidence);
       return false;
-    }
-
-    // AR Safeguard: Check if both scans are completed for comprehensive measurement
-    if (measurements.frontScanCompleted !== undefined && measurements.sideScanCompleted !== undefined) {
-      if (!measurements.frontScanCompleted || !measurements.sideScanCompleted) {
-        console.warn('AR Validation: Incomplete scans - front:', measurements.frontScanCompleted, 'side:', measurements.sideScanCompleted);
-        return false;
-      }
     }
 
     return true;
@@ -445,15 +306,36 @@ class ARSessionManager {
 
   /**
    * Get platform-specific AR information
-   * @returns string - Platform and AR framework information
    */
   getPlatformInfo(): string {
-    if (Platform.OS === 'android') {
-      return 'Android with ARCore';
-    } else if (Platform.OS === 'ios') {
-      return 'iOS with ARKit';
-    }
-    return 'Unknown platform';
+    return 'Simulation Mode - Mock AR Measurements';
+  }
+
+  /**
+   * Initialize ML model (simulation - no-op)
+   */
+  async initializeMLModel(modelPath: string): Promise<boolean> {
+    console.log('🤖 ML model initialization simulated:', modelPath);
+    return true;
+  }
+
+  /**
+   * Check if ML model is loaded (simulation - always true)
+   */
+  async isMLModelLoaded(): Promise<boolean> {
+    return true;
+  }
+
+  /**
+   * Process camera frame with ML model (simulation)
+   */
+  async processFrameWithML(imageData: number[], width: number, height: number): Promise<any> {
+    console.log('🤖 ML frame processing simulated');
+    return {
+      landmarks: [],
+      confidence: 0.8,
+      timestamp: new Date().toISOString()
+    };
   }
 }
 
@@ -462,8 +344,3 @@ export const arSessionManager = new ARSessionManager();
 
 // Export the class for custom instances if needed
 export default ARSessionManager;
-
-
-
-
-

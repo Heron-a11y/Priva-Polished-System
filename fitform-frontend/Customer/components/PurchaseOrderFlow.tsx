@@ -20,7 +20,9 @@ import { useNotificationContext } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Colors } from '../../constants/Colors';
 import SuccessModal from '../../components/SuccessModal';
-import ARMeasurementScreen from '../screens/RealARMeasurementScreen';
+import ARMeasurementScreen from '../screens/ARMeasurementScreen';
+import MeasurementValidationWarning from '../../components/MeasurementValidationWarning';
+import { MeasurementData, CompleteMeasurements, normalizeMeasurementData } from '../../types/measurements';
 
 const CLOTHING_TYPES = [
   { id: 'gown', label: 'Gown', icon: '👗', description: 'Elegant formal gowns' },
@@ -119,9 +121,12 @@ export default function PurchaseOrderFlow() {
   const [refreshing, setRefreshing] = useState(false);
   const [showCounterOfferModal, setShowCounterOfferModal] = useState(false);
   const [counterOfferAmount, setCounterOfferAmount] = useState('');
+  const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [counterOfferNotes, setCounterOfferNotes] = useState('');
   const [reviewAgreementAccepted, setReviewAgreementAccepted] = useState(false);
   const [showAgreementModal, setShowAgreementModal] = useState(false);
+  const [showMeasurementWarning, setShowMeasurementWarning] = useState(false);
+  const [missingMeasurementFields, setMissingMeasurementFields] = useState<string[]>([]);
 
   // AR Measurement states
   const [showARMeasurement, setShowARMeasurement] = useState(false);
@@ -137,6 +142,8 @@ export default function PurchaseOrderFlow() {
     armLength: 0,
     neck: 0
   });
+  const [latestMeasurements, setLatestMeasurements] = useState<MeasurementData | null>(null);
+  const [loadingLatestMeasurements, setLoadingLatestMeasurements] = useState(false);
 
   const { selectedOrderForReview, clearOrderReview } = useNotificationContext();
   const { user } = useAuth();
@@ -166,6 +173,193 @@ export default function PurchaseOrderFlow() {
     if (method === 'ar') {
       setShowARMeasurement(true);
     }
+  };
+
+  // Load latest measurements for the user
+  const loadLatestMeasurements = async () => {
+    if (!user) {
+      return;
+    }
+    
+    try {
+      setLoadingLatestMeasurements(true);
+      console.log('🔄 Loading latest measurements for purchase order...');
+      const response = await apiService.getLatestMeasurements();
+      if (response.success && response.data) {
+        console.log('✅ Latest measurements loaded:', response.data);
+        setLatestMeasurements(response.data);
+      } else {
+        console.log('ℹ️ No latest measurements found');
+        setLatestMeasurements(null);
+      }
+    } catch (error) {
+      console.error('❌ Error loading latest measurements:', error);
+      setLatestMeasurements(null);
+    } finally {
+      setLoadingLatestMeasurements(false);
+    }
+  };
+
+  // Use latest measurements to populate the selected measurement method
+  const useLatestMeasurements = () => {
+    if (!latestMeasurements) {
+      Alert.alert('No Latest Measurements', 'No previous measurements found. Please enter your measurements manually.');
+      return;
+    }
+
+    // Extract actual body measurements without calculations
+    const actualMeasurements = latestMeasurements.measurements || latestMeasurements;
+    console.log('📏 Using latest measurements (actual body measurements):', actualMeasurements);
+    
+    // Map the actual measurements directly to measurements
+    const newMeasurements: CompleteMeasurements = {
+      height: actualMeasurements.height || 0,
+      chest: actualMeasurements.chest || 0,
+      waist: actualMeasurements.waist || 0,
+      hips: actualMeasurements.hips || 0,
+      shoulders: actualMeasurements.shoulder_width || actualMeasurements.shoulders || 0,
+      inseam: actualMeasurements.inseam || 0,
+      armLength: actualMeasurements.arm_length || actualMeasurements.armLength || 0,
+      neck: actualMeasurements.neck || 0,
+      thigh: actualMeasurements.thigh || 0,
+    };
+    
+    // Populate the appropriate measurement method
+    if (measurementMethod === 'ar') {
+      setArMeasurements(newMeasurements);
+    } else if (measurementMethod === 'manual') {
+      setManualMeasurements(newMeasurements);
+    } else {
+      // If no method selected, populate manual measurements and select manual method
+      setManualMeasurements(newMeasurements);
+      setMeasurementMethod('manual');
+    }
+    
+    Alert.alert('Success', 'Latest body measurements have been applied to your form!');
+  };
+
+  // Load latest measurements when component mounts
+  useEffect(() => {
+    if (user) {
+      loadLatestMeasurements();
+    }
+  }, [user]);
+
+  // Transaction action handlers
+  const handleCancelOrder = async (order: any) => {
+    // Check if order is confirmed (quotation accepted or confirmed status)
+    const isConfirmed = order.quotation_status === 'accepted' || 
+                       order.status === 'confirmed' || 
+                       order.status === 'quotation_accepted';
+    
+    if (isConfirmed) {
+      // Show penalty warning for confirmed orders
+      Alert.alert(
+        '⚠️ Cancellation Penalty',
+        'This order has been confirmed. Cancelling will incur a penalty of ₱500.\n\nDo you want to proceed with the cancellation?',
+        [
+          {
+            text: 'No, Keep Order',
+            style: 'cancel',
+          },
+          {
+            text: 'Yes, Cancel with ₱500 Penalty',
+            style: 'destructive',
+            onPress: () => {
+              // Show final confirmation
+              Alert.alert(
+                'Final Confirmation',
+                'Are you absolutely sure you want to cancel this confirmed order?\n\nThis will result in a ₱500 penalty charge.',
+                [
+                  {
+                    text: 'No, Keep Order',
+                    style: 'cancel',
+                  },
+                  {
+                    text: 'Yes, Cancel Order',
+                    style: 'destructive',
+                    onPress: () => executeCancellation(order),
+                  },
+                ]
+              );
+            },
+          },
+        ]
+      );
+    } else {
+      // Regular cancellation for non-confirmed orders
+      Alert.alert(
+        'Cancel Order',
+        'Are you sure you want to cancel this order? This action cannot be undone.',
+        [
+          {
+            text: 'No',
+            style: 'cancel',
+          },
+          {
+            text: 'Yes, Cancel',
+            style: 'destructive',
+            onPress: () => executeCancellation(order),
+          },
+        ]
+      );
+    }
+  };
+
+  const executeCancellation = async (order: any) => {
+    try {
+      setLoading(true);
+      await apiService.cancelPurchaseOrder(order.id);
+      
+      // Show appropriate success message
+      const isConfirmed = order.quotation_status === 'accepted' || 
+                         order.status === 'confirmed' || 
+                         order.status === 'quotation_accepted';
+      
+      if (isConfirmed) {
+        Alert.alert('Success', 'Order has been cancelled successfully.\n\n₱500 penalty has been applied to your account.');
+      } else {
+        Alert.alert('Success', 'Order has been cancelled successfully.');
+      }
+      
+      fetchPurchaseOrders(); // Refresh the orders list
+    } catch (error: any) {
+      console.error('Error cancelling order:', error);
+      Alert.alert('Error', `Failed to cancel order: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditOrder = (order: any) => {
+    Alert.alert(
+      'Edit Order',
+      'This will allow you to modify your order details. Do you want to continue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Edit',
+          onPress: () => {
+            // Set the form data to the order data for editing
+            setFormData({
+              clothingType: order.clothing_type || '',
+              measurements: order.measurements || '',
+              style: order.style || '',
+              color: order.color || '',
+              notes: order.notes || '',
+              counterOfferAmount: order.counter_offer_amount?.toString() || '',
+              counterOfferNotes: order.counter_offer_notes || '',
+            });
+            setArMeasurements(order.ar_measurements || {});
+            setStep(0); // Go back to the first step
+            setEditingOrderId(order.id);
+          },
+        },
+      ]
+    );
   };
 
   // Complete measurement fields for manual input
@@ -239,6 +433,7 @@ export default function PurchaseOrderFlow() {
   // Helper function to validate measurements based on clothing type
   const validateMeasurements = () => {
     const newErrors: Errors = {};
+    const warnings: string[] = [];
     
     // Check if measurement method is selected
     if (!measurementMethod) {
@@ -261,12 +456,28 @@ export default function PurchaseOrderFlow() {
         const value = manualMeasurements[field.key as keyof CompleteMeasurements];
         if (!value || value <= 0) {
           newErrors[field.key] = `${field.label} is required and must be greater than 0`;
+          warnings.push(`${field.label} is missing or invalid`);
         }
       });
     }
     
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    
+    // If there are errors, show comprehensive warning
+    if (Object.keys(newErrors).length > 0) {
+      const missingFields = Object.keys(newErrors).filter(key => key !== 'measurementMethod');
+      if (missingFields.length > 0) {
+        const missingFieldLabels = missingFields.map(field => {
+          const fieldInfo = COMPLETE_MEASUREMENT_FIELDS.find(f => f.key === field);
+          return fieldInfo?.label || field;
+        });
+        setMissingMeasurementFields(missingFieldLabels);
+        setShowMeasurementWarning(true);
+      }
+      return false;
+    }
+    
+    return true;
   };
 
   const resetForm = () => {
@@ -305,7 +516,7 @@ export default function PurchaseOrderFlow() {
 
   // Memoize filtered orders to avoid re-filtering on every render
   const filteredOrders = useMemo(() => 
-    orders.filter(order => order.customer_email === user?.email),
+    orders.filter(order => order.customer_email === user?.email && order.status !== 'cancelled'),
     [orders, user?.email]
   );
 
@@ -540,17 +751,50 @@ export default function PurchaseOrderFlow() {
                     <Text style={styles.reviewQuotationBtnText}>Review Counter Offer</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={(e) => {
-                    e.stopPropagation(); // Prevent card click
-                    setSelectedOrder(item);
-                    setShowOrderDetails(true);
-                  }}
-                >
-                  <Ionicons name="eye-outline" size={16} color={Colors.primary} />
-                  <Text style={styles.actionButtonText}>View Details</Text>
-                </TouchableOpacity>
+
+                {/* Transaction Action Buttons */}
+                <View style={styles.transactionActions}>
+                  {/* Cancel Button - Show for all statuses except completed/declined */}
+                  {!['picked_up', 'returned', 'declined'].includes(item.status) && (
+                    <TouchableOpacity 
+                      style={styles.cancelButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleCancelOrder(item);
+                      }}
+                    >
+                      <Ionicons name="close-circle-outline" size={16} color="#dc2626" />
+                      <Text style={styles.cancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Edit Button - Show for pending and quotation_sent statuses */}
+                  {['pending', 'quotation_sent'].includes(item.status) && (
+                    <TouchableOpacity 
+                      style={styles.editButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleEditOrder(item);
+                      }}
+                    >
+                      <Ionicons name="create-outline" size={16} color={Colors.primary} />
+                      <Text style={styles.editButtonText}>Edit</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* View Details Button */}
+                  <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={(e) => {
+                      e.stopPropagation(); // Prevent card click
+                      setSelectedOrder(item);
+                      setShowOrderDetails(true);
+                    }}
+                  >
+                    <Ionicons name="eye-outline" size={16} color={Colors.primary} />
+                    <Text style={styles.actionButtonText}>View Details</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </TouchableOpacity>
           )}
@@ -959,11 +1203,11 @@ export default function PurchaseOrderFlow() {
                     <Text style={styles.currencySymbol}>₱</Text>
                     <TextInput
                       style={styles.enhancedTextInput}
-                      placeholder="Enter your counter offer amount"
+                      placeholder="5000, 7500"
+                      placeholderTextColor="#999"
                       value={counterOfferAmount}
                       onChangeText={setCounterOfferAmount}
                       keyboardType="numeric"
-                      placeholderTextColor={Colors.text.secondary}
                     />
                   </View>
                   <Text style={styles.inputHelperText}>
@@ -975,13 +1219,13 @@ export default function PurchaseOrderFlow() {
                   <Text style={styles.enhancedInputLabel}>Reason for Counter Offer (Optional)</Text>
                   <TextInput
                     style={styles.enhancedNotesInput}
-                    placeholder="Explain why you're making a counter offer or any special requests..."
+                    placeholder="Budget constraints, timeline flexibility"
+                    placeholderTextColor="#999"
                     value={counterOfferNotes}
                     onChangeText={setCounterOfferNotes}
                     multiline={true}
                     numberOfLines={4}
                     textAlignVertical="top"
-                    placeholderTextColor={Colors.text.secondary}
                   />
                 </View>
               </View>
@@ -1122,7 +1366,8 @@ export default function PurchaseOrderFlow() {
                     <Text style={styles.inputLabel}>Specify clothing type:</Text>
             <TextInput
               style={styles.input}
-                      placeholder="Enter custom clothing type..."
+              placeholder="Custom Suit, Wedding Dress, Formal Gown"
+              placeholderTextColor="#999"
               value={otherClothing}
               onChangeText={setOtherClothing}
               maxLength={40}
@@ -1204,17 +1449,51 @@ export default function PurchaseOrderFlow() {
               </TouchableOpacity>
             </View>
 
+            {/* Use Latest Measurements Button - Available for both AR and Manual */}
+            {latestMeasurements && (
+              <View style={styles.latestMeasurementsContainer}>
+                <TouchableOpacity
+                  style={styles.useLatestButton}
+                  onPress={useLatestMeasurements}
+                  disabled={loadingLatestMeasurements}
+                >
+                  <Ionicons 
+                    name="refresh" 
+                    size={16} 
+                    color={Colors.primary} 
+                    style={styles.buttonIcon}
+                  />
+                  <Text style={styles.useLatestButtonText}>
+                    {loadingLatestMeasurements ? 'Loading...' : 'Use Latest Measurements'}
+                  </Text>
+                </TouchableOpacity>
+                <Text style={styles.latestMeasurementsHint}>
+                  💡 Tap to auto-fill with your most recent body measurements
+                </Text>
+              </View>
+            )}
+
+
             {/* Show AR Measurement Results */}
             {measurementMethod === 'ar' && arMeasurements && (
               <View style={styles.arResultsContainer}>
                 <Text style={styles.arResultsTitle}>AR Measurement Results</Text>
                 <View style={styles.arResultsGrid}>
-                  {Object.entries(arMeasurements).map(([key, value]) => (
-                    <View key={key} style={styles.arResultItem}>
-                      <Text style={styles.arResultLabel}>{key.replace('_', ' ').toUpperCase()}</Text>
-                      <Text style={styles.arResultValue}>{value} cm</Text>
-                    </View>
-                  ))}
+                  {Object.entries(arMeasurements).map(([key, value]) => {
+                    // Only display actual body measurements, not metadata fields
+                    const bodyMeasurementKeys = ['height', 'chest', 'waist', 'hips', 'shoulders', 'inseam', 'armLength', 'neck'];
+                    const metadataFields = ['timestamp', 'frontScanCompleted', 'sideScanCompleted', 'scanStatus'];
+                    
+                    if (bodyMeasurementKeys.includes(key) && !metadataFields.includes(key)) {
+                      return (
+                        <View key={key} style={styles.arResultItem}>
+                          <Text style={styles.arResultLabel}>{key.replace('_', ' ').toUpperCase()}</Text>
+                          <Text style={styles.arResultValue}>{value} cm</Text>
+                        </View>
+                      );
+                    }
+                    return null;
+                  })}
                 </View>
               </View>
             )}
@@ -1223,7 +1502,7 @@ export default function PurchaseOrderFlow() {
               {measurementMethod === 'manual' && (
                 <View style={styles.manualInputContainer}>
                   <Text style={styles.manualInputTitle}>Manual Measurement Input</Text>
-                  <Text style={styles.manualInputSubtitle}>Enter your measurements in centimeters</Text>
+                  <Text style={styles.manualInputSubtitle}>Enter your measurements in inches</Text>
                   
                   <View style={styles.measurementGrid}>
                     {COMPLETE_MEASUREMENT_FIELDS.map(field => (
@@ -1231,7 +1510,8 @@ export default function PurchaseOrderFlow() {
                         <Text style={styles.measurementFieldLabel}>{field.label}</Text>
               <TextInput 
                           style={styles.measurementInput}
-                          placeholder={`${field.label} (cm)`}
+                          placeholder="180, 95, 85"
+                          placeholderTextColor="#999"
                           value={manualMeasurements[field.key as keyof CompleteMeasurements] > 0 ? 
                                  manualMeasurements[field.key as keyof CompleteMeasurements].toString() : ''}
                           onChangeText={(text) => {
@@ -1289,6 +1569,7 @@ export default function PurchaseOrderFlow() {
                   <TextInput 
                     style={styles.input} 
                     placeholder="e.g., Modern slim-fit, Classic traditional, Vintage retro" 
+                    placeholderTextColor="#999"
                     value={design.style} 
                     onChangeText={v => setDesign({ ...design, style: v })} 
                   />
@@ -1301,6 +1582,7 @@ export default function PurchaseOrderFlow() {
                   <TextInput 
                     style={styles.input} 
                     placeholder="e.g., Navy blue, Black and white, Burgundy" 
+                    placeholderTextColor="#999"
                     value={design.color} 
                     onChangeText={v => setDesign({ ...design, color: v })} 
                   />
@@ -1313,6 +1595,7 @@ export default function PurchaseOrderFlow() {
                   <TextInput 
                     style={[styles.input, styles.textArea]} 
                     placeholder="e.g., Special occasion details, fabric preferences, specific features" 
+                    placeholderTextColor="#999"
                     value={design.notes} 
                     onChangeText={v => setDesign({ ...design, notes: v })} 
                     multiline={true}
@@ -1561,6 +1844,16 @@ export default function PurchaseOrderFlow() {
           />
         </Modal>
       )}
+
+      {/* Measurement Validation Warning */}
+      <MeasurementValidationWarning
+        visible={showMeasurementWarning}
+        missingFields={missingMeasurementFields}
+        onClose={() => setShowMeasurementWarning(false)}
+        onFillMeasurements={() => setShowMeasurementWarning(false)}
+        title="Incomplete Measurements"
+        subtitle="Please fill in all required measurements for accurate sizing"
+      />
 
       {/* Success Modal */}
       <SuccessModal
@@ -3305,6 +3598,84 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.text.secondary,
     marginTop: 4,
+    fontStyle: 'italic',
+  },
+
+  // Transaction Action Buttons
+  transactionActions: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#fef2f2',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#dc2626',
+    marginLeft: 4,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginLeft: 4,
+  },
+  // Latest Measurements Button Styles
+  latestMeasurementsContainer: {
+    backgroundColor: Colors.background.light,
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 16,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    alignItems: 'center',
+  },
+  useLatestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    marginBottom: 8,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  buttonIcon: {
+    marginRight: 8,
+  },
+  useLatestButtonText: {
+    color: Colors.text.inverse,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  latestMeasurementsHint: {
+    fontSize: 12,
+    color: Colors.text.muted,
+    textAlign: 'center',
     fontStyle: 'italic',
   },
 }); 

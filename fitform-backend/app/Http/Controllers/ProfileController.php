@@ -62,7 +62,7 @@ class ProfileController extends Controller
             'zip_code' => 'nullable|string|max:20',
             'country' => 'nullable|string|max:100',
             'date_of_birth' => 'nullable|date|before:today',
-            'gender' => 'nullable|in:male,female',
+            'gender' => 'nullable|in:male,female,other,prefer_not_to_say',
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 

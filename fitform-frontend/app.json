@@ -77,7 +77,6 @@
         }
       ],
       "expo-router",
-      "./plugins/arcore-plugin",
       [
         "expo-build-properties",
         {

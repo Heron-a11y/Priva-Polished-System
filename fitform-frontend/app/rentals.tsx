@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, Button, TextInput, StyleSheet } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
+import KeyboardAvoidingWrapper from '../components/KeyboardAvoidingWrapper';
 
 export default function RentalsScreen() {
   const { user } = useAuth();
@@ -29,7 +30,7 @@ export default function RentalsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container}>
       <Text style={styles.title}>My Rentals</Text>
       <FlatList
         data={rentals}
@@ -46,10 +47,11 @@ export default function RentalsScreen() {
         style={styles.input}
         value={itemName}
         onChangeText={setItemName}
-        placeholder="Item name"
+        placeholder="Wedding Dress, Tuxedo, Formal Suit"
+        placeholderTextColor="#999"
       />
       <Button title="Rent Item" onPress={createRental} />
-    </View>
+    </KeyboardAvoidingWrapper>
   );
 }
 

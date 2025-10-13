@@ -251,9 +251,16 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
                       color={item.read ? '#014D40' : '#FFD700'} 
                       style={{ marginRight: 8 }} 
                     />
-                    <Text style={[styles.notifText, !item.read && styles.notifTextUnread]}>
-                      {item.message}
-                    </Text>
+                    <View style={styles.notifContent}>
+                      <Text style={[styles.notifText, !item.read && styles.notifTextUnread]}>
+                        {item.message}
+                      </Text>
+                      {item.customer_email && (
+                        <Text style={styles.customerEmail}>
+                          📧 {item.customer_email}
+                        </Text>
+                      )}
+                    </View>
                   </TouchableOpacity>
                 )}
               />
@@ -441,15 +448,23 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
     backgroundColor: 'transparent',
   },
+  notifContent: {
+    flex: 1,
+  },
   notifText: {
     color: '#014D40',
     fontSize: 14,
-    flex: 1,
     lineHeight: 20,
   },
   notifTextUnread: {
     fontWeight: 'bold',
     color: '#014D40',
+  },
+  customerEmail: {
+    color: '#666',
+    fontSize: 12,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   profileImage: {
     width: 32,

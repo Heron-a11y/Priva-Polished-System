@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\SizingController;
 use App\Http\Controllers\MeasurementHistoryController;
+use App\Http\Controllers\BodyMeasurementController;
 use App\Http\Middleware\CorsMiddleware;
 
 /*
@@ -86,9 +87,11 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         // Rental actions
         Route::post('/rentals/{id}/approve', [\App\Http\Controllers\RentalController::class, 'approve']);
         Route::post('/rentals/{id}/decline', [\App\Http\Controllers\RentalController::class, 'decline']);
+        Route::post('/rentals/{id}/cancel', [\App\Http\Controllers\RentalController::class, 'cancel']);
         // Purchase actions
         Route::post('/purchases/{id}/approve', [\App\Http\Controllers\PurchaseController::class, 'approve']);
         Route::post('/purchases/{id}/decline', [\App\Http\Controllers\PurchaseController::class, 'decline']);
+        Route::post('/purchases/{id}/cancel', [\App\Http\Controllers\PurchaseController::class, 'cancel']);
         // Quotation actions for purchases
         Route::post('/purchases/{id}/set-quotation', [\App\Http\Controllers\PurchaseController::class, 'setQuotation']);
         Route::post('/purchases/{id}/accept-quotation', [\App\Http\Controllers\PurchaseController::class, 'customerAcceptQuotation']);
@@ -158,6 +161,12 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         Route::get('/measurement-history/{id}', [MeasurementHistoryController::class, 'show']);
         Route::put('/measurement-history/{id}', [MeasurementHistoryController::class, 'update']);
         Route::delete('/measurement-history/{id}', [MeasurementHistoryController::class, 'destroy']);
+        
+        // AR Body Measurement Routes
+        Route::post('/body-measurements', [BodyMeasurementController::class, 'store']);
+        Route::get('/body-measurements', [BodyMeasurementController::class, 'index']);
+        Route::get('/body-measurements/latest', [BodyMeasurementController::class, 'latest']);
+        Route::post('/body-measurements/validate', [BodyMeasurementController::class, 'validate']);
         
         // Admin Measurement History Routes (New Table)
         Route::get('/admin/measurement-history', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'index']);

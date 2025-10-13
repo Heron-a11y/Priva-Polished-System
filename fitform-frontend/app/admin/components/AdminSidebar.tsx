@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Image, Dimensions, Alert } fr
 import { Link, usePathname, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../contexts/AuthContext';
+import { getLocalImageUrl } from '../../../utils/imageUrlHelper';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const isMobile = SCREEN_WIDTH < 600;
@@ -71,7 +72,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ open, setOpen }) => {
                   {user.profile_image ? (
                     <Image 
                       source={{ 
-                        uri: user.profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.105:8000'),
+                        uri: getLocalImageUrl(user.profile_image),
                         cache: 'force-cache'
                       }} 
                       style={styles.logoImage}
@@ -141,7 +142,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ open, setOpen }) => {
               {user.profile_image ? (
                 <Image 
                   source={{ 
-                    uri: user.profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.105:8000'),
+                    uri: getLocalImageUrl(user.profile_image),
                     cache: 'force-cache'
                   }} 
                   style={styles.logoImage}

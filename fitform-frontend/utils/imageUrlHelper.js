@@ -1,4 +1,6 @@
 // Image URL Helper utility
+import networkConfig from '../services/network-config';
+
 class ImageUrlHelper {
   constructor() {
     this.baseUrl = 'http://192.168.1.105:8000';
@@ -8,37 +10,59 @@ class ImageUrlHelper {
 
   // Get the appropriate base URL based on environment
   getBaseUrl() {
+    // Use dynamic network configuration if available
+    try {
+      const networkUrl = networkConfig.getBackendUrl();
+      if (networkUrl) {
+        // Remove /api suffix if present to get base URL
+        return networkUrl.replace('/api', '');
+      }
+    } catch (error) {
+      console.log('⚠️ Could not get network config, using fallback:', error.message);
+    }
+    
     return this.isDevelopment ? this.baseUrl : this.ngrokUrl;
   }
 
   // Convert image URL to local development URL
   getLocalImageUrl(imageUrl) {
     if (!imageUrl) {
+      console.log('⚠️ No image URL provided');
       return null;
     }
 
+    console.log('🖼️ Processing image URL:', imageUrl);
+
     // If it's already a local URL, return as is
-    if (imageUrl.includes('192.168.1.105') || imageUrl.includes('localhost')) {
+    if (imageUrl.includes('192.168.1.105') || imageUrl.includes('localhost') || imageUrl.includes('192.168.1.108')) {
+      console.log('✅ Already local URL:', imageUrl);
       return imageUrl;
     }
 
     // If it's an ngrok URL, convert to local
     if (imageUrl.includes('ngrok.io')) {
-      return imageUrl.replace(this.ngrokUrl, this.baseUrl);
+      const localUrl = imageUrl.replace(this.ngrokUrl, this.baseUrl);
+      console.log('🔄 Converted ngrok to local:', localUrl);
+      return localUrl;
     }
 
     // If it's a relative path, prepend base URL
     if (imageUrl.startsWith('/')) {
-      return `${this.getBaseUrl()}${imageUrl}`;
+      const fullUrl = `${this.getBaseUrl()}${imageUrl}`;
+      console.log('🔄 Added base URL to relative path:', fullUrl);
+      return fullUrl;
     }
 
     // If it's already a full URL, return as is
     if (imageUrl.startsWith('http')) {
+      console.log('✅ Full URL provided:', imageUrl);
       return imageUrl;
     }
 
     // Default: prepend base URL
-    return `${this.getBaseUrl()}/${imageUrl}`;
+    const defaultUrl = `${this.getBaseUrl()}/${imageUrl}`;
+    console.log('🔄 Default URL construction:', defaultUrl);
+    return defaultUrl;
   }
 
   // Convert image URL to production URL

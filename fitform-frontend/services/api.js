@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import networkConfig from './network-config';
 
 // Base API configuration - will be dynamically set based on network mode
-let API_BASE_URL = 'http://192.168.1.59:8000/api'; // Updated to current IP
+let API_BASE_URL = 'http://192.168.1.108:8000/api'; // Updated to current IP
 
 class ApiService {
     constructor() {
@@ -296,7 +296,7 @@ class ApiService {
     async getAllAppointments() {
         return this.request('/admin/appointments');
     }
-    async updateAppointmentStatus(id, status) {
+    async updateAdminAppointmentStatus(id, status) {
         return this.request(`/admin/appointments/${id}/status`, {
             method: 'POST',
             body: JSON.stringify({ status }),
@@ -421,6 +421,12 @@ class ApiService {
     async deleteRental(id) {
         return this.request(`/rentals/${id}`, {
             method: 'DELETE',
+        });
+    }
+
+    async cancelRentalOrder(id) {
+        return this.request(`/rentals/${id}/cancel`, {
+            method: 'POST',
         });
     }
 
@@ -652,6 +658,10 @@ class ApiService {
     }
 
     async saveMeasurementHistory(data) {
+        console.log('🌐 API: Sending measurement data to backend');
+        if (data.notes) {
+            console.log('🌐 API: Notes field:', data.notes);
+        }
         return this.request('/measurement-history', {
             method: 'POST',
             body: JSON.stringify(data),
@@ -660,6 +670,45 @@ class ApiService {
 
     async getMeasurementHistoryById(id) {
         return this.request(`/measurement-history/${id}`);
+    }
+
+    // Get latest measurements for the current user
+    async getLatestMeasurements() {
+        try {
+            // Skip the non-existent endpoint and go straight to fallback
+            console.log('🔄 Using fallback for latest measurements...');
+            
+            // Try measurement history latest first
+            const response = await this.request('/measurement-history/latest');
+            if (response && response.data) {
+                return { success: true, data: response.data };
+            }
+            
+            // If that doesn't work, try getting the most recent from history
+            const historyResponse = await this.request('/measurement-history');
+            if (historyResponse && Array.isArray(historyResponse) && historyResponse.length > 0) {
+                // Get the most recent measurement
+                const latestMeasurement = historyResponse[0];
+                return { success: true, data: latestMeasurement };
+            }
+            
+            return { success: false, data: null };
+        } catch (error) {
+            console.log('❌ Error loading latest measurements:', error.message);
+            return { success: false, data: null };
+        }
+    }
+
+    // Get user's measurement history
+    async getUserMeasurements() {
+        try {
+            // Skip the non-existent endpoint and go straight to fallback
+            console.log('🔄 Using fallback for user measurements...');
+            return await this.request('/measurement-history');
+        } catch (error) {
+            console.log('❌ Error loading user measurements:', error.message);
+            return { success: false, data: [] };
+        }
     }
 
     async updateMeasurementHistory(id, data) {
@@ -793,6 +842,19 @@ class ApiService {
 
     async syncAdminMeasurementHistory() {
         return this.request('/admin/measurement-history/sync', {
+            method: 'POST',
+        });
+    }
+
+    // Cancel functions
+    async cancelRentalOrder(id) {
+        return this.request(`/rentals/${id}/cancel`, {
+            method: 'POST',
+        });
+    }
+
+    async cancelPurchaseOrder(id) {
+        return this.request(`/purchases/${id}/cancel`, {
             method: 'POST',
         });
     }

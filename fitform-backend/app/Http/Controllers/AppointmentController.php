@@ -67,15 +67,15 @@ class AppointmentController extends Controller
             ], 422);
         }
 
-        // Enhanced business hours validation (10 AM to 6 PM, 30-minute slots)
+        // Enhanced business hours validation (10 AM to 7 PM, 30-minute slots)
         $appointmentHour = $appointmentDate->hour;
         $appointmentMinute = $appointmentDate->minute;
         
-        // Check if time is within business hours
-        if ($appointmentHour < 10 || $appointmentHour >= 18) {
+        // Check if time is within business hours (10 AM to 7 PM)
+        if ($appointmentHour < 10 || $appointmentHour > 19) {
             return response()->json([
                 'success' => false,
-                'message' => 'Appointments can only be scheduled between 10:00 AM and 6:00 PM.',
+                'message' => 'Appointments can only be scheduled between 10:00 AM and 7:00 PM.',
                 'error' => 'outside_business_hours'
             ], 422);
         }
@@ -197,9 +197,9 @@ class AppointmentController extends Controller
             ], 422);
         }
 
-        // Check if rescheduled appointment time is within business hours (10 AM to 7 PM, last slot at 6 PM)
+        // Check if rescheduled appointment time is within business hours (10 AM to 7 PM)
         $appointmentHour = $appointmentDate->hour;
-        if ($appointmentHour < 10 || $appointmentHour >= 19) { // 10 AM to 7 PM (19:00), last slot at 6 PM (18:00)
+        if ($appointmentHour < 10 || $appointmentHour > 19) { // 10 AM to 7 PM (19:00)
             return response()->json([
                 'success' => false,
                 'message' => 'Appointments can only be rescheduled between 10:00 AM and 7:00 PM. Please select a time within business hours.',

@@ -86,6 +86,33 @@ class PurchaseController extends Controller
         return response()->json(['success' => true, 'status' => 'declined']);
     }
 
+    public function cancel($id)
+    {
+        $purchase = Purchase::findOrFail($id);
+        
+        // Only allow cancellation of orders that haven't been picked up yet
+        if (!in_array($purchase->status, ['pending', 'quotation_sent', 'counter_offer_pending', 'in_progress', 'ready_for_pickup'])) {
+            return response()->json(['error' => 'Cannot cancel order in current status: ' . $purchase->status], 400);
+        }
+        
+        $purchase->status = 'cancelled';
+        $purchase->save();
+        
+        // Update history entry
+        $this->updatePurchaseHistory($purchase);
+        
+        Notification::create([
+            'user_id' => $purchase->user_id,
+            'sender_role' => 'customer',
+            'message' => 'Your purchase order #' . $purchase->id . ' has been cancelled.',
+            'read' => false,
+            'order_id' => $purchase->id,
+            'order_type' => 'Purchase',
+        ]);
+        
+        return response()->json(['success' => true, 'status' => 'cancelled']);
+    }
+
 
     public function adminAccept($id)
     {

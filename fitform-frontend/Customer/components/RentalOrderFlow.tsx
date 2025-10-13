@@ -8,7 +8,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNotificationContext } from '../../contexts/NotificationContext';
 import { Colors } from '../../constants/Colors';
 import SuccessModal from '../../components/SuccessModal';
-import ARMeasurementScreen from '../screens/RealARMeasurementScreen';
+import ARMeasurementScreen from '../screens/ARMeasurementScreen';
+import MeasurementValidationWarning from '../../components/MeasurementValidationWarning';
+import { MeasurementData, CompleteMeasurements, normalizeMeasurementData } from '../../types/measurements';
 
 const { width } = Dimensions.get('window');
 
@@ -102,6 +104,9 @@ export default function RentalOrderFlow() {
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showAgreementModal, setShowAgreementModal] = useState(false);
+  const [showMeasurementWarning, setShowMeasurementWarning] = useState(false);
+  const [missingMeasurementFields, setMissingMeasurementFields] = useState<string[]>([]);
+  const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [showCounterOfferModal, setShowCounterOfferModal] = useState(false);
   const [counterOfferAmount, setCounterOfferAmount] = useState('');
   const [counterOfferNotes, setCounterOfferNotes] = useState('');
@@ -121,6 +126,8 @@ export default function RentalOrderFlow() {
     armLength: 0,
     neck: 0
   });
+  const [latestMeasurements, setLatestMeasurements] = useState<MeasurementData | null>(null);
+  const [loadingLatestMeasurements, setLoadingLatestMeasurements] = useState(false);
 
   useEffect(() => {
     if (showQuotationModal) {
@@ -157,6 +164,136 @@ export default function RentalOrderFlow() {
     if (method === 'ar') {
       setShowARMeasurement(true);
     }
+  };
+
+  // Transaction action handlers
+  const handleCancelOrder = async (order: any) => {
+    // Check if order is confirmed (quotation accepted or confirmed status)
+    const isConfirmed = order.quotation_status === 'accepted' || 
+                       order.status === 'confirmed' || 
+                       order.status === 'quotation_accepted';
+    
+    if (isConfirmed) {
+      // Show penalty warning for confirmed orders
+      Alert.alert(
+        '⚠️ Cancellation Penalty',
+        'This order has been confirmed. Cancelling will incur a penalty of ₱500.\n\nDo you want to proceed with the cancellation?',
+        [
+          {
+            text: 'No, Keep Order',
+            style: 'cancel',
+          },
+          {
+            text: 'Yes, Cancel with ₱500 Penalty',
+            style: 'destructive',
+            onPress: () => {
+              // Show final confirmation
+              Alert.alert(
+                'Final Confirmation',
+                'Are you absolutely sure you want to cancel this confirmed order?\n\nThis will result in a ₱500 penalty charge.',
+                [
+                  {
+                    text: 'No, Keep Order',
+                    style: 'cancel',
+                  },
+                  {
+                    text: 'Yes, Cancel Order',
+                    style: 'destructive',
+                    onPress: () => executeCancellation(order),
+                  },
+                ]
+              );
+            },
+          },
+        ]
+      );
+    } else {
+      // Regular cancellation for non-confirmed orders
+      Alert.alert(
+        'Cancel Rental',
+        'Are you sure you want to cancel this rental? This action cannot be undone.',
+        [
+          {
+            text: 'No',
+            style: 'cancel',
+          },
+          {
+            text: 'Yes, Cancel',
+            style: 'destructive',
+            onPress: () => executeCancellation(order),
+          },
+        ]
+      );
+    }
+  };
+
+  const executeCancellation = async (order: any) => {
+    try {
+      setLoading(true);
+      console.log('Attempting to cancel rental:', order.id);
+      await apiService.cancelRentalOrder(order.id);
+      console.log('Rental cancelled successfully:', order.id);
+      
+      // Show appropriate success message
+      const isConfirmed = order.quotation_status === 'accepted' || 
+                         order.status === 'confirmed' || 
+                         order.status === 'quotation_accepted';
+      
+      if (isConfirmed) {
+        Alert.alert('Success', 'Rental has been cancelled successfully.\n\n₱500 penalty has been applied to your account.');
+      } else {
+        Alert.alert('Success', 'Rental has been cancelled successfully.');
+      }
+      
+      fetchRentalOrders(); // Refresh the orders list
+    } catch (error: any) {
+      console.error('Error cancelling rental:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.status,
+        response: error.response
+      });
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to cancel rental';
+      if (error.message) {
+        errorMessage += `: ${error.message}`;
+      } else if (error.response?.data?.error) {
+        errorMessage += `: ${error.response.data.error}`;
+      }
+      
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditOrder = (order: any) => {
+    Alert.alert(
+      'Edit Rental',
+      'This will allow you to modify your rental details. Do you want to continue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Edit',
+          onPress: () => {
+            // Set the form data to the order data for editing
+            setFormData({
+              rentalType: order.rental_type || order.clothing_type || '',
+              otherType: order.other_type || '',
+              startDate: order.rental_date || '',
+              specialRequests: order.special_requests || '',
+            });
+            setArMeasurements(order.ar_measurements || {});
+            setEditingOrderId(order.id);
+            setShowNewRentalModal(true); // Open the rental modal for editing
+          },
+        },
+      ]
+    );
   };
 
   // Complete measurement fields for manual input
@@ -216,13 +353,20 @@ export default function RentalOrderFlow() {
     }
   }, [selectedOrderForReview, orders]);
 
+  // Load latest measurements when component mounts
+  useEffect(() => {
+    if (user) {
+      loadLatestMeasurements();
+    }
+  }, [user]);
+
   const fetchRentalOrders = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
       const response = await apiService.getRentals();
       const rentalOrders = Array.isArray(response) ? response : response.data || [];
       const filteredOrders = rentalOrders.filter((order: RentalOrder) => 
-        order.customer_email === user?.email
+        order.customer_email === user?.email && order.status !== 'cancelled'
       );
       setOrders(filteredOrders);
     } catch (error) {
@@ -235,6 +379,69 @@ export default function RentalOrderFlow() {
       setRefreshing(false);
     }
   }, [user?.email]);
+
+  // Load latest measurements for the user
+  const loadLatestMeasurements = async () => {
+    if (!user) {
+      return;
+    }
+    
+    try {
+      setLoadingLatestMeasurements(true);
+      console.log('🔄 Loading latest measurements for rental order...');
+      const response = await apiService.getLatestMeasurements();
+      if (response.success && response.data) {
+        console.log('✅ Latest measurements loaded:', response.data);
+        setLatestMeasurements(response.data);
+      } else {
+        console.log('ℹ️ No latest measurements found');
+        setLatestMeasurements(null);
+      }
+    } catch (error) {
+      console.error('❌ Error loading latest measurements:', error);
+      setLatestMeasurements(null);
+    } finally {
+      setLoadingLatestMeasurements(false);
+    }
+  };
+
+  // Use latest measurements to populate the selected measurement method
+  const useLatestMeasurements = () => {
+    if (!latestMeasurements) {
+      Alert.alert('No Latest Measurements', 'No previous measurements found. Please enter your measurements manually.');
+      return;
+    }
+
+    // Extract actual body measurements without calculations
+    const actualMeasurements = latestMeasurements.measurements || latestMeasurements;
+    console.log('📏 Using latest measurements (actual body measurements):', actualMeasurements);
+    
+    // Map the actual measurements directly to measurements
+    const newMeasurements: CompleteMeasurements = {
+      height: actualMeasurements.height || 0,
+      chest: actualMeasurements.chest || 0,
+      waist: actualMeasurements.waist || 0,
+      hips: actualMeasurements.hips || 0,
+      shoulders: actualMeasurements.shoulder_width || actualMeasurements.shoulders || 0,
+      inseam: actualMeasurements.inseam || 0,
+      armLength: actualMeasurements.arm_length || actualMeasurements.armLength || 0,
+      neck: actualMeasurements.neck || 0,
+      thigh: actualMeasurements.thigh || 0,
+    };
+    
+    // Populate the appropriate measurement method
+    if (measurementMethod === 'ar') {
+      setArMeasurements(newMeasurements);
+    } else if (measurementMethod === 'manual') {
+      setManualMeasurements(newMeasurements);
+    } else {
+      // If no method selected, populate manual measurements and select manual method
+      setManualMeasurements(newMeasurements);
+      setMeasurementMethod('manual');
+    }
+    
+    Alert.alert('Success', 'Latest body measurements have been applied to your form!');
+  };
 
   const validateForm = () => {
     const newErrors: {[key: string]: string} = {};
@@ -266,6 +473,21 @@ export default function RentalOrderFlow() {
     }
 
     setErrors(newErrors);
+    
+    // If there are measurement errors, show comprehensive warning
+    if (measurementMethod === 'manual' && Object.keys(newErrors).some(key => COMPLETE_MEASUREMENT_FIELDS.some(field => field.key === key))) {
+      const missingFields = Object.keys(newErrors).filter(key => COMPLETE_MEASUREMENT_FIELDS.some(field => field.key === key));
+      if (missingFields.length > 0) {
+        const missingFieldLabels = missingFields.map(field => {
+          const fieldInfo = COMPLETE_MEASUREMENT_FIELDS.find(f => f.key === field);
+          return fieldInfo?.label || field;
+        });
+        setMissingMeasurementFields(missingFieldLabels);
+        setShowMeasurementWarning(true);
+        return false;
+      }
+    }
+    
     return Object.keys(newErrors).length === 0;
   };
 
@@ -571,17 +793,49 @@ export default function RentalOrderFlow() {
             <Text style={styles.reviewQuotationBtnText}>Review Counter Offer</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => {
-            console.log('Order data being set:', order);
-            setSelectedOrder(order);
-            setShowOrderDetails(true);
-          }}
-        >
-          <Ionicons name="eye-outline" size={16} color={Colors.primary} />
-          <Text style={styles.actionButtonText}>View Details</Text>
-        </TouchableOpacity>
+        {/* Transaction Action Buttons */}
+        <View style={styles.transactionActions}>
+          {/* Cancel Button - Show for all statuses except completed/declined */}
+          {!['picked_up', 'returned', 'declined'].includes(order.status) && (
+            <TouchableOpacity 
+              style={styles.cancelButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleCancelOrder(order);
+              }}
+            >
+              <Ionicons name="close-circle-outline" size={16} color="#dc2626" />
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Edit Button - Show for pending and quotation_sent statuses */}
+          {['pending', 'quotation_sent'].includes(order.status) && (
+            <TouchableOpacity 
+              style={styles.editButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleEditOrder(order);
+              }}
+            >
+              <Ionicons name="create-outline" size={16} color={Colors.primary} />
+              <Text style={styles.editButtonText}>Edit</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* View Details Button */}
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => {
+              console.log('Order data being set:', order);
+              setSelectedOrder(order);
+              setShowOrderDetails(true);
+            }}
+          >
+            <Ionicons name="eye-outline" size={16} color={Colors.primary} />
+            <Text style={styles.actionButtonText}>View Details</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -668,7 +922,8 @@ export default function RentalOrderFlow() {
               {formData.rentalType === 'other' && (
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Specify rental type..."
+                  placeholder="Wedding Dress, Tuxedo, Formal Suit"
+                  placeholderTextColor="#999"
                   value={formData.otherType}
                   onChangeText={(text) => setFormData({...formData, otherType: text})}
                 />
@@ -715,7 +970,8 @@ export default function RentalOrderFlow() {
                 <Text style={styles.formSectionTitle}>Special Requests</Text>
                 <TextInput
                   style={[styles.textInput, styles.textArea]}
-                  placeholder="Any special requirements or notes..."
+                  placeholder="Rush order, specific measurements, color preferences"
+                  placeholderTextColor="#999"
                   value={formData.specialRequests}
                   onChangeText={(text) => setFormData({...formData, specialRequests: text})}
                   multiline
@@ -780,17 +1036,51 @@ export default function RentalOrderFlow() {
                   </TouchableOpacity>
                 </View>
 
+                {/* Use Latest Measurements Button - Available for both AR and Manual */}
+                {latestMeasurements && (
+                  <View style={styles.latestMeasurementsContainer}>
+                    <TouchableOpacity
+                      style={styles.useLatestButton}
+                      onPress={useLatestMeasurements}
+                      disabled={loadingLatestMeasurements}
+                    >
+                      <Ionicons 
+                        name="refresh" 
+                        size={16} 
+                        color={Colors.primary} 
+                        style={styles.buttonIcon}
+                      />
+                      <Text style={styles.useLatestButtonText}>
+                        {loadingLatestMeasurements ? 'Loading...' : 'Use Latest Measurements'}
+                      </Text>
+                    </TouchableOpacity>
+                    <Text style={styles.latestMeasurementsHint}>
+                      💡 Tap to auto-fill with your most recent body measurements
+                    </Text>
+                  </View>
+                )}
+
+
                 {/* Show AR Measurement Results */}
                 {measurementMethod === 'ar' && arMeasurements && (
                   <View style={styles.arResultsContainer}>
                     <Text style={styles.arResultsTitle}>AR Measurement Results</Text>
                     <View style={styles.arResultsGrid}>
-                      {Object.entries(arMeasurements).map(([key, value]) => (
-                        <View key={key} style={styles.arResultItem}>
-                          <Text style={styles.arResultLabel}>{key.replace('_', ' ').toUpperCase()}</Text>
-                          <Text style={styles.arResultValue}>{value} cm</Text>
-                        </View>
-                      ))}
+                      {Object.entries(arMeasurements).map(([key, value]) => {
+                        // Only display actual body measurements, not metadata fields
+                        const bodyMeasurementKeys = ['height', 'chest', 'waist', 'hips', 'shoulders', 'inseam', 'armLength', 'neck'];
+                        const metadataFields = ['timestamp', 'frontScanCompleted', 'sideScanCompleted', 'scanStatus'];
+                        
+                        if (bodyMeasurementKeys.includes(key) && !metadataFields.includes(key)) {
+                          return (
+                            <View key={key} style={styles.arResultItem}>
+                              <Text style={styles.arResultLabel}>{key.replace('_', ' ').toUpperCase()}</Text>
+                              <Text style={styles.arResultValue}>{value} cm</Text>
+                            </View>
+                          );
+                        }
+                        return null;
+                      })}
                     </View>
                   </View>
                 )}
@@ -799,7 +1089,7 @@ export default function RentalOrderFlow() {
                 {measurementMethod === 'manual' && (
                   <View style={styles.manualInputContainer}>
                     <Text style={styles.manualInputTitle}>Manual Measurement Input</Text>
-                    <Text style={styles.manualInputSubtitle}>Enter your measurements in centimeters</Text>
+                    <Text style={styles.manualInputSubtitle}>Enter your measurements in inches</Text>
                     
                     <View style={styles.measurementGrid}>
                       {COMPLETE_MEASUREMENT_FIELDS.map(field => (
@@ -807,7 +1097,8 @@ export default function RentalOrderFlow() {
                           <Text style={styles.measurementFieldLabel}>{field.label}</Text>
                           <TextInput
                             style={styles.measurementInput}
-                            placeholder={`${field.label} (cm)`}
+                            placeholder="180, 95, 85"
+                            placeholderTextColor="#999"
                             value={manualMeasurements[field.key as keyof CompleteMeasurements] && manualMeasurements[field.key as keyof CompleteMeasurements]! > 0 ? 
                                    manualMeasurements[field.key as keyof CompleteMeasurements]!.toString() : ''}
                             onChangeText={(text) => {
@@ -868,12 +1159,6 @@ export default function RentalOrderFlow() {
 
           {/* Modal Actions */}
           <View style={styles.modalActions}>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => setShowNewRentalModal(false)}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
             <TouchableOpacity
               style={[styles.submitButton, loading && styles.submitButtonDisabled]}
               onPress={submitRentalOrder}
@@ -1356,11 +1641,11 @@ export default function RentalOrderFlow() {
                   <Text style={styles.currencySymbol}>₱</Text>
                   <TextInput
                     style={styles.enhancedTextInput}
-                    placeholder="Enter your counter offer amount"
+                    placeholder="5000, 7500"
+                    placeholderTextColor="#999"
                     value={counterOfferAmount}
                     onChangeText={setCounterOfferAmount}
                     keyboardType="numeric"
-                    placeholderTextColor={Colors.text.secondary}
                   />
                 </View>
                 <Text style={styles.inputHelperText}>
@@ -1372,13 +1657,13 @@ export default function RentalOrderFlow() {
                 <Text style={styles.enhancedInputLabel}>Reason for Counter Offer (Optional)</Text>
                 <TextInput
                   style={styles.enhancedNotesInput}
-                  placeholder="Explain why you're making a counter offer or any special requests..."
+                  placeholder="Budget constraints, timeline flexibility"
+                  placeholderTextColor="#999"
                   value={counterOfferNotes}
                   onChangeText={setCounterOfferNotes}
                   multiline={true}
                   numberOfLines={4}
                   textAlignVertical="top"
-                  placeholderTextColor={Colors.text.secondary}
                 />
               </View>
             </View>
@@ -1591,6 +1876,16 @@ export default function RentalOrderFlow() {
           />
         </Modal>
       )}
+
+      {/* Measurement Validation Warning */}
+      <MeasurementValidationWarning
+        visible={showMeasurementWarning}
+        missingFields={missingMeasurementFields}
+        onClose={() => setShowMeasurementWarning(false)}
+        onFillMeasurements={() => setShowMeasurementWarning(false)}
+        title="Incomplete Measurements"
+        subtitle="Please fill in all required measurements for accurate sizing"
+      />
 
       {/* Date Pickers */}
       {showStartDatePicker && (
@@ -1960,6 +2255,7 @@ const styles = StyleSheet.create({
   },
   modalActions: {
     flexDirection: 'row',
+    justifyContent: 'center',
     paddingHorizontal: 24,
     paddingVertical: 24,
     borderTopWidth: 1,
@@ -3286,5 +3582,83 @@ const styles = StyleSheet.create({
     color: Colors.text.inverse,
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  // Transaction Action Buttons
+  transactionActions: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#fef2f2',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#dc2626',
+    marginLeft: 4,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginLeft: 4,
+  },
+  // Latest Measurements Button Styles
+  latestMeasurementsContainer: {
+    backgroundColor: Colors.background.light,
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 16,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    alignItems: 'center',
+  },
+  useLatestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    marginBottom: 8,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  buttonIcon: {
+    marginRight: 8,
+  },
+  useLatestButtonText: {
+    color: Colors.text.inverse,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  latestMeasurementsHint: {
+    fontSize: 12,
+    color: Colors.text.muted,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

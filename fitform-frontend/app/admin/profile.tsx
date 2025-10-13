@@ -18,6 +18,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/api';
 import { Colors } from '../../constants/Colors';
+import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
+import { getLocalImageUrl } from '../../utils/imageUrlHelper';
+import EditModal from '../../components/EditModal';
+import GroupedReadOnlyField from '../../components/GroupedReadOnlyField';
 
 const { width } = Dimensions.get('window');
 
@@ -76,6 +80,8 @@ export default function AdminProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showUsersModal, setShowUsersModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingField, setEditingField] = useState<string>('');
   const [passwordData, setPasswordData] = useState({
     current_password: '',
     new_password: '',
@@ -84,6 +90,7 @@ export default function AdminProfileScreen() {
   const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [activeTab, setActiveTab] = useState<'profile' | 'users' | 'stats'>('profile');
+  const [showUsersTable, setShowUsersTable] = useState(false); // Start collapsed
 
   useEffect(() => {
     loadProfile();
@@ -271,6 +278,267 @@ export default function AdminProfileScreen() {
     );
   };
 
+  const handleEditField = (field: string) => {
+    if (field === 'profile') {
+      // For grouped profile editing, we'll show a multi-field modal
+      setEditingField('profile');
+      setShowEditModal(true);
+    } else {
+      setEditingField(field);
+      setShowEditModal(true);
+    }
+  };
+
+  const handleSaveField = async (data: Record<string, string>) => {
+    try {
+      setSaving(true);
+      
+      if (editingField === 'profile') {
+        // Handle grouped profile editing
+        const updatedProfile = {
+          name: data.name?.trim() || '',
+          email: data.email?.trim() || '',
+          phone: data.phone?.trim() || null,
+          address: data.address?.trim() || null,
+          city: data.city?.trim() || null,
+          state: data.state?.trim() || null,
+          zip_code: data.zip_code?.trim() || null,
+          country: data.country?.trim() || null,
+          date_of_birth: data.date_of_birth?.trim() || null,
+          gender: data.gender && ['male', 'female', 'other', 'prefer_not_to_say'].includes(data.gender.toLowerCase()) ? data.gender.toLowerCase() : (data.gender === '' ? null : data.gender),
+        };
+
+        const profileData = {
+          name: updatedProfile.name,
+          email: updatedProfile.email,
+          phone: updatedProfile.phone,
+          address: updatedProfile.address,
+          city: updatedProfile.city,
+          state: updatedProfile.state,
+          zip_code: updatedProfile.zip_code,
+          country: updatedProfile.country,
+          date_of_birth: updatedProfile.date_of_birth,
+          gender: updatedProfile.gender,
+        };
+
+        const response = await apiService.updateProfile(profileData);
+        if (response.success) {
+          setProfile(updatedProfile);
+          // Refresh user data in AuthContext to update header and other components
+          await refreshUser();
+          Alert.alert('Success', 'Profile updated successfully');
+          return true;
+        } else {
+          Alert.alert('Error', response.message || 'Failed to update profile');
+          return false;
+        }
+      } else {
+        // Handle single field editing
+        const fieldValue = data[editingField];
+        const updatedProfile = { ...profile, [editingField]: fieldValue };
+        
+        const profileData = {
+          name: updatedProfile.name?.trim() || '',
+          email: updatedProfile.email?.trim() || '',
+          phone: updatedProfile.phone?.trim() || null,
+          address: updatedProfile.address?.trim() || null,
+          city: updatedProfile.city?.trim() || null,
+          state: updatedProfile.state?.trim() || null,
+          zip_code: updatedProfile.zip_code?.trim() || null,
+          country: updatedProfile.country?.trim() || null,
+          date_of_birth: updatedProfile.date_of_birth?.trim() || null,
+          gender: updatedProfile.gender && ['male', 'female', 'other', 'prefer_not_to_say'].includes(updatedProfile.gender.toLowerCase()) ? updatedProfile.gender.toLowerCase() : (updatedProfile.gender === '' ? null : updatedProfile.gender),
+        };
+
+        const response = await apiService.updateProfile(profileData);
+        if (response.success) {
+          setProfile(updatedProfile);
+          // Refresh user data in AuthContext to update header and other components
+          await refreshUser();
+          Alert.alert('Success', 'Profile updated successfully');
+          return true;
+        } else {
+          Alert.alert('Error', response.message || 'Failed to update profile');
+          return false;
+        }
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert('Error', 'Failed to update profile');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getEditFields = () => {
+    if (editingField === 'profile') {
+      // Return all profile fields for grouped editing
+      return [
+        {
+          key: 'name',
+          label: 'Full Name',
+          value: profile.name,
+          type: 'text' as const,
+          placeholder: 'John Doe',
+          required: true,
+        },
+        {
+          key: 'email',
+          label: 'Email Address',
+          value: profile.email,
+          type: 'email' as const,
+          placeholder: 'john@example.com',
+          required: true,
+        },
+        {
+          key: 'phone',
+          label: 'Phone Number',
+          value: profile.phone,
+          type: 'phone' as const,
+          placeholder: '+1 (555) 123-4567',
+        },
+        {
+          key: 'address',
+          label: 'Address',
+          value: profile.address,
+          type: 'multiline' as const,
+          placeholder: '123 Main St, Apt 4B',
+          multiline: true,
+          numberOfLines: 3,
+        },
+        {
+          key: 'city',
+          label: 'City',
+          value: profile.city,
+          type: 'text' as const,
+          placeholder: 'New York',
+        },
+        {
+          key: 'state',
+          label: 'State',
+          value: profile.state,
+          type: 'text' as const,
+          placeholder: 'NY',
+        },
+        {
+          key: 'zip_code',
+          label: 'ZIP Code',
+          value: profile.zip_code,
+          type: 'text' as const,
+          placeholder: '10001',
+        },
+        {
+          key: 'country',
+          label: 'Country',
+          value: profile.country,
+          type: 'text' as const,
+          placeholder: 'United States',
+        },
+        {
+          key: 'date_of_birth',
+          label: 'Date of Birth',
+          value: profile.date_of_birth,
+          type: 'text' as const,
+          placeholder: 'YYYY-MM-DD',
+        },
+        {
+          key: 'gender',
+          label: 'Gender',
+          value: profile.gender,
+          type: 'radio' as const,
+          placeholder: 'Select your gender',
+          options: [
+            { value: 'male', label: 'Male' },
+            { value: 'female', label: 'Female' },
+            { value: 'other', label: 'Other' },
+            { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+          ],
+        },
+      ];
+    }
+
+    // Single field editing (fallback)
+    const fieldConfigs = {
+      name: {
+        key: 'name',
+        label: 'Full Name',
+        value: profile.name,
+        type: 'text' as const,
+        placeholder: 'John Doe',
+        required: true,
+      },
+      email: {
+        key: 'email',
+        label: 'Email Address',
+        value: profile.email,
+        type: 'email' as const,
+        placeholder: 'john@example.com',
+        required: true,
+      },
+      phone: {
+        key: 'phone',
+        label: 'Phone Number',
+        value: profile.phone,
+        type: 'phone' as const,
+        placeholder: '+1 (555) 123-4567',
+      },
+      address: {
+        key: 'address',
+        label: 'Address',
+        value: profile.address,
+        type: 'multiline' as const,
+        placeholder: '123 Main St, Apt 4B',
+        multiline: true,
+        numberOfLines: 3,
+      },
+      city: {
+        key: 'city',
+        label: 'City',
+        value: profile.city,
+        type: 'text' as const,
+        placeholder: 'New York',
+      },
+      state: {
+        key: 'state',
+        label: 'State',
+        value: profile.state,
+        type: 'text' as const,
+        placeholder: 'NY',
+      },
+      zip_code: {
+        key: 'zip_code',
+        label: 'ZIP Code',
+        value: profile.zip_code,
+        type: 'text' as const,
+        placeholder: '10001',
+      },
+      country: {
+        key: 'country',
+        label: 'Country',
+        value: profile.country,
+        type: 'text' as const,
+        placeholder: 'United States',
+      },
+      date_of_birth: {
+        key: 'date_of_birth',
+        label: 'Date of Birth',
+        value: profile.date_of_birth,
+        type: 'text' as const,
+        placeholder: 'YYYY-MM-DD',
+      },
+      gender: {
+        key: 'gender',
+        label: 'Gender',
+        value: profile.gender,
+        type: 'text' as const,
+        placeholder: 'Male, Female, Other',
+      },
+    };
+
+    return [fieldConfigs[editingField as keyof typeof fieldConfigs]].filter(Boolean);
+  };
+
   const renderProfileTab = () => (
     <ScrollView style={styles.tabContent}>
       {/* Profile Image Section */}
@@ -279,7 +547,7 @@ export default function AdminProfileScreen() {
           <Image
             source={
               profile.profile_image
-                ? { uri: profile.profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.105:8000') }
+                ? { uri: getLocalImageUrl(profile.profile_image) }
                 : require('../../assets/images/priva-logo.jpg')
             }
             style={styles.profileImage}
@@ -296,118 +564,26 @@ export default function AdminProfileScreen() {
         )}
       </View>
 
-      {/* Profile Form */}
-      <View style={styles.formContainer}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Full Name</Text>
-          <TextInput
-            style={styles.input}
-            value={profile.name}
-            onChangeText={(text) => setProfile(prev => ({ ...prev, name: text }))}
-            placeholder="Enter your full name"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Email Address</Text>
-          <TextInput
-            style={styles.input}
-            value={profile.email}
-            onChangeText={(text) => setProfile(prev => ({ ...prev, email: text }))}
-            placeholder="Enter your email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Phone Number</Text>
-          <TextInput
-            style={styles.input}
-            value={profile.phone}
-            onChangeText={(text) => setProfile(prev => ({ ...prev, phone: text }))}
-            placeholder="Enter your phone number"
-            keyboardType="phone-pad"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Address</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={profile.address}
-            onChangeText={(text) => setProfile(prev => ({ ...prev, address: text }))}
-            placeholder="Enter your address"
-            multiline
-            numberOfLines={3}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <View style={[styles.inputGroup, styles.halfWidth]}>
-            <Text style={styles.label}>City</Text>
-            <TextInput
-              style={styles.input}
-              value={profile.city}
-              onChangeText={(text) => setProfile(prev => ({ ...prev, city: text }))}
-              placeholder="City"
-            />
-          </View>
-          <View style={[styles.inputGroup, styles.halfWidth]}>
-            <Text style={styles.label}>State</Text>
-            <TextInput
-              style={styles.input}
-              value={profile.state}
-              onChangeText={(text) => setProfile(prev => ({ ...prev, state: text }))}
-              placeholder="State"
-            />
-          </View>
-        </View>
-
-        <View style={styles.row}>
-          <View style={[styles.inputGroup, styles.halfWidth]}>
-            <Text style={styles.label}>ZIP Code</Text>
-            <TextInput
-              style={styles.input}
-              value={profile.zip_code}
-              onChangeText={(text) => setProfile(prev => ({ ...prev, zip_code: text }))}
-              placeholder="ZIP Code"
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={[styles.inputGroup, styles.halfWidth]}>
-            <Text style={styles.label}>Country</Text>
-            <TextInput
-              style={styles.input}
-              value={profile.country}
-              onChangeText={(text) => setProfile(prev => ({ ...prev, country: text }))}
-              placeholder="Country"
-            />
-          </View>
-        </View>
-
-        <View style={styles.row}>
-          <View style={[styles.inputGroup, styles.halfWidth]}>
-            <Text style={styles.label}>Date of Birth</Text>
-            <TextInput
-              style={styles.input}
-              value={profile.date_of_birth}
-              onChangeText={(text) => setProfile(prev => ({ ...prev, date_of_birth: text }))}
-              placeholder="YYYY-MM-DD"
-            />
-          </View>
-           <View style={[styles.inputGroup, styles.halfWidth]}>
-             <Text style={styles.label}>Gender</Text>
-             <TextInput
-               style={styles.input}
-               value={profile.gender}
-               onChangeText={(text) => setProfile(prev => ({ ...prev, gender: text.toLowerCase() }))}
-               placeholder="Enter male or female"
-               autoCapitalize="none"
-             />
-           </View>
-        </View>
-      </View>
+      {/* Profile Information - Grouped */}
+      <GroupedReadOnlyField
+        title="Admin Profile Information"
+        description="Your administrative profile details and contact information"
+        fields={[
+          { label: 'Full Name', value: profile.name },
+          { label: 'Email Address', value: profile.email },
+          { label: 'Phone Number', value: profile.phone },
+          { label: 'Address', value: profile.address, multiline: true, numberOfLines: 3 },
+          { label: 'City', value: profile.city },
+          { label: 'State', value: profile.state },
+          { label: 'ZIP Code', value: profile.zip_code },
+          { label: 'Country', value: profile.country },
+          { label: 'Date of Birth', value: profile.date_of_birth },
+          { label: 'Gender', value: profile.gender },
+        ]}
+        onEdit={() => handleEditField('profile')}
+        icon="pencil"
+        editButtonText="Edit Profile"
+      />
 
       {/* Action Buttons */}
       <View style={styles.buttonContainer}>
@@ -510,7 +686,7 @@ export default function AdminProfileScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Admin Profile</Text>
@@ -568,7 +744,7 @@ export default function AdminProfileScreen() {
                 style={styles.input}
                 value={passwordData.current_password}
                 onChangeText={(text) => setPasswordData(prev => ({ ...prev, current_password: text }))}
-                placeholder="Enter current password"
+                placeholder="Current password"
                 secureTextEntry
               />
             </View>
@@ -579,7 +755,7 @@ export default function AdminProfileScreen() {
                 style={styles.input}
                 value={passwordData.new_password}
                 onChangeText={(text) => setPasswordData(prev => ({ ...prev, new_password: text }))}
-                placeholder="Enter new password"
+                placeholder="New password"
                 secureTextEntry
               />
             </View>
@@ -634,36 +810,81 @@ export default function AdminProfileScreen() {
               </TouchableOpacity>
             </View>
             
-            <FlatList
-              data={users}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <View style={styles.userItem}>
-                  <View style={styles.userInfo}>
-                    <Text style={styles.userName}>{item.name}</Text>
-                    <Text style={styles.userEmail}>{item.email}</Text>
-                    <Text style={styles.userRole}>{item.role}</Text>
-                  </View>
-                  <View style={styles.userActions}>
-                    <TouchableOpacity
-                      style={[
-                        styles.roleButton,
-                        item.role === 'admin' ? styles.adminButton : styles.customerButton
-                      ]}
-                      onPress={() => handleUpdateUserRole(item.id, item.role === 'admin' ? 'customer' : 'admin')}
-                    >
-                      <Text style={styles.roleButtonText}>
-                        {item.role === 'admin' ? 'Make Customer' : 'Make Admin'}
+            {/* Collapsible Customer Monitoring Section */}
+            <View style={styles.collapsibleSection}>
+              <TouchableOpacity 
+                style={styles.collapsibleHeader}
+                onPress={() => setShowUsersTable(!showUsersTable)}
+              >
+                <View style={styles.collapsibleHeaderContent}>
+                  <View style={styles.collapsibleHeaderLeft}>
+                    <Text style={styles.collapsibleTitle}>Customer Monitoring</Text>
+                    {!showUsersTable && users.length > 0 && (
+                      <Text style={styles.collapsibleSubtitle}>
+                        Tap to view {users.length} users • {users.filter(u => u.role === 'customer').length} customers, {users.filter(u => u.role === 'admin').length} admins
                       </Text>
-                    </TouchableOpacity>
+                    )}
+                  </View>
+                  <View style={styles.collapsibleHeaderRight}>
+                    <Text style={styles.userCount}>{users.length} users</Text>
+                    <Ionicons 
+                      name={showUsersTable ? "chevron-up" : "chevron-down"} 
+                      size={20} 
+                      color={Colors.text.secondary} 
+                    />
                   </View>
                 </View>
+              </TouchableOpacity>
+              
+              {showUsersTable && (
+                <View style={styles.collapsibleContent}>
+                  <FlatList
+                    data={users}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={({ item }) => (
+                      <View style={styles.userItem}>
+                        <View style={styles.userInfo}>
+                          <Text style={styles.userName}>{item.name}</Text>
+                          <Text style={styles.userEmail}>{item.email}</Text>
+                          <Text style={styles.userRole}>{item.role}</Text>
+                        </View>
+                        <View style={styles.userActions}>
+                          <TouchableOpacity
+                            style={[
+                              styles.roleButton,
+                              item.role === 'admin' ? styles.adminButton : styles.customerButton
+                            ]}
+                            onPress={() => handleUpdateUserRole(item.id, item.role === 'admin' ? 'customer' : 'admin')}
+                          >
+                            <Text style={styles.roleButtonText}>
+                              {item.role === 'admin' ? 'Make Customer' : 'Make Admin'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+                  />
+                </View>
               )}
-            />
+            </View>
           </View>
         </View>
       </Modal>
-    </View>
+
+      {/* Edit Field Modal */}
+      <EditModal
+        visible={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingField('');
+        }}
+        title={editingField === 'profile' ? 'Edit Profile Information' : `Edit ${editingField.charAt(0).toUpperCase() + editingField.slice(1).replace('_', ' ')}`}
+        fields={getEditFields()}
+        onSave={handleSaveField}
+        loading={saving}
+        icon="pencil"
+      />
+    </KeyboardAvoidingWrapper>
   );
 }
 
@@ -1044,5 +1265,56 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: 'white',
+  },
+  // Collapsible Section Styles
+  collapsibleSection: {
+    marginVertical: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.background.light,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  collapsibleHeader: {
+    padding: 16,
+    backgroundColor: Colors.background.light,
+    borderRadius: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light,
+  },
+  collapsibleHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  collapsibleHeaderLeft: {
+    flex: 1,
+    marginRight: 16,
+  },
+  collapsibleTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  collapsibleSubtitle: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  collapsibleHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  userCount: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    fontWeight: '500',
+  },
+  collapsibleContent: {
+    padding: 8,
+    backgroundColor: Colors.background.light,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
   },
 });

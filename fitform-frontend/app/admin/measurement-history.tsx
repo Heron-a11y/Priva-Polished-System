@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import apiService from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isTablet = screenWidth > 768;
@@ -400,7 +401,7 @@ const AdminMeasurementHistory = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container}>
       <View style={styles.header}>
         <View style={styles.titleContainer}>
           <Ionicons name="analytics" size={24} color={Colors.primary} style={styles.titleIcon} />
@@ -463,7 +464,10 @@ const AdminMeasurementHistory = () => {
                   <View style={styles.userInfo}>
                     <Ionicons name="person" size={14} color="#6b7280" />
                     <Text style={styles.userText}>
-                      User: {measurement.user_name || measurement.user_email || `User #${measurement.user_id}`}
+                      {/* Check if this is an admin measurement by looking for client name in notes field */}
+                      {measurement.notes && measurement.notes.startsWith('Client:') ? 
+                       `Client: ${measurement.notes.replace('Client: ', '')}` : 
+                       `User: ${measurement.user_name || measurement.user_email || `User #${measurement.user_id}`}`}
                     </Text>
                   </View>
                   {measurement.admin_name && (
@@ -638,7 +642,7 @@ const AdminMeasurementHistory = () => {
           </ScrollView>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingWrapper>
   );
 };
 

@@ -4,6 +4,7 @@ import apiService from '../../services/api';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
 
 interface Order {
   id: number;
@@ -153,6 +154,173 @@ const OrdersScreen = () => {
     );
   };
 
+  const renderOrderCard = (order: Order) => {
+    const getStatusIcon = (status: string) => {
+      switch (status) {
+        case 'pending': return 'time';
+        case 'quotation_sent': return 'mail';
+        case 'quotation_accepted': return 'checkmark-circle';
+        case 'quotation_rejected': return 'close-circle';
+        case 'picked_up': return 'car';
+        case 'returned': return 'checkmark-done';
+        case 'declined': return 'close';
+        default: return 'help-circle';
+      }
+    };
+
+    return (
+      <View key={`${order.type}-${order.id}`} style={styles.orderCard}>
+        <View style={styles.cardHeader}>
+          <View style={styles.orderInfo}>
+            <Text style={styles.orderId}>#{order.id}</Text>
+            <Text style={styles.orderType}>{order.type}</Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) + '20' }]}>
+            <Ionicons name={getStatusIcon(order.status)} size={16} color={getStatusColor(order.status)} />
+            <Text style={[styles.statusText, { color: getStatusColor(order.status) }]}>
+              {getStatusText(order.status)}
+            </Text>
+          </View>
+        </View>
+        
+        <View style={styles.cardContent}>
+          <View style={styles.infoRow}>
+            <Ionicons name="person-outline" size={18} color="#666" />
+            <Text style={styles.infoText}>{order.customer}</Text>
+          </View>
+          
+          <View style={styles.infoRow}>
+            <Ionicons name="document-text-outline" size={18} color="#666" />
+            <Text style={styles.infoText} numberOfLines={2}>{order.details}</Text>
+          </View>
+
+          {order.quotation_amount && (
+            <View style={styles.infoRow}>
+              <Ionicons name="cash-outline" size={18} color="#666" />
+              <Text style={styles.infoText}>₱{order.quotation_amount.toLocaleString()}</Text>
+            </View>
+          )}
+
+          {order.type === 'Rental' && order.penalty_status && (
+            <View style={styles.infoRow}>
+              <Ionicons name="warning-outline" size={18} color="#666" />
+              <Text style={[
+                styles.infoText,
+                { 
+                  color: order.penalty_status === 'paid' ? '#388e3c' : 
+                         order.penalty_status === 'pending' ? '#ff9800' : '#666'
+                }
+              ]}>
+                Penalty: {order.penalty_status === 'paid' ? '✅ Paid' : 
+                         order.penalty_status === 'pending' ? '⚠️ Pending' : '—'}
+              </Text>
+            </View>
+          )}
+        </View>
+        
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.viewButton]}
+            onPress={() => handleViewDetails(order)}
+          >
+            <Ionicons name="eye" size={18} color="#014D40" />
+            <Text style={styles.viewButtonText}>View Details</Text>
+          </TouchableOpacity>
+
+          {/* Cancel Button - Show for all statuses except completed/declined */}
+          {!['picked_up', 'returned', 'declined'].includes(order.status) && order.status !== 'cancelled' && (
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.cancelButton]}
+              onPress={() => handleCancelOrder(order)}
+            >
+              <Ionicons name="close-circle-outline" size={18} color="#dc2626" />
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Remove Button - Show for cancelled orders */}
+          {order.status === 'cancelled' && (
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.removeButton]}
+              onPress={() => handleRemoveOrder(order)}
+            >
+              <Ionicons name="trash-outline" size={18} color="#dc2626" />
+              <Text style={styles.removeButtonText}>Remove</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Edit Button - Show for pending and quotation_sent statuses */}
+          {['pending', 'quotation_sent'].includes(order.status) && (
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.editButton]}
+              onPress={() => handleEditOrder(order)}
+            >
+              <Ionicons name="create-outline" size={18} color="#014D40" />
+              <Text style={styles.editButtonText}>Edit</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const renderOrderGroups = () => {
+    // Group orders by status
+    const groupedOrders = filteredOrders.reduce((groups, order) => {
+      const status = order.status;
+      if (!groups[status]) {
+        groups[status] = [];
+      }
+      groups[status].push(order);
+      return groups;
+    }, {} as Record<string, Order[]>);
+
+    // Sort status groups by business priority (most important first)
+    const statusOrder = ['pending', 'quotation_sent', 'quotation_accepted', 'picked_up', 'returned', 'quotation_rejected', 'declined', 'cancelled'];
+    const sortedStatusGroups = Object.keys(groupedOrders).sort((a, b) => {
+      const aIndex = statusOrder.indexOf(a);
+      const bIndex = statusOrder.indexOf(b);
+      return aIndex - bIndex;
+    });
+
+    return sortedStatusGroups.map((status) => (
+      <View key={status}>
+        {renderStatusGroupHeader(status, groupedOrders[status].length)}
+        {groupedOrders[status].map(renderOrderCard)}
+      </View>
+    ));
+  };
+
+  const renderStatusGroupHeader = (status: string, count: number) => {
+    const getStatusIcon = (status: string) => {
+      switch (status) {
+        case 'pending': return 'time';
+        case 'quotation_sent': return 'mail';
+        case 'quotation_accepted': return 'checkmark-circle';
+        case 'quotation_rejected': return 'close-circle';
+        case 'picked_up': return 'car';
+        case 'returned': return 'checkmark-done';
+        case 'declined': return 'close';
+        default: return 'help-circle';
+      }
+    };
+
+    return (
+      <View style={styles.statusGroupHeader}>
+        <View style={[styles.statusGroupTitle, { borderLeftColor: getStatusColor(status) }]}>
+          <Ionicons 
+            name={getStatusIcon(status)} 
+            size={20} 
+            color={getStatusColor(status)} 
+          />
+          <Text style={[styles.statusGroupTitleText, { color: getStatusColor(status) }]}>
+            {getStatusText(status)} ({count})
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
   useEffect(() => {
     const fetchOrders = async (showLoading = true) => {
       if (showLoading) setLoading(true);
@@ -246,6 +414,132 @@ const OrdersScreen = () => {
     }
   };
 
+  // Transaction action handlers
+  const handleCancelOrder = async (order: Order) => {
+    Alert.alert(
+      'Cancel Order',
+      `Are you sure you want to cancel this ${order.type.toLowerCase()}? This action cannot be undone.`,
+      [
+        {
+          text: 'No',
+          style: 'cancel',
+        },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const endpoint = order.type === 'Rental' 
+                ? `/rentals/${order.id}/cancel`
+                : `/purchases/${order.id}/cancel`;
+              await apiService.request(endpoint, { method: 'POST' });
+              Alert.alert('Success', `${order.type} has been cancelled successfully.`);
+              // Orders will be automatically refreshed by the real-time polling
+            } catch (error: any) {
+              console.error('Error cancelling order:', error);
+              Alert.alert('Error', `Failed to cancel ${order.type.toLowerCase()}: ${error.message}`);
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEditOrder = (order: Order) => {
+    Alert.alert(
+      'Edit Order',
+      `This will allow you to modify this ${order.type.toLowerCase()} details. Do you want to continue?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Edit',
+          onPress: () => {
+            // Navigate to the appropriate order management screen for editing
+            Alert.alert('Edit Feature', 'Edit functionality will be implemented based on your specific requirements.');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRemoveOrder = async (order: Order) => {
+    Alert.alert(
+      'Remove Order',
+      `Are you sure you want to permanently remove this cancelled ${order.type.toLowerCase()}? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Yes, Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const endpoint = order.type === 'Rental' 
+                ? `/rentals/${order.id}/remove`
+                : `/purchases/${order.id}/remove`;
+              await apiService.request(endpoint, { method: 'DELETE' });
+              Alert.alert('Success', `${order.type} has been removed successfully.`);
+              // Orders will be automatically refreshed by the real-time polling
+            } catch (error: any) {
+              console.error('Error removing order:', error);
+              Alert.alert('Error', `Failed to remove ${order.type.toLowerCase()}: ${error.message}`);
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRemoveAllCancelled = async () => {
+    const cancelledOrders = orders.filter(order => order.status === 'cancelled');
+    Alert.alert(
+      'Remove All Cancelled Orders',
+      `Are you sure you want to permanently remove all ${cancelledOrders.length} cancelled orders? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Yes, Remove All',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              // Remove all cancelled orders
+              const removePromises = cancelledOrders.map(order => {
+                const endpoint = order.type === 'Rental' 
+                  ? `/rentals/${order.id}/remove`
+                  : `/purchases/${order.id}/remove`;
+                return apiService.request(endpoint, { method: 'DELETE' });
+              });
+              
+              await Promise.all(removePromises);
+              Alert.alert('Success', `All ${cancelledOrders.length} cancelled orders have been removed successfully.`);
+              // Orders will be automatically refreshed by the real-time polling
+            } catch (error: any) {
+              console.error('Error removing cancelled orders:', error);
+              Alert.alert('Error', `Failed to remove some cancelled orders: ${error.message}`);
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Filtering logic
   const filteredOrders = orders.filter(order => {
     const matchesType = typeFilter === 'All' || order.type === typeFilter;
@@ -322,7 +616,7 @@ const OrdersScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container}>
       <View style={styles.header}>
         <View style={styles.titleContainer}>
           <Ionicons name="file-tray-full" size={28} color={Colors.primary} />
@@ -513,8 +807,9 @@ const OrdersScreen = () => {
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search customer..."
+          placeholder="John Doe, Jane Smith"
           value={search}
+          placeholderTextColor="#999"
           onChangeText={setSearch}
           onFocus={() => {
             setShowTypeDropdown(false);
@@ -523,117 +818,53 @@ const OrdersScreen = () => {
         />
       </View>
 
+      {/* Remove All Cancelled Orders Button */}
+      {orders.some(order => order.status === 'cancelled') && (
+        <View style={styles.removeAllContainer}>
+          <TouchableOpacity
+            style={styles.removeAllButton}
+            onPress={handleRemoveAllCancelled}
+          >
+            <Ionicons name="trash" size={18} color="#fff" />
+            <Text style={styles.removeAllButtonText}>
+              Remove All Cancelled Orders ({orders.filter(order => order.status === 'cancelled').length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Spacing between filters and table */}
       <View style={styles.tableSpacing} />
 
-      {loading ? (
-        <ActivityIndicator size="large" color={Colors.primary} />
-      ) : filteredOrders.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>No orders found</Text>
+      {/* Transactions Monitoring */}
+      <View style={styles.transactionsSection}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionHeaderLeft}>
+            <Text style={styles.sectionTitle}>Transactions Monitoring</Text>
+            <Text style={styles.sectionSubtitle}>
+              {filteredOrders.length} transactions • {filteredOrders.filter(o => o.type === 'Rental').length} rentals, {filteredOrders.filter(o => o.type === 'Purchase').length} purchases
+            </Text>
+          </View>
+          <View style={styles.sectionHeaderRight}>
+            <Text style={styles.transactionCount}>{filteredOrders.length} transactions</Text>
+          </View>
         </View>
-      ) : isMobile ? (
-        <View style={styles.tableWrapper}>
-          <ScrollView 
-            style={styles.tableScroll} 
-            horizontal={true} 
-            showsHorizontalScrollIndicator={true}
-            contentContainerStyle={styles.tableScrollContent}
-            bounces={false}
-            scrollEventThrottle={16}
-            nestedScrollEnabled={true}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.tableContainerClassic}>
-              <View style={styles.orderRowHeaderClassic}>
-                <View style={[styles.headerCell, { width: 60 }]}><Text style={styles.orderCellHeaderClassic}>ID</Text></View>
-                <View style={[styles.headerCell, { width: 80 }]}><Text style={styles.orderCellHeaderClassic}>Type</Text></View>
-                <View style={[styles.headerCell, { width: 120 }]}><Text style={styles.orderCellHeaderClassic}>Customer</Text></View>
-                <View style={[styles.headerCell, { width: 100 }]}><Text style={styles.orderCellHeaderClassic}>Status</Text></View>
-                <View style={[styles.headerCell, { width: 80 }]}><Text style={styles.orderCellHeaderClassic}>Actions</Text></View>
-                <View style={[styles.headerCell, { width: 100 }]}><Text style={styles.orderCellHeaderClassic}>Penalty</Text></View>
-              </View>
-              <FlatList
-                data={filteredOrders}
-                renderItem={renderFlatListItem}
-                keyExtractor={(item) => `${item.type}-${item.id}`}
-                showsVerticalScrollIndicator={true}
-                contentContainerStyle={{ paddingBottom: 20 }}
-                style={{ height: 400 }}
-                nestedScrollEnabled={true}
-              />
+        
+        <View style={styles.transactionsContent}>
+          {loading ? (
+            <ActivityIndicator size="large" color={Colors.primary} />
+          ) : filteredOrders.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No orders found</Text>
             </View>
-          </ScrollView>
-        </View>
-      ) : (
-        <View style={styles.tableWrapper}>
-          <ScrollView 
-            style={styles.tableScroll} 
-            horizontal={true} 
-            showsHorizontalScrollIndicator={true}
-            contentContainerStyle={styles.tableScrollContent}
-            bounces={false}
-            scrollEventThrottle={16}
-            nestedScrollEnabled={true}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.tableContainerClassic}> 
-              <View style={styles.orderRowHeaderClassic}> 
-                <View style={[styles.headerCell, { width: 80 }]}><Text style={styles.orderCellHeaderClassic}>Order ID</Text></View>
-                <View style={[styles.headerCell, { width: 100 }]}><Text style={styles.orderCellHeaderClassic}>Type</Text></View>
-                <View style={[styles.headerCell, { width: 140 }]}><Text style={styles.orderCellHeaderClassic}>Customer</Text></View>
-                <View style={[styles.headerCell, { width: 120 }]}><Text style={styles.orderCellHeaderClassic}>Status</Text></View>
-                <View style={[styles.headerCell, { width: 100 }]}><Text style={styles.orderCellHeaderClassic}>Actions</Text></View>
-                <View style={[styles.headerCell, { width: 120 }]}><Text style={styles.orderCellHeaderClassic}>Penalty Status</Text></View>
-              </View>
-              <FlatList
-                data={filteredOrders}
-                renderItem={({ item }) => (
-                  <View style={styles.orderRowClassic2}>
-                    <View style={[styles.dataCell, { width: 80 }]}><Text style={styles.orderCellClassic2}>{item.id}</Text></View>
-                    <View style={[styles.dataCell, { width: 100 }]}><Text style={styles.orderCellClassic2}>{item.type}</Text></View>
-                    <View style={[styles.dataCell, { width: 140 }]}><Text style={styles.orderCellClassic2}>{item.customer}</Text></View>
-                    <View style={[styles.dataCell, { width: 120, justifyContent: 'center', alignItems: 'center' }]}>
-                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-                        <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-                          {getStatusText(item.status)}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={[styles.dataCell, { width: 100 }]}>
-                      <TouchableOpacity style={styles.actionButtonClassic2} onPress={() => handleViewDetails(item)}>
-                        <Text style={styles.actionButtonTextClassic2}>View</Text>
-                      </TouchableOpacity>
-                    </View>
-                    {/* Add penalty status column for all orders - show data for rentals, empty for others */}
-                    <View style={[styles.dataCell, { width: 120 }]}>
-                      {item.type === 'Rental' ? (
-                        <Text style={[
-                          styles.orderCellClassic2,
-                          { 
-                            color: item.penalty_status === 'paid' ? '#388e3c' : 
-                                   item.penalty_status === 'pending' ? '#ff9800' : '#666'
-                          }
-                        ]}>
-                          {item.penalty_status === 'paid' ? '✅ Paid' : 
-                           item.penalty_status === 'pending' ? '⚠️ Pending' : '—'}
-                        </Text>
-                      ) : (
-                        <Text style={[styles.orderCellClassic2, { color: '#ccc' }]}>—</Text>
-                      )}
-                    </View>
-                  </View>
-                )}
-                keyExtractor={(item) => `${item.type}-${item.id}`}
-                showsVerticalScrollIndicator={true}
-                contentContainerStyle={{ paddingBottom: 20 }}
-                style={{ height: 400 }}
-                nestedScrollEnabled={true}
-              />
+          ) : (
+            <View style={styles.cardsContainer}>
+              {renderOrderGroups()}
             </View>
-          </ScrollView>
+          )}
         </View>
-      )}
+      </View>
+      
       {/* Order Details Modal */}
       {selectedOrder && (
         <Modal
@@ -1257,12 +1488,13 @@ const OrdersScreen = () => {
                       <TextInput
                         style={{ backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: '#e0e0e0', fontSize: 16, color: '#014D40', minHeight: 48 }}
                         value={quotationAmount}
+                        placeholder="5000, 7500, 10000"
+                        placeholderTextColor="#999"
+                        keyboardType="numeric"
                         onChangeText={(text) => {
                           setQuotationAmount(text);
                           if (quotationError) setQuotationError('');
                         }}
-                        placeholder="Enter amount"
-                        keyboardType="numeric"
                       />
                     </View>
 
@@ -1274,11 +1506,12 @@ const OrdersScreen = () => {
                           <TextInput
                             style={{ flex: 1, marginRight: 8, backgroundColor: 'transparent', borderWidth: 0, paddingHorizontal: 0, paddingVertical: 0, fontSize: 16, color: '#014D40' }}
                             value={quotationSchedule}
+                            placeholder="DD/MM/YYYY"
+                            placeholderTextColor="#999"
                             onChangeText={(text) => {
                               setQuotationSchedule(text);
                               if (quotationError) setQuotationError('');
                             }}
-                            placeholder="DD/MM/YYYY"
                           />
                           <TouchableOpacity
                             style={{ padding: 8, borderRadius: 6, backgroundColor: '#014D40' }}
@@ -1297,9 +1530,10 @@ const OrdersScreen = () => {
                       <TextInput
                         style={{ backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: '#e0e0e0', fontSize: 16, color: '#014D40', height: 100, textAlignVertical: 'top' }}
                         value={quotationNotes}
+                        placeholder="Special requirements, timeline, materials needed"
+                        placeholderTextColor="#999"
+                        multiline={true}
                         onChangeText={setQuotationNotes}
-                        placeholder="Add any notes for the customer"
-                        multiline
                         numberOfLines={3}
                       />
                     </View>
@@ -1353,7 +1587,7 @@ const OrdersScreen = () => {
           }}
         />
       )}
-    </View>
+    </KeyboardAvoidingWrapper>
   );
 };
 
@@ -2235,6 +2469,244 @@ const styles = StyleSheet.create({
   notesValue: {
     textAlign: 'left',
     fontStyle: 'italic',
+  },
+
+  // Transaction Action Buttons
+  transactionActions: {
+    flexDirection: 'row',
+    gap: 4,
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#fef2f2',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  cancelButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#dc2626',
+    marginLeft: 2,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+  },
+  editButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#014D40',
+    marginLeft: 2,
+  },
+  // Section Styles
+  transactionsSection: {
+    marginVertical: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.background.light,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  sectionHeader: {
+    padding: 16,
+    backgroundColor: Colors.background.light,
+    borderRadius: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionHeaderLeft: {
+    flex: 1,
+    marginRight: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  sectionHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  transactionCount: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    fontWeight: '500',
+  },
+  transactionsContent: {
+    padding: 8,
+    backgroundColor: Colors.background.light,
+  },
+  // Card layout styles
+  cardsContainer: {
+    paddingVertical: 8,
+  },
+  orderCard: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 12,
+    marginBottom: 12,
+    padding: 16,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  orderInfo: {
+    flex: 1,
+  },
+  orderId: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.primary,
+    marginBottom: 2,
+  },
+  orderType: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    fontWeight: '500',
+  },
+  cardContent: {
+    marginBottom: 12,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    color: Colors.text.primary,
+    flex: 1,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 4,
+    flex: 1,
+    justifyContent: 'center',
+    minWidth: 100,
+  },
+  viewButton: {
+    backgroundColor: '#E8F5E8',
+    borderWidth: 1,
+    borderColor: '#014D40',
+  },
+  viewButtonText: {
+    color: '#014D40',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  cancelButton: {
+    backgroundColor: '#FFEBEE',
+    borderWidth: 1,
+    borderColor: '#dc2626',
+  },
+  cancelButtonText: {
+    color: '#dc2626',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  editButton: {
+    backgroundColor: '#E3F2FD',
+    borderWidth: 1,
+    borderColor: '#014D40',
+  },
+  editButtonText: {
+    color: '#014D40',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  // Remove button styles
+  removeButton: {
+    backgroundColor: '#FFEBEE',
+    borderWidth: 1,
+    borderColor: '#dc2626',
+  },
+  removeButtonText: {
+    color: '#dc2626',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  // Remove all cancelled orders button styles
+  removeAllContainer: {
+    marginVertical: 12,
+    alignItems: 'center',
+  },
+  removeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+    shadowColor: '#dc2626',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  removeAllButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Status group styles
+  statusGroupHeader: {
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  statusGroupTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: Colors.background.light,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    gap: 8,
+  },
+  statusGroupTitleText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

@@ -160,6 +160,92 @@ class RentalController extends Controller
         return response()->json(['success' => true, 'status' => 'declined']);
     }
 
+    public function cancel($id)
+    {
+        try {
+            $rental = Rental::findOrFail($id);
+            
+            // Only allow cancellation of orders that haven't been picked up yet
+            // Include all possible statuses that should be cancellable (including legacy statuses)
+            $cancellableStatuses = [
+                'pending', 'quotation_sent', 'counter_offer_pending', 'in_progress', 'ready_for_pickup',
+                'confirmed', 'approved', 'for_pickup' // Legacy statuses that might still exist
+            ];
+            
+            // Debug logging
+            \Log::info('Rental cancellation attempt', [
+                'rental_id' => $id,
+                'current_status' => $rental->status,
+                'allowed_statuses' => $cancellableStatuses,
+                'is_cancellable' => in_array($rental->status, $cancellableStatuses)
+            ]);
+            
+            if (!in_array($rental->status, $cancellableStatuses)) {
+                \Log::warning('Rental cancellation blocked', [
+                    'rental_id' => $id,
+                    'status' => $rental->status,
+                    'reason' => 'Status not in allowed list',
+                    'all_rental_statuses' => Rental::distinct()->pluck('status')->toArray()
+                ]);
+                return response()->json([
+                    'error' => 'Cannot cancel order in current status: ' . $rental->status,
+                    'current_status' => $rental->status,
+                    'allowed_statuses' => $cancellableStatuses
+                ], 400);
+            }
+            
+            // Update rental status
+            $rental->status = 'cancelled';
+            $rental->save();
+            
+            \Log::info('Rental status updated to cancelled', ['rental_id' => $id]);
+            
+            // Update history entry (with error handling)
+            try {
+                $this->updateRentalHistory($rental);
+                \Log::info('Rental history updated successfully', ['rental_id' => $id]);
+            } catch (\Exception $e) {
+                \Log::warning('Failed to update rental history', [
+                    'rental_id' => $id,
+                    'error' => $e->getMessage()
+                ]);
+                // Don't fail the cancellation if history update fails
+            }
+            
+            // Create notification (with error handling)
+            try {
+                Notification::create([
+                    'user_id' => $rental->user_id,
+                    'sender_role' => 'customer',
+                    'message' => 'Your rental order #' . $rental->id . ' has been cancelled.',
+                    'read' => false,
+                    'order_id' => $rental->id,
+                    'order_type' => 'Rental',
+                ]);
+                \Log::info('Notification created successfully', ['rental_id' => $id]);
+            } catch (\Exception $e) {
+                \Log::warning('Failed to create notification', [
+                    'rental_id' => $id,
+                    'error' => $e->getMessage()
+                ]);
+                // Don't fail the cancellation if notification creation fails
+            }
+            
+            \Log::info('Rental cancellation completed successfully', ['rental_id' => $id]);
+            return response()->json(['success' => true, 'status' => 'cancelled']);
+            
+        } catch (\Exception $e) {
+            \Log::error('Rental cancellation failed', [
+                'rental_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'error' => 'Failed to cancel rental: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
 
     public function setQuotation(Request $request, $id)
     {

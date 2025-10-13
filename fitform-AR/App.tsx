@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Alert, Platform, AppState, Animated } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library';
+import { Ionicons } from '@expo/vector-icons';
 import ARSessionManager from './src/ARSessionManager';
 import { getConfig } from './src/config/ARConfig';
 import { logger, logInfo, logError, logPerformance, logWarn } from './src/utils/ARLogger';
@@ -3023,7 +3024,7 @@ export default function App() {
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => setCurrentScreen('ar-measurement')}
+            onPress={startMeasurement}
           >
             <Text style={styles.primaryButtonText}>📷 Start AR Measurement</Text>
           </TouchableOpacity>
@@ -3040,15 +3041,17 @@ export default function App() {
   );
 
   const renderARMeasurementScreen = () => (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={styles.fullScreenContainer}>
+      {/* AR Back Button */}
+      <View style={styles.arBackButtonContainer}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={styles.arBackButton}
           onPress={() => setCurrentScreen('instructions')}
+          activeOpacity={0.8}
         >
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Ionicons name="arrow-back" size={24} color="white" />
+          <Text style={styles.arBackButtonText}>Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>AR Measurement</Text>
       </View>
 
       <View style={styles.arContainer}>
@@ -3874,6 +3877,7 @@ const styles = StyleSheet.create({
     left: 20,
     top: 60,
     padding: 10,
+    zIndex: 10,
   },
   backButtonText: {
     color: 'white',
@@ -3884,6 +3888,39 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 30,
+  },
+  // AR back button styles
+  arBackButtonContainer: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    zIndex: 1000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  arBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  arBackButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  // Full screen container
+  fullScreenContainer: {
+    flex: 1,
+    backgroundColor: '#000',
   },
   contentContainer: {
     paddingBottom: 20,
@@ -3988,10 +4025,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   instructionNumber: {
     backgroundColor: '#6366f1',
@@ -4028,12 +4067,12 @@ const styles = StyleSheet.create({
   instructionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1f2937',
+    color: '#000000',
     marginBottom: 4,
   },
   instructionDescription: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#374151',
     lineHeight: 20,
   },
   warningCard: {

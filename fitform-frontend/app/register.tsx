@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, Acti
 import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 import PasswordInput from '../components/PasswordInput';
+import KeyboardAvoidingWrapper from '../components/KeyboardAvoidingWrapper';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
@@ -125,7 +126,30 @@ export default function RegisterScreen() {
 
   if (showSuccess) {
     return (
-      <View style={styles.container}>
+      <KeyboardAvoidingWrapper style={styles.container}>
+        <View style={styles.contentContainer}>
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('../assets/images/priva-logo.jpg')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
+          <View style={styles.successContainer}>
+            <Text style={styles.successTitle}>Registration Successful!</Text>
+            <Text style={styles.successMessage}>
+              Your account has been created successfully. You will be redirected to login in a few seconds...
+            </Text>
+            <ActivityIndicator size="large" color="#014D40" style={styles.successSpinner} />
+          </View>
+        </View>
+      </KeyboardAvoidingWrapper>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingWrapper style={styles.container}>
+      <View style={styles.contentContainer}>
         <View style={styles.logoContainer}>
           <Image
             source={require('../assets/images/priva-logo.jpg')}
@@ -133,104 +157,90 @@ export default function RegisterScreen() {
             resizeMode="contain"
           />
         </View>
-        <View style={styles.successContainer}>
-          <Text style={styles.successTitle}>Registration Successful!</Text>
-          <Text style={styles.successMessage}>
-            Your account has been created successfully. You will be redirected to login in a few seconds...
-          </Text>
-          <ActivityIndicator size="large" color="#014D40" style={styles.successSpinner} />
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.logoContainer}>
-        <Image
-          source={require('../assets/images/priva-logo.jpg')}
-          style={styles.logo}
-          resizeMode="contain"
+        <Text style={styles.title}>Create Account</Text>
+        
+        <Text style={styles.label}>Full Name</Text>
+        <TextInput
+          style={[styles.input, errors.name && styles.inputError]}
+          value={name}
+          onChangeText={(text) => {
+            setName(text);
+            if (errors.name) setErrors({ ...errors, name: undefined });
+          }}
+          placeholder="John Doe"
+          placeholderTextColor="#999"
+          autoCapitalize="words"
+          autoCorrect={false}
         />
+        {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+        
+        <Text style={styles.label}>Email Address</Text>
+        <TextInput
+          style={[styles.input, errors.email && styles.inputError]}
+          value={email}
+          onChangeText={(text) => {
+            setEmail(text);
+            if (errors.email) setErrors({ ...errors, email: undefined });
+          }}
+          placeholder="john@example.com"
+          placeholderTextColor="#999"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+        
+        <PasswordInput
+          label="Password"
+          value={password}
+          onChangeText={(text) => {
+            setPassword(text);
+            if (errors.password) setErrors({ ...errors, password: undefined });
+          }}
+          placeholder="Password (min. 8 characters)"
+          error={errors.password}
+        />
+        
+        <PasswordInput
+          label="Confirm Password"
+          value={confirmPassword}
+          onChangeText={(text) => {
+            setConfirmPassword(text);
+            if (errors.confirmPassword) setErrors({ ...errors, confirmPassword: undefined });
+          }}
+          placeholder="Confirm password (must match above)"
+          error={errors.confirmPassword}
+        />
+        
+        <TouchableOpacity 
+          style={[styles.button, loading && styles.buttonDisabled]} 
+          onPress={handleRegister}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Create Account</Text>
+          )}
+        </TouchableOpacity>
+        
+        <TouchableOpacity onPress={() => router.push('/login')}>
+          <Text style={styles.linkText}>Already have an account? Login</Text>
+        </TouchableOpacity>
       </View>
-      <Text style={styles.title}>Create Account</Text>
-      
-      <Text style={styles.label}>Full Name</Text>
-      <TextInput
-        style={[styles.input, errors.name && styles.inputError]}
-        value={name}
-        onChangeText={(text) => {
-          setName(text);
-          if (errors.name) setErrors({ ...errors, name: undefined });
-        }}
-        placeholder="Enter your full name"
-        autoCapitalize="words"
-        autoCorrect={false}
-      />
-      {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
-      
-      <Text style={styles.label}>Email Address</Text>
-      <TextInput
-        style={[styles.input, errors.email && styles.inputError]}
-        value={email}
-        onChangeText={(text) => {
-          setEmail(text);
-          if (errors.email) setErrors({ ...errors, email: undefined });
-        }}
-        placeholder="Enter your email"
-        keyboardType="email-address"
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-      {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
-      
-      <PasswordInput
-        label="Password"
-        value={password}
-        onChangeText={(text) => {
-          setPassword(text);
-          if (errors.password) setErrors({ ...errors, password: undefined });
-        }}
-        placeholder="Enter your password"
-        error={errors.password}
-      />
-      
-      <PasswordInput
-        label="Confirm Password"
-        value={confirmPassword}
-        onChangeText={(text) => {
-          setConfirmPassword(text);
-          if (errors.confirmPassword) setErrors({ ...errors, confirmPassword: undefined });
-        }}
-        placeholder="Confirm your password"
-        error={errors.confirmPassword}
-      />
-      
-      <TouchableOpacity 
-        style={[styles.button, loading && styles.buttonDisabled]} 
-        onPress={handleRegister}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Create Account</Text>
-        )}
-      </TouchableOpacity>
-      
-      <TouchableOpacity onPress={() => router.push('/login')}>
-        <Text style={styles.linkText}>Already have an account? Login</Text>
-      </TouchableOpacity>
-    </View>
+    </KeyboardAvoidingWrapper>
   );
 }
 
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    justifyContent: 'center', 
-    padding: 24, 
     backgroundColor: '#f5f5f5' 
+  },
+  contentContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
   },
   logoContainer: { 
     alignItems: 'center', 

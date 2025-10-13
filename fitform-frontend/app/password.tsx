@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import PasswordInput from '../components/PasswordInput';
+import KeyboardAvoidingWrapper from '../components/KeyboardAvoidingWrapper';
 
 export default function PasswordScreen() {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -15,32 +16,35 @@ export default function PasswordScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Ionicons name="arrow-back" size={28} color="#014D40" />
-      </TouchableOpacity>
-      <Text style={styles.title}>Change Password</Text>
-      <PasswordInput
-        label="Current Password"
-        value={currentPassword}
-        onChangeText={setCurrentPassword}
-        placeholder="Enter current password"
-      />
-      <PasswordInput
-        label="New Password"
-        value={newPassword}
-        onChangeText={setNewPassword}
-        placeholder="Enter new password"
-      />
-      <TouchableOpacity style={styles.saveButton} onPress={handleChangePassword}>
-        <Text style={styles.saveButtonText}>Change Password</Text>
-      </TouchableOpacity>
-    </View>
+    <KeyboardAvoidingWrapper style={styles.container}>
+      <View style={styles.contentContainer}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={28} color="#014D40" />
+        </TouchableOpacity>
+        <Text style={styles.title}>Change Password</Text>
+        <PasswordInput
+          label="Current Password"
+          value={currentPassword}
+          onChangeText={setCurrentPassword}
+          placeholder="Current password (min. 8 characters)"
+        />
+        <PasswordInput
+          label="New Password"
+          value={newPassword}
+          onChangeText={setNewPassword}
+          placeholder="New password (min. 8 characters)"
+        />
+        <TouchableOpacity style={styles.saveButton} onPress={handleChangePassword}>
+          <Text style={styles.saveButtonText}>Change Password</Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, backgroundColor: '#f5f5f5' },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  contentContainer: { flex: 1, padding: 24 },
   backButton: {
     position: 'absolute',
     top: 24,

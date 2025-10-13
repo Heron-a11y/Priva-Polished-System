@@ -17,6 +17,8 @@ import apiService from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
+import { getLocalImageUrl } from '../../utils/imageUrlHelper';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isTablet = screenWidth > 768;
@@ -47,6 +49,7 @@ interface Appointment {
 const AppointmentsScreen = () => {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(false);
   
   // Helper function to get appointment status color
   const getAppointmentStatusColor = (status: string) => {
@@ -74,6 +77,7 @@ const AppointmentsScreen = () => {
     notes: '',
   });
   const [rescheduleModalVisible, setRescheduleModalVisible] = useState(false);
+  const [editingAppointmentId, setEditingAppointmentId] = useState<number | null>(null);
   const [appointmentToReschedule, setAppointmentToReschedule] = useState<Appointment | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [dailyCapacity, setDailyCapacity] = useState<any>(null);
@@ -90,6 +94,8 @@ const AppointmentsScreen = () => {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [selectedTime, setSelectedTime] = useState(new Date());
   const [timeError, setTimeError] = useState<string>('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDateForPicker, setSelectedDateForPicker] = useState(new Date());
   const router = useRouter();
   const { register } = useAuth();
 
@@ -166,16 +172,23 @@ const AppointmentsScreen = () => {
       console.log('Raw appointments response:', response);
       console.log('Current user:', user);
       
+      let appointmentsData = [];
       if (Array.isArray(response)) {
-        setAppointments(response);
+        appointmentsData = response;
         console.log('Set appointments (array):', response);
       } else if (response && response.data) {
-        setAppointments(response.data);
+        appointmentsData = response.data;
         console.log('Set appointments (data):', response.data);
       } else {
-        setAppointments([]);
+        appointmentsData = [];
         console.log('Set appointments (empty)');
       }
+      
+      // Filter out cancelled appointments
+      const filteredAppointments = appointmentsData.filter((appointment: Appointment) => 
+        appointment.status !== 'cancelled'
+      );
+      setAppointments(filteredAppointments);
       
     } catch (error) {
       console.error('Error fetching appointments:', error);
@@ -214,9 +227,26 @@ const AppointmentsScreen = () => {
   const isTimeWithinBusinessHours = (timeString: string) => {
     const [hours, minutes] = timeString.split(':').map(Number);
     const totalMinutes = hours * 60 + minutes;
-    const businessStart = 10 * 60; // 10:00 AM in minutes
-    const businessEnd = 18 * 60; // 6:00 PM in minutes
+    const businessStart = 10 * 60; // 10:00 AM in minutes (600 minutes)
+    const businessEnd = 19 * 60; // 7:00 PM in minutes (1140 minutes)
+    
+    // Debug logging to help identify the issue
+    console.log('🕐 Time validation:', {
+      timeString,
+      hours,
+      minutes,
+      totalMinutes,
+      businessStart,
+      businessEnd,
+      isValid: totalMinutes >= businessStart && totalMinutes <= businessEnd
+    });
+    
     return totalMinutes >= businessStart && totalMinutes <= businessEnd;
+  };
+
+  const isTimeOnHourOrHalfHour = (timeString: string) => {
+    const [hours, minutes] = timeString.split(':').map(Number);
+    return minutes === 0 || minutes === 30;
   };
 
   const isTimeAlreadyTaken = (timeString: string) => {
@@ -226,8 +256,14 @@ const AppointmentsScreen = () => {
   const validateSelectedTime = (timeString: string) => {
     setTimeError('');
     
+    // Check if time is on the hour or half-hour
+    if (!isTimeOnHourOrHalfHour(timeString)) {
+      setTimeError('Appointments can only be scheduled on the hour or half-hour (e.g., 2:00 PM or 2:30 PM)');
+      return false;
+    }
+    
     if (!isTimeWithinBusinessHours(timeString)) {
-      setTimeError('Time must be between 10:00 AM and 6:00 PM');
+      setTimeError('Time must be between 10:00 AM and 7:00 PM');
       return false;
     }
     
@@ -237,6 +273,34 @@ const AppointmentsScreen = () => {
     }
     
     return true;
+  };
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setSelectedDateForPicker(selectedDate);
+      // Format the date as YYYY-MM-DD
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const dateString = `${year}-${month}-${day}`;
+      
+      // Update the appointment with the selected date
+      setNewAppointment({ ...newAppointment, appointment_date: dateString });
+      
+      // Also update the selectedDate state for calendar synchronization
+      setSelectedDate(dateString);
+    }
+  };
+
+  const openDatePicker = () => {
+    // Set initial date based on current appointment_date or today
+    let initialDate = new Date();
+    if (newAppointment.appointment_date) {
+      initialDate = new Date(newAppointment.appointment_date);
+    }
+    setSelectedDateForPicker(initialDate);
+    setShowDatePicker(true);
   };
 
   const fetchBookedDates = async () => {
@@ -308,6 +372,68 @@ const AppointmentsScreen = () => {
     });
   };
 
+  const handleAddAppointment = async () => {
+    // Get today's date
+    const today = new Date();
+    const todayStr = today.getFullYear() + '-' + 
+      String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+      String(today.getDate()).padStart(2, '0');
+    
+    let selectedDateStr = todayStr;
+    
+    // Check if today is a weekend
+    if (today.getDay() === 0 || today.getDay() === 6) {
+      // If today is weekend, find the next weekday
+      let nextWeekday = new Date(today);
+      do {
+        nextWeekday.setDate(nextWeekday.getDate() + 1);
+      } while (nextWeekday.getDay() === 0 || nextWeekday.getDay() === 6);
+      
+      selectedDateStr = nextWeekday.getFullYear() + '-' + 
+        String(nextWeekday.getMonth() + 1).padStart(2, '0') + '-' + 
+        String(nextWeekday.getDate()).padStart(2, '0');
+    } else {
+      // Check if it's after business hours (after 7 PM)
+      const currentHour = today.getHours();
+      if (currentHour >= 19) {
+        // If after business hours, set tomorrow as default
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        // If tomorrow is weekend, find next weekday
+        if (tomorrow.getDay() === 0 || tomorrow.getDay() === 6) {
+          do {
+            tomorrow.setDate(tomorrow.getDate() + 1);
+          } while (tomorrow.getDay() === 0 || tomorrow.getDay() === 6);
+        }
+        
+        selectedDateStr = tomorrow.getFullYear() + '-' + 
+          String(tomorrow.getMonth() + 1).padStart(2, '0') + '-' + 
+          String(tomorrow.getDate()).padStart(2, '0');
+      }
+    }
+    
+    // Set the selected date and appointment data
+    setSelectedDate(selectedDateStr);
+    setCurrentViewDate(selectedDateStr);
+    setNewAppointment({
+      appointment_date: selectedDateStr,
+      service_type: '',
+      preferred_time: '10:00',
+      notes: '',
+    });
+    
+    // Open the modal
+    setModalVisible(true);
+    
+    // Fetch daily capacity for the selected date in the background
+    try {
+      await fetchDailyCapacity(selectedDateStr);
+    } catch (error) {
+      console.error('Error fetching daily capacity:', error);
+    }
+  };
+
   const handleCreateAppointment = async () => {
     // Validate required fields
     if (!newAppointment.service_type.trim()) {
@@ -320,9 +446,15 @@ const AppointmentsScreen = () => {
       return;
     }
 
+    // Validate time format (hour or half-hour only)
+    if (!isTimeOnHourOrHalfHour(newAppointment.preferred_time)) {
+      setTimeError('Appointments can only be scheduled on the hour or half-hour (e.g., 2:00 PM or 2:30 PM)');
+      return;
+    }
+
     // Validate business hours and check for time errors
     if (!isTimeWithinBusinessHours(newAppointment.preferred_time)) {
-      setTimeError('Time must be between 10:00 AM and 6:00 PM');
+      setTimeError('Time must be between 10:00 AM and 7:00 PM');
       return;
     }
 
@@ -380,12 +512,21 @@ const AppointmentsScreen = () => {
       console.log('Final appointment_date being sent:', appointmentData.appointment_date);
       console.log('Current user:', user);
 
-      const response = await apiService.createAppointment(appointmentData);
-      console.log('Appointment API response:', response);
-      if (response && response.id) {
+      let response;
+      if (editingAppointmentId) {
+        // Update existing appointment
+        response = await apiService.updateAppointment(editingAppointmentId, appointmentData);
+        console.log('Appointment update API response:', response);
+      } else {
+        // Create new appointment
+        response = await apiService.createAppointment(appointmentData);
+        console.log('Appointment create API response:', response);
+      }
+      
+      if (response && (response.id || response.success)) {
         setModalVisible(false);
         
-        // Clear the form fields after successful creation
+        // Clear the form fields after successful creation/update
         setTimeError(''); // Clear time error
         setNewAppointment({
           appointment_date: '',
@@ -393,24 +534,28 @@ const AppointmentsScreen = () => {
           preferred_time: '10:00',
           notes: '',
         });
+        setEditingAppointmentId(null); // Clear editing state
         
         // Immediately refresh appointments to prevent duplicate bookings
         await fetchAppointments();
         await fetchBookedDates(); // Refresh booked dates
         await fetchDailyCapacity(currentViewDate); // Refresh daily capacity
         
-        Alert.alert('Success', 'Appointment created successfully!');
+        const successMessage = editingAppointmentId ? 'Appointment updated successfully!' : 'Appointment created successfully!';
+        Alert.alert('Success', successMessage);
       } else {
-        Alert.alert('Error', 'Failed to create appointment');
+        const errorMessage = editingAppointmentId ? 'Failed to update appointment' : 'Failed to create appointment';
+        Alert.alert('Error', errorMessage);
       }
     } catch (error: any) {
-      console.error('Error creating appointment:', error);
+      const operation = editingAppointmentId ? 'updating' : 'creating';
+      console.error(`Error ${operation} appointment:`, error);
       if (error.message && error.message.includes('already booked')) {
         Alert.alert('Date Unavailable', 'This date is already booked. Please choose another date.');
       } else if (error.message && error.message.includes('past')) {
         Alert.alert('Invalid Date', 'Cannot schedule appointments in the past. Please select a current or future date.');
       } else if (error.message && error.message.includes('business hours')) {
-        setTimeError('Appointments can only be scheduled between 10:00 AM and 6:00 PM. Please select a time within business hours.');
+        setTimeError('Appointments can only be scheduled between 10:00 AM and 7:00 PM. Please select a time within business hours.');
       } else if (error.message && error.message.includes('user already has appointment')) {
         Alert.alert('Booked', 'You already have an appointment on this date. Only 1 appointment per customer per day is allowed.');
       } else if (error.message && error.message.includes('time slot taken')) {
@@ -418,7 +563,8 @@ const AppointmentsScreen = () => {
       } else if (error.message && error.message.includes('daily limit reached')) {
         Alert.alert('Daily Limit Reached', 'Maximum 5 appointments per day allowed. Please select another date.');
       } else {
-        Alert.alert('Error', 'Failed to create appointment');
+        const errorMessage = editingAppointmentId ? 'Failed to update appointment' : 'Failed to create appointment';
+        Alert.alert('Error', errorMessage);
       }
     }
   };
@@ -486,11 +632,89 @@ const AppointmentsScreen = () => {
       if (error.message && error.message.includes('past dates')) {
         Alert.alert('Invalid Date', 'Cannot reschedule appointments to past dates. Please select a current or future date.');
       } else if (error.message && error.message.includes('business hours')) {
-        Alert.alert('Invalid Time', 'Appointments can only be rescheduled between 10:00 AM and 6:00 PM. Please select a time within business hours.');
+        Alert.alert('Invalid Time', 'Appointments can only be rescheduled between 10:00 AM and 7:00 PM. Please select a time within business hours.');
       } else {
         Alert.alert('Error', 'Failed to reschedule appointment');
       }
     }
+  };
+
+  // Transaction action handlers
+  const handleCancelAppointment = async (appointment: any) => {
+    Alert.alert(
+      'Cancel Appointment',
+      'Are you sure you want to cancel this appointment? This action cannot be undone.',
+      [
+        {
+          text: 'No',
+          style: 'cancel',
+        },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              console.log('🔄 Cancelling appointment:', appointment.id);
+              
+              // For customers, use delete method directly (no status update route exists)
+              await apiService.deleteAppointment(appointment.id);
+              console.log('✅ Appointment cancelled successfully');
+              
+              Alert.alert('Success', 'Appointment has been cancelled successfully.');
+              fetchAppointments(); // Refresh the appointments list
+            } catch (error: any) {
+              console.error('❌ Error cancelling appointment:', error);
+              console.error('Error details:', {
+                message: error.message,
+                status: error.status,
+                response: error.response
+              });
+              
+              // Provide more specific error messages
+              let errorMessage = 'Failed to cancel appointment';
+              if (error.message) {
+                errorMessage += `: ${error.message}`;
+              } else if (error.response?.data?.error) {
+                errorMessage += `: ${error.response.data.error}`;
+              } else if (error.response?.data?.message) {
+                errorMessage += `: ${error.response.data.message}`;
+              }
+              
+              Alert.alert('Error', errorMessage);
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEditAppointment = (appointment: any) => {
+    Alert.alert(
+      'Edit Appointment',
+      'This will allow you to modify your appointment details. Do you want to continue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Edit',
+          onPress: () => {
+            // Set the form data to the appointment data for editing
+            setNewAppointment({
+              appointment_date: appointment.appointment_date,
+              service_type: appointment.service_type,
+              notes: appointment.notes || '',
+            });
+            setEditingAppointmentId(appointment.id);
+            setModalVisible(true); // Open the appointment modal for editing
+          },
+        },
+      ]
+    );
   };
 
   const getMarkedDates = () => {
@@ -582,7 +806,7 @@ const AppointmentsScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
@@ -591,7 +815,7 @@ const AppointmentsScreen = () => {
         </View>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => setModalVisible(true)}
+          onPress={handleAddAppointment}
         >
           <Ionicons name="add" size={24} color="#fff" />
         </TouchableOpacity>
@@ -679,7 +903,7 @@ const AppointmentsScreen = () => {
           {/* Business Hours Info */}
           <View style={styles.businessHoursInfo}>
             <Text style={styles.businessHoursTitle}>Business Hours</Text>
-            <Text style={styles.businessHoursText}>10:00 AM - 6:00 PM</Text>
+            <Text style={styles.businessHoursText}>10:00 AM - 7:00 PM</Text>
           </View>
 
         </View>
@@ -704,7 +928,7 @@ const AppointmentsScreen = () => {
                       {user?.profile_image ? (
                         <Image 
                           source={{ 
-                            uri: user.profile_image.replace('https://fitform-api.ngrok.io', 'http://192.168.1.105:8000'),
+                            uri: getLocalImageUrl(user.profile_image),
                             cache: 'force-cache'
                           }} 
                           style={styles.customerProfileImage}
@@ -745,16 +969,48 @@ const AppointmentsScreen = () => {
                   </View>
                   
                   <View style={styles.cardActions}>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.viewDetailsButton]}
-                      onPress={() => {
-                        setSelectedAppointmentDetails(appointment);
-                        setShowAppointmentDetails(true);
-                      }}
-                    >
-                      <Ionicons name="eye" size={18} color="#014D40" />
-                      <Text style={styles.viewDetailsText}>View Details</Text>
-                    </TouchableOpacity>
+                    {/* Transaction Action Buttons */}
+                    <View style={styles.transactionActions}>
+                      {/* Cancel Button - Show for all statuses except completed/cancelled */}
+                      {!['completed', 'cancelled'].includes(appointment.status) && (
+                        <TouchableOpacity 
+                          style={styles.cancelButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleCancelAppointment(appointment);
+                          }}
+                        >
+                          <Ionicons name="close-circle-outline" size={16} color="#dc2626" />
+                          <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Edit Button - Show for pending and confirmed statuses */}
+                      {['pending', 'confirmed'].includes(appointment.status) && (
+                        <TouchableOpacity 
+                          style={styles.editButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleEditAppointment(appointment);
+                          }}
+                        >
+                          <Ionicons name="create-outline" size={16} color="#014D40" />
+                          <Text style={styles.editButtonText}>Edit</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* View Details Button */}
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.viewDetailsButton]}
+                        onPress={() => {
+                          setSelectedAppointmentDetails(appointment);
+                          setShowAppointmentDetails(true);
+                        }}
+                      >
+                        <Ionicons name="eye" size={18} color="#014D40" />
+                        <Text style={styles.viewDetailsText}>View Details</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
               );
@@ -810,16 +1066,98 @@ const AppointmentsScreen = () => {
                 <Ionicons name="shirt" size={20} color={Colors.primary} />
                 <Text style={styles.scheduleModalCardTitle}>Service Type</Text>
               </View>
-              <TextInput
-                style={styles.scheduleModalInput}
-                value={newAppointment.service_type}
-                onChangeText={(text) => {
-                  console.log('Service type changed to:', text);
-                  setNewAppointment({ ...newAppointment, service_type: text });
-                }}
-                placeholder="Enter service type (e.g., Fitting, Consultation, Measurement)"
-                placeholderTextColor={Colors.text.secondary}
-              />
+              <Text style={styles.scheduleModalCardSubtitle}>Select the type of service you need</Text>
+              
+              {/* Service Type Options */}
+              <View style={styles.serviceTypeContainer}>
+                {[
+                  { value: 'measurement', label: 'Measurement', icon: '📏', description: 'Body measurements for custom fitting' },
+                  { value: 'consultation', label: 'Consultation', icon: '💬', description: 'Style and design consultation' },
+                  { value: 'fitting', label: 'Fitting', icon: '👔', description: 'Try on and adjust garments' },
+                  { value: 'alteration', label: 'Alteration', icon: '✂️', description: 'Modify existing garments' },
+                ].map((service) => (
+                  <TouchableOpacity
+                    key={service.value}
+                    style={[
+                      styles.serviceTypeOption,
+                      newAppointment.service_type === service.value && styles.serviceTypeOptionSelected
+                    ]}
+                    onPress={() => {
+                      console.log('Service type selected:', service.value);
+                      setNewAppointment({ ...newAppointment, service_type: service.value });
+                    }}
+                  >
+                    <View style={styles.serviceTypeContent}>
+                      <Text style={styles.serviceTypeIcon}>{service.icon}</Text>
+                      <View style={styles.serviceTypeText}>
+                        <Text style={[
+                          styles.serviceTypeLabel,
+                          newAppointment.service_type === service.value && styles.serviceTypeLabelSelected
+                        ]}>
+                          {service.label}
+                        </Text>
+                        <Text style={[
+                          styles.serviceTypeDescription,
+                          newAppointment.service_type === service.value && styles.serviceTypeDescriptionSelected
+                        ]}>
+                          {service.description}
+                        </Text>
+                      </View>
+                    </View>
+                    {newAppointment.service_type === service.value && (
+                      <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Date Selection Card */}
+            <View style={styles.scheduleModalCard}>
+              <View style={styles.scheduleModalCardHeader}>
+                <Ionicons name="calendar" size={20} color={Colors.primary} />
+                <Text style={styles.scheduleModalCardTitle}>Appointment Date</Text>
+              </View>
+              <Text style={styles.scheduleModalCardSubtitle}>Select your preferred date</Text>
+              
+              {/* Date Picker Button */}
+              <TouchableOpacity
+                style={styles.datePickerButton}
+                onPress={openDatePicker}
+              >
+                <View style={styles.datePickerContent}>
+                  <Ionicons name="calendar" size={20} color={Colors.primary} />
+                  <View style={styles.datePickerTextContainer}>
+                    <Text style={styles.datePickerLabel}>Selected Date</Text>
+                    <Text style={styles.datePickerValue}>
+                      {newAppointment.appointment_date ? 
+                        (() => {
+                          const date = new Date(newAppointment.appointment_date);
+                          return date.toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          });
+                        })() : 
+                        'Select a date'
+                      }
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-down" size={20} color={Colors.text.secondary} />
+                </View>
+              </TouchableOpacity>
+
+              {/* Date Picker Modal */}
+              {showDatePicker && (
+                <DateTimePicker
+                  value={selectedDateForPicker}
+                  mode="date"
+                  display="default"
+                  minimumDate={new Date()}
+                  onChange={handleDateChange}
+                />
+              )}
             </View>
 
             {/* Time Selection Card */}
@@ -828,7 +1166,7 @@ const AppointmentsScreen = () => {
                 <Ionicons name="time" size={20} color={Colors.primary} />
                 <Text style={styles.scheduleModalCardTitle}>Preferred Time</Text>
               </View>
-              <Text style={styles.scheduleModalCardSubtitle}>Select time between 10 AM - 6 PM</Text>
+              <Text style={styles.scheduleModalCardSubtitle}>Select time between 10 AM - 7 PM (hour or half-hour only)</Text>
               
               {/* Time Picker Button */}
               <TouchableOpacity
@@ -890,8 +1228,8 @@ const AppointmentsScreen = () => {
                 onChangeText={(text) =>
                   setNewAppointment({ ...newAppointment, notes: text })
                 }
-                placeholder="Add any special requirements or notes (optional)"
-                placeholderTextColor={Colors.text.secondary}
+                placeholder="Rush order, specific measurements needed"
+                placeholderTextColor="#999"
                 multiline
                 numberOfLines={4}
               />
@@ -949,7 +1287,8 @@ const AppointmentsScreen = () => {
                 style={styles.input}
                 value={rescheduleDate}
                 onChangeText={setRescheduleDate}
-                placeholder="YYYY-MM-DD"
+                placeholder="2024-12-25"
+                placeholderTextColor="#999"
               />
             </View>
 
@@ -1045,7 +1384,7 @@ const AppointmentsScreen = () => {
                       if (timeMatch) {
                         const hours = parseInt(timeMatch[1], 10);
                         const waitTimeHours = hours - 10; // Hours after 10 AM
-                        const validWaitTime = Math.max(0, Math.min(waitTimeHours, 6));
+                        const validWaitTime = Math.max(0, Math.min(waitTimeHours, 9));
                         
                         return validWaitTime === 0 ? 'No wait time (First appointment)' : `${validWaitTime} hours`;
                       }
@@ -1202,7 +1541,7 @@ const AppointmentsScreen = () => {
           </View>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingWrapper>
   );
 };
 
@@ -1431,6 +1770,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
     borderWidth: 1,
     borderColor: '#e0e0e0',
+    flex: 0, // Override flex: 1 from actionButton
   },
   viewDetailsText: {
     color: '#014D40',
@@ -2060,6 +2400,52 @@ const styles = StyleSheet.create({
     height: 100,
     textAlignVertical: 'top',
   },
+  serviceTypeContainer: {
+    gap: 12,
+  },
+  serviceTypeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
+  },
+  serviceTypeOptionSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + '10',
+  },
+  serviceTypeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  serviceTypeIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  serviceTypeText: {
+    flex: 1,
+  },
+  serviceTypeLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginBottom: 4,
+  },
+  serviceTypeLabelSelected: {
+    color: Colors.primary,
+  },
+  serviceTypeDescription: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    lineHeight: 18,
+  },
+  serviceTypeDescriptionSelected: {
+    color: Colors.primary + 'CC',
+  },
   scheduleModalTimeContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -2180,6 +2566,74 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.error,
     flex: 1,
+  },
+
+  // Date Picker Styles
+  datePickerButton: {
+    backgroundColor: Colors.background.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    marginVertical: 8,
+  },
+  datePickerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  datePickerTextContainer: {
+    flex: 1,
+  },
+  datePickerLabel: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginBottom: 4,
+  },
+  datePickerValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+
+  // Transaction Action Buttons
+  transactionActions: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#fef2f2',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#dc2626',
+    marginLeft: 4,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#014D40',
+    marginLeft: 4,
   },
 });
 

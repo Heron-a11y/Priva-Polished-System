@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import apiService from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
 
 const { width, height } = Dimensions.get('window');
 const isMobile = width < 768;
@@ -217,7 +218,8 @@ export default function RentalPurchaseHistory() {
     { value: 'in_progress', label: 'In Progress' },
     { value: 'ready_for_pickup', label: 'Ready for Pickup' },
     { value: 'completed', label: 'Completed' },
-    { value: 'declined', label: 'Declined' }
+    { value: 'declined', label: 'Declined' },
+    { value: 'cancelled', label: 'Cancelled' }
   ];
 
   const typeOptions = [
@@ -434,6 +436,62 @@ export default function RentalPurchaseHistory() {
     );
   };
 
+  // Transaction action handlers
+  const handleCancelTransaction = async (item: HistoryItem) => {
+    Alert.alert(
+      'Cancel Transaction',
+      `Are you sure you want to cancel this ${item.type}? This action cannot be undone.`,
+      [
+        {
+          text: 'No',
+          style: 'cancel',
+        },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              if (item.type === 'rental') {
+                await apiService.cancelRentalOrder(item.id);
+              } else {
+                await apiService.cancelPurchaseOrder(item.id);
+              }
+              Alert.alert('Success', `${item.type === 'rental' ? 'Rental' : 'Purchase'} has been cancelled successfully.`);
+              fetchHistory(); // Refresh the history list
+            } catch (error: any) {
+              console.error('Error cancelling transaction:', error);
+              Alert.alert('Error', `Failed to cancel ${item.type}: ${error.message}`);
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEditTransaction = (item: HistoryItem) => {
+    Alert.alert(
+      'Edit Transaction',
+      `This will allow you to modify your ${item.type} details. Do you want to continue?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Edit',
+          onPress: () => {
+            // Navigate to the appropriate order flow for editing
+            // This would typically involve setting up the form with existing data
+            Alert.alert('Edit Feature', 'Edit functionality will be implemented based on your specific requirements.');
+          },
+        },
+      ]
+    );
+  };
+
   const renderHistoryItem = ({ item }: { item: HistoryItem }) => (
     <TouchableOpacity
       style={styles.historyItem}
@@ -491,15 +549,46 @@ export default function RentalPurchaseHistory() {
           <Text style={styles.amountLabel}>Amount:</Text>
           <View style={styles.amountRow}>
             <Text style={styles.amount}>{formatCurrency(item.amount)}</Text>
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleDeleteItem(item);
-              }}
-            >
-              <Ionicons name="trash" size={18} color="#ef4444" />
-            </TouchableOpacity>
+            <View style={styles.transactionActions}>
+              {/* Cancel Button - Show for all statuses except completed/cancelled */}
+              {!['completed', 'cancelled', 'returned'].includes(item.status) && (
+                <TouchableOpacity 
+                  style={styles.cancelButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleCancelTransaction(item);
+                  }}
+                >
+                  <Ionicons name="close-circle-outline" size={16} color="#dc2626" />
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Edit Button - Show for pending and quotation_sent statuses */}
+              {['pending', 'quotation_sent'].includes(item.status) && (
+                <TouchableOpacity 
+                  style={styles.editButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleEditTransaction(item);
+                  }}
+                >
+                  <Ionicons name="create-outline" size={16} color="#014D40" />
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Delete Button */}
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleDeleteItem(item);
+                }}
+              >
+                <Ionicons name="trash" size={18} color="#ef4444" />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -643,9 +732,9 @@ export default function RentalPurchaseHistory() {
   }
 
   return (
-    <ScrollView 
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
+    <KeyboardAvoidingWrapper style={styles.container}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
       bounces={true}
       overScrollMode="never"
       contentContainerStyle={styles.scrollContainer}
@@ -792,6 +881,7 @@ export default function RentalPurchaseHistory() {
       {/* Details Modal */}
       {renderDetailsModal()}
     </ScrollView>
+    </KeyboardAvoidingWrapper>
   );
 }
 
@@ -1392,5 +1482,45 @@ const styles = StyleSheet.create({
   measurementsTitleContainer: {
     alignItems: 'center',
     marginBottom: 16,
+  },
+
+  // Transaction Action Buttons
+  transactionActions: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#fef2f2',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#dc2626',
+    marginLeft: 4,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#014D40',
+    marginLeft: 4,
   },
 });

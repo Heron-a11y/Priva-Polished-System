@@ -16,6 +16,7 @@ import { Colors } from '../../constants/Colors';
 import apiService from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useRouter } from 'expo-router';
+import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isTablet = screenWidth > 768;
@@ -472,7 +473,7 @@ const MeasurementHistoryScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={Colors.primary} />
@@ -652,7 +653,7 @@ const MeasurementHistoryScreen = () => {
           </ScrollView>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingWrapper>
   );
 };
 

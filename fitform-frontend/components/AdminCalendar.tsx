@@ -251,7 +251,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
         }
       }
       
-      await apiService.updateAppointmentStatus(appointmentId, newStatus);
+      await apiService.updateAdminAppointmentStatus(appointmentId, newStatus);
       await fetchAppointments(); // Refresh the appointments
       setShowAppointmentModal(false);
       

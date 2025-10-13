@@ -17,6 +17,7 @@ import { ThemedText } from '../../../components/ThemedText';
 import { Colors } from '../../../constants/Colors';
 import apiService from '../../../services/api';
 import { Ionicons } from '@expo/vector-icons';
+import KeyboardAvoidingWrapper from '../../../components/KeyboardAvoidingWrapper';
 
 const { width } = Dimensions.get('window');
 
@@ -1121,7 +1122,7 @@ export default function SizingManagementScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={Colors.primary} />
@@ -1251,7 +1252,7 @@ export default function SizingManagementScreen() {
           </View>
         </View>
       </Modal>
-    </ThemedView>
+    </KeyboardAvoidingWrapper>
   );
 }
 
