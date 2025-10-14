@@ -11,10 +11,12 @@ import {
   ScrollView,
   Alert,
   RefreshControl,
-  Dimensions
+  Dimensions,
+  Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import { CLOTHING_TYPES } from '../../constants/ClothingTypes';
 import apiService from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
@@ -550,34 +552,6 @@ export default function RentalPurchaseHistory() {
           <View style={styles.amountRow}>
             <Text style={styles.amount}>{formatCurrency(item.amount)}</Text>
             <View style={styles.transactionActions}>
-              {/* Cancel Button - Show for all statuses except completed/cancelled */}
-              {!['completed', 'cancelled', 'returned'].includes(item.status) && (
-                <TouchableOpacity 
-                  style={styles.cancelButton}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleCancelTransaction(item);
-                  }}
-                >
-                  <Ionicons name="close-circle-outline" size={16} color="#dc2626" />
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Edit Button - Show for pending and quotation_sent statuses */}
-              {['pending', 'quotation_sent'].includes(item.status) && (
-                <TouchableOpacity 
-                  style={styles.editButton}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleEditTransaction(item);
-                  }}
-                >
-                  <Ionicons name="create-outline" size={16} color="#014D40" />
-                  <Text style={styles.editButtonText}>Edit</Text>
-                </TouchableOpacity>
-              )}
-
               {/* Delete Button */}
               <TouchableOpacity
                 style={styles.deleteButton}
@@ -631,6 +605,48 @@ export default function RentalPurchaseHistory() {
 
           <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
             <View style={styles.orderDetailCard}>
+              {/* Item Image */}
+              {(() => {
+                // Extract clothing type from item_name (e.g., "Suit Marty - Badly needed..." -> "Suit Marty")
+                const itemText = selectedItem.item_name || '';
+                const clothingTypeName = itemText.split(' - ')[0] || itemText.split(',')[0] || itemText;
+                
+                const clothingType = CLOTHING_TYPES.find(type => 
+                  type.label === clothingTypeName || 
+                  type.label === selectedItem.item_name ||
+                  itemText.includes(type.label)
+                );
+                
+                return clothingType ? (
+                  <View style={styles.itemImageContainer}>
+                    {clothingType.image ? (
+                      <Image 
+                        source={clothingType.image} 
+                        style={styles.itemImage}
+                        resizeMode="cover"
+                      />
+                    ) : clothingType.imageUrl ? (
+                      <Image 
+                        source={{ uri: clothingType.imageUrl }} 
+                        style={styles.itemImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.itemImagePlaceholder, { backgroundColor: clothingType.color }]}>
+                        <Text style={styles.itemImageIcon}>{clothingType.icon}</Text>
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  // Fallback image if no clothing type found
+                  <View style={styles.itemImageContainer}>
+                    <View style={[styles.itemImagePlaceholder, { backgroundColor: '#6B7280' }]}>
+                      <Ionicons name="shirt-outline" size={48} color="#fff" />
+                    </View>
+                  </View>
+                );
+              })()}
+              
               <View style={styles.orderDetailHeader}>
                 <Text style={styles.orderDetailTitle}>{selectedItem.item_name}</Text>
                 <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedItem.status) + '20' }]}>
@@ -693,10 +709,10 @@ export default function RentalPurchaseHistory() {
                     <Text style={styles.measurementsTitle}>Measurements</Text>
                   </View>
                   {Object.entries(originalItem.measurements)
-                    .filter(([key, value]) => value !== null && value !== undefined && value !== '')
+                    .filter(([key, value]) => value !== null && value !== undefined && value !== '' && key !== 'thigh')
                     .length > 0 ? (
                       Object.entries(originalItem.measurements)
-                        .filter(([key, value]) => value !== null && value !== undefined && value !== '')
+                        .filter(([key, value]) => value !== null && value !== undefined && value !== '' && key !== 'thigh')
                         .map(([key, value]) => (
                           <View key={key} style={styles.orderDetailItem}>
                             <Text style={styles.orderDetailLabel}>
@@ -1218,6 +1234,7 @@ const styles = StyleSheet.create({
     borderColor: '#fecaca',
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: -2,
   },
   statusBadge: {
     paddingHorizontal: 16,
@@ -1522,5 +1539,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#014D40',
     marginLeft: 4,
+  },
+  // Item Image Styles
+  itemImageContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  itemImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  itemImagePlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  itemImageIcon: {
+    fontSize: 48,
+    opacity: 0.8,
   },
 });

@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 class DynamicNetworkConfig {
     constructor() {
         this.currentIP = null;
-        this.fallbackIPs = ['192.168.1.108', '192.168.1.100', '192.168.0.1', '10.0.0.1'];
+        this.fallbackIPs = ['192.168.1.56', '192.168.1.108', '192.168.1.100', '192.168.0.1', '10.0.0.1'];
         this.initializeNetwork();
     }
 

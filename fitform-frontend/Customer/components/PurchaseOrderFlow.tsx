@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -11,7 +11,11 @@ import {
   FlatList,
   Dimensions,
   Modal,
-  Platform
+  Platform,
+  Animated,
+  LayoutAnimation,
+  UIManager,
+  Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -22,30 +26,13 @@ import { Colors } from '../../constants/Colors';
 import SuccessModal from '../../components/SuccessModal';
 import ARMeasurementScreen from '../screens/ARMeasurementScreen';
 import MeasurementValidationWarning from '../../components/MeasurementValidationWarning';
+import ClothingTypeCatalog from '../../components/ClothingTypeCatalog';
+import { MEASUREMENT_REQUIREMENTS, CLOTHING_TYPES } from '../../constants/ClothingTypes';
 import { MeasurementData, CompleteMeasurements, normalizeMeasurementData } from '../../types/measurements';
 
-const CLOTHING_TYPES = [
-  { id: 'gown', label: 'Gown', icon: '👗', description: 'Elegant formal gowns' },
-  { id: 'barong', label: 'Barong', icon: '👔', description: 'Traditional Filipino formal wear' },
-  { id: 'suit', label: 'Suit', icon: '🤵', description: 'Professional business suits' },
-  { id: 'dress', label: 'Dress', icon: '👗', description: 'Casual and formal dresses' },
-  { id: 'tuxedo', label: 'Tuxedo', icon: '🎩', description: 'Black tie formal wear' },
-  { id: 'uniform', label: 'Uniform', icon: '👮', description: 'Professional uniforms' },
-  { id: 'costume', label: 'Costume', icon: '🎭', description: 'Special event costumes' },
-  { id: 'other', label: 'Other', icon: '👕', description: 'Other clothing types' }
-];
+// CLOTHING_TYPES moved to constants/ClothingTypes.ts
 
-// Measurement requirements for each clothing type
-const MEASUREMENT_REQUIREMENTS = {
-  gown: ['bust', 'waist', 'hips', 'shoulder_width', 'arm_length'],
-  barong: ['bust', 'waist', 'shoulder_width', 'arm_length'],
-  suit: ['bust', 'waist', 'shoulder_width', 'arm_length', 'inseam'],
-  dress: ['bust', 'waist', 'hips', 'shoulder_width', 'arm_length'],
-  tuxedo: ['bust', 'waist', 'shoulder_width', 'arm_length', 'inseam'],
-  uniform: ['bust', 'waist', 'shoulder_width', 'arm_length'],
-  costume: ['bust', 'waist', 'hips', 'shoulder_width', 'arm_length'],
-  other: ['bust', 'waist', 'hips', 'shoulder_width', 'arm_length', 'inseam'] // Default to all measurements
-};
+// MEASUREMENT_REQUIREMENTS moved to constants/ClothingTypes.ts
 
 // Measurement field labels and descriptions
 const MEASUREMENT_FIELDS = {
@@ -105,6 +92,11 @@ interface Errors {
 }
 
 export default function PurchaseOrderFlow() {
+  // LayoutAnimation is deprecated in New Architecture - using LayoutAnimation.configureNext instead
+  // if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  //   UIManager.setLayoutAnimationEnabledExperimental(true);
+  // }
+
   const [step, setStep] = useState(0);
   const [clothingType, setClothingType] = useState('');
   const [otherClothing, setOtherClothing] = useState('');
@@ -682,76 +674,128 @@ export default function PurchaseOrderFlow() {
       {orders.length > 0 ? (
         <FlatList
           data={filteredOrders}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.orderCard}
-              onPress={() => {
-                setSelectedOrder(item);
-                setShowOrderDetails(true);
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.orderHeader}>
-                <View style={styles.orderInfo}>
-                  <Text style={styles.orderItemName}>Order #{item.id}</Text>
-                  <Text style={styles.orderType}>🛍️ Purchase</Text>
+          renderItem={({ item, index }) => {
+            const cardAnim = new Animated.Value(0);
+            const scaleAnim = new Animated.Value(1);
+
+            // Start entrance animation immediately
+            Animated.timing(cardAnim, {
+              toValue: 1,
+              duration: 300,
+              delay: index * 100,
+              useNativeDriver: true,
+            }).start();
+
+            const handlePressIn = () => {
+              Animated.spring(scaleAnim, {
+                toValue: 0.95,
+                useNativeDriver: true,
+              }).start();
+            };
+
+            const handlePressOut = () => {
+              Animated.spring(scaleAnim, {
+                toValue: 1,
+                useNativeDriver: true,
+              }).start();
+            };
+
+            return (
+              <Animated.View
+                style={[
+                  {
+                    opacity: cardAnim,
+                    transform: [
+                      {
+                        translateY: cardAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [50, 0],
+                        }),
+                      },
+                      { scale: scaleAnim },
+                    ],
+                  },
+                ]}
+              >
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.historyItem}
+                  onPress={() => {
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                    setSelectedOrder(item);
+                    setShowOrderDetails(true);
+                  }}
+                  onPressIn={handlePressIn}
+                  onPressOut={handlePressOut}
+                  activeOpacity={0.8}
+                >
+              <View style={styles.itemHeader}>
+                <View style={styles.itemTypeContainer}>
+                  <View style={[
+                    styles.typeBadge,
+                    { backgroundColor: '#FFD700' }
+                  ]}>
+                    <Ionicons 
+                      name="bag" 
+                      size={16} 
+                      color="#fff" 
+                    />
+                  </View>
+                  <View style={styles.itemInfo}>
+                    <Text style={styles.itemName} numberOfLines={1}>
+                      Order #{item.id}
+                    </Text>
+                    <Text style={styles.itemType}>
+                      Purchase
+                    </Text>
+                  </View>
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-                  <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-                    {getStatusText(item.status)}
-                  </Text>
+                <View style={styles.statusContainer}>
+                  <View style={[
+                    styles.statusBadge,
+                    { backgroundColor: getStatusColor(item.status) + '20' }
+                  ]}>
+                    <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                      {getStatusText(item.status)}
+                    </Text>
+                  </View>
                 </View>
               </View>
-              
-              <View style={styles.orderDetails}>
-                <View style={styles.orderDetailRow}>
-                  <Ionicons name="calendar-outline" size={16} color={Colors.text.secondary} />
-                  <Text style={styles.orderDetailText}>
-                    {formatDate(item.purchase_date || '')}
-                  </Text>
+
+              <View style={styles.itemDetails}>
+                <View style={styles.detailRow}>
+                  <View style={styles.detailItem}>
+                    <Ionicons name="shirt-outline" size={16} color="#6B7280" />
+                    <Text style={styles.detailText}>{item.clothing_type}</Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+                    <Text style={styles.detailText}>{formatDate(item.purchase_date || '')}</Text>
+                  </View>
                 </View>
-                <View style={styles.orderDetailRow}>
-                  <Ionicons name="cash-outline" size={16} color={Colors.text.secondary} />
-                  <Text style={styles.orderDetailText}>
-                    ₱{item.quotation_price?.toLocaleString() || 'TBD'}
-                  </Text>
+                <View style={styles.amountContainer}>
+                  <Text style={styles.amountLabel}>Amount:</Text>
+                  <View style={styles.amountRow}>
+                    <Text style={styles.amount}>
+                      ₱{item.quotation_price?.toLocaleString() || 'TBD'}
+                    </Text>
+                    <View style={styles.transactionActions}>
+                      {/* Delete Button */}
+                      <TouchableOpacity
+                        style={styles.deleteButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDeleteOrder(item);
+                        }}
+                      >
+                        <Ionicons name="trash" size={16} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
                 </View>
               </View>
 
               <View style={styles.orderActions}>
-                {/* Only show Review Quotation if quotation is sent and customer hasn't responded yet */}
-                {item.status === 'quotation_sent' && 
-                 (item.quotation_amount || item.quotation_price) && 
-                 !item.quotation_responded_at && (
-                  <TouchableOpacity 
-                    style={styles.reviewQuotationBtn} 
-                    onPress={(e) => { 
-                      e.stopPropagation(); // Prevent card click
-                      setSelectedOrder(item); 
-                      setShowQuotationModal(true); 
-                    }}
-                  >
-                    <Text style={styles.reviewQuotationBtnText}>Review Quotation</Text>
-                  </TouchableOpacity>
-                )}
-                
-                {/* Show Review Quotation for counter offer pending (admin needs to respond) */}
-                {item.status === 'counter_offer_pending' && 
-                 item.counter_offer_amount && 
-                 item.counter_offer_status === 'pending' && (
-                  <TouchableOpacity 
-                    style={styles.reviewQuotationBtn} 
-                    onPress={(e) => { 
-                      e.stopPropagation(); // Prevent card click
-                      setSelectedOrder(item); 
-                      setShowQuotationModal(true); 
-                    }}
-                  >
-                    <Text style={styles.reviewQuotationBtnText}>Review Counter Offer</Text>
-                  </TouchableOpacity>
-                )}
-
                 {/* Transaction Action Buttons */}
                 <View style={styles.transactionActions}>
                   {/* Cancel Button - Show for all statuses except completed/declined */}
@@ -781,23 +825,46 @@ export default function PurchaseOrderFlow() {
                       <Text style={styles.editButtonText}>Edit</Text>
                     </TouchableOpacity>
                   )}
-
-                  {/* View Details Button */}
-                  <TouchableOpacity 
-                    style={styles.actionButton}
-                    onPress={(e) => {
-                      e.stopPropagation(); // Prevent card click
-                      setSelectedOrder(item);
-                      setShowOrderDetails(true);
-                    }}
-                  >
-                    <Ionicons name="eye-outline" size={16} color={Colors.primary} />
-                    <Text style={styles.actionButtonText}>View Details</Text>
-                  </TouchableOpacity>
                 </View>
+
+                {/* Review Quotation Button - Show below transaction actions */}
+                {item.status === 'quotation_sent' && 
+                 (item.quotation_amount || item.quotation_price) && 
+                 !item.quotation_responded_at && (
+            <TouchableOpacity 
+              style={styles.reviewQuotationBtn} 
+              onPress={(e) => { 
+                e.stopPropagation(); // Prevent card click
+                setSelectedOrder(item); 
+                setShowQuotationModal(true); 
+              }}
+            >
+              <Ionicons name="document-text-outline" size={16} color="#3b82f6" />
+              <Text style={styles.reviewQuotationBtnText}>Review Quotation</Text>
+            </TouchableOpacity>
+                )}
+                
+                {/* Show Review Quotation for counter offer pending (admin needs to respond) */}
+                {item.status === 'counter_offer_pending' && 
+                 item.counter_offer_amount && 
+                 item.counter_offer_status === 'pending' && (
+            <TouchableOpacity 
+              style={styles.reviewQuotationBtn} 
+              onPress={(e) => { 
+                e.stopPropagation(); // Prevent card click
+                setSelectedOrder(item); 
+                setShowQuotationModal(true); 
+              }}
+            >
+              <Ionicons name="document-text-outline" size={16} color="#3b82f6" />
+              <Text style={styles.reviewQuotationBtnText}>Review Counter Offer</Text>
+            </TouchableOpacity>
+                )}
               </View>
             </TouchableOpacity>
-          )}
+              </Animated.View>
+            );
+          }}
           keyExtractor={(item) => item.id.toString()}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.ordersList}
@@ -1342,25 +1409,14 @@ export default function PurchaseOrderFlow() {
               <View style={styles.formSection}>
           <Text style={styles.label}>What type of clothes do you want to purchase?</Text>
                 <Text style={styles.subtitle}>Choose from our selection of custom garments</Text>
-                <View style={styles.choicesGrid}>
-            {CLOTHING_TYPES.map(type => (
-              <TouchableOpacity
-                      key={type.id}
-                      style={[styles.choiceCard, clothingType === type.id && styles.choiceCardActive]}
-                      onPress={() => { setClothingType(type.id); if(type.id !== 'other') setOtherClothing(''); }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.choiceIcon}>{type.icon}</Text>
-                      <Text style={clothingType === type.id ? styles.choiceTextActive : styles.choiceText}>{type.label}</Text>
-                      <Text style={styles.choiceDescription}>{type.description}</Text>
-                      {clothingType === type.id && (
-                        <View style={styles.selectedIndicator}>
-                          <Ionicons name="checkmark-circle" size={24} color={Colors.secondary} />
-                        </View>
-                      )}
-              </TouchableOpacity>
-            ))}
-          </View>
+                <ClothingTypeCatalog
+                  selectedType={clothingType}
+                  onSelectType={(typeId) => { 
+                    setClothingType(typeId); 
+                    if(typeId !== 'other') setOtherClothing(''); 
+                  }}
+                  showCategories={true}
+                />
                 {clothingType === 'other' && (
                   <View style={styles.otherInputContainer}>
                     <Text style={styles.inputLabel}>Specify clothing type:</Text>
@@ -1748,6 +1804,48 @@ export default function PurchaseOrderFlow() {
 
             <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
               <View style={styles.orderDetailCard}>
+                {/* Item Image */}
+                {(() => {
+                  // Extract clothing type from item_name (e.g., "Suit Marty - Badly needed..." -> "Suit Marty")
+                  const itemText = selectedOrder.item_name || '';
+                  const clothingTypeName = itemText.split(' - ')[0] || itemText.split(',')[0] || itemText;
+                  
+                  const clothingType = CLOTHING_TYPES.find(type => 
+                    type.label === clothingTypeName || 
+                    type.label === selectedOrder.item_name ||
+                    itemText.includes(type.label)
+                  );
+                  
+                  return clothingType ? (
+                    <View style={styles.itemImageContainer}>
+                      {clothingType.image ? (
+                        <Image 
+                          source={clothingType.image} 
+                          style={styles.itemImage}
+                          resizeMode="cover"
+                        />
+                      ) : clothingType.imageUrl ? (
+                        <Image 
+                          source={{ uri: clothingType.imageUrl }} 
+                          style={styles.itemImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={[styles.itemImagePlaceholder, { backgroundColor: clothingType.color }]}>
+                          <Text style={styles.itemImageIcon}>{clothingType.icon}</Text>
+                        </View>
+                      )}
+                    </View>
+                  ) : (
+                    // Fallback image if no clothing type found
+                    <View style={styles.itemImageContainer}>
+                      <View style={[styles.itemImagePlaceholder, { backgroundColor: '#6B7280' }]}>
+                        <Ionicons name="shirt-outline" size={48} color="#fff" />
+                      </View>
+                    </View>
+                  );
+                })()}
+                
                 <View style={styles.orderDetailHeader}>
                   <Text style={styles.orderDetailTitle}>{selectedOrder.item_name || 'Order Details'}</Text>
                   <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedOrder.status) + '20' }]}>
@@ -1813,7 +1911,9 @@ export default function PurchaseOrderFlow() {
                     <View style={styles.measurementsTitleContainer}>
                       <Text style={styles.measurementsTitle}>Measurements</Text>
                     </View>
-                    {Object.entries(selectedOrder.measurements).map(([key, value]) => (
+                    {Object.entries(selectedOrder.measurements)
+                      .filter(([key]) => key !== 'thigh') // Remove thigh measurement
+                      .map(([key, value]) => (
                       <View key={key} style={styles.orderDetailItem}>
                         <Text style={styles.orderDetailLabel}>
                           {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}:
@@ -1928,30 +2028,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8, 
     elevation: 4 
   },
-  choiceIcon: {
-    fontSize: 32,
-    marginBottom: 8
-  },
-  choiceText: { 
-    color: Colors.text.primary, 
-    fontWeight: '600',
-    fontSize: Platform.OS === 'ios' ? 17 : 16,
-    marginBottom: 4,
-    textAlign: 'center'
-  },
-  choiceTextActive: { 
-    color: Colors.primary, 
-    fontWeight: '700',
-    fontSize: Platform.OS === 'ios' ? 17 : 16,
-    marginBottom: 4,
-    textAlign: 'center'
-  },
-  choiceDescription: {
-    color: Colors.text.secondary,
-    fontSize: Platform.OS === 'ios' ? 13 : 12,
-    textAlign: 'center',
-    lineHeight: Platform.OS === 'ios' ? 18 : 16
-  },
+  // Old choice styles removed - now using ClothingTypeCatalog component
   nextBtn: { 
     backgroundColor: Colors.primary, 
     borderRadius: 12, 
@@ -2041,6 +2118,111 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     lineHeight: Platform.OS === 'ios' ? 24 : 22
   },
+  // History card styles (matching RentalPurchaseHistory)
+  historyItem: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    marginHorizontal: 16,
+  },
+  itemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  itemTypeContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 16,
+    gap: 6,
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  itemType: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  statusContainer: {
+    alignItems: 'flex-end',
+  },
+  itemDetails: {
+    marginBottom: 16,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  detailText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  amountContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  amountLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  amount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  transactionActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  deleteButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -2,
+  },
   orderCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -2081,16 +2263,22 @@ const styles = StyleSheet.create({
     borderColor: Colors.border.light + '20',
   },
   reviewQuotationBtn: {
-    backgroundColor: Colors.info,
-    borderRadius: 8,
-    paddingHorizontal: 16,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    alignItems: 'center'
+    backgroundColor: '#3b82f620',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
   },
   reviewQuotationBtnText: {
-    color: Colors.text.inverse,
+    color: '#3b82f6',
     fontWeight: '600',
-    fontSize: Platform.OS === 'ios' ? 15 : 14
+    fontSize: 12,
+    marginLeft: 4,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -2223,9 +2411,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   orderActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'column',
+    gap: 8,
   },
   actionButton: {
     flexDirection: 'row',
@@ -2241,36 +2428,7 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     marginLeft: 4,
   },
-  choicesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 20,
-    paddingHorizontal: 4
-  },
-  choiceCard: {
-    width: (Dimensions.get('window').width - (Platform.OS === 'ios' ? 88 : 80)) / 2,
-    backgroundColor: Colors.background.light,
-    borderRadius: 16,
-    padding: Platform.OS === 'ios' ? 18 : 16,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: Colors.border.light,
-    alignItems: 'center',
-    shadowColor: Colors.neutral[900],
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-    minHeight: Platform.OS === 'ios' ? 130 : 120,
-    position: 'relative',
-    marginHorizontal: 2
-  },
-  choiceCardActive: {
-    backgroundColor: Colors.primary + '10',
-    borderColor: Colors.primary
-  },
+  // Old choice card styles removed - now using ClothingTypeCatalog component
   selectedIndicator: {
     position: 'absolute',
     top: 8,
@@ -3605,12 +3763,13 @@ const styles = StyleSheet.create({
   transactionActions: {
     flexDirection: 'row',
     gap: 8,
-    flexWrap: 'wrap',
     marginTop: 8,
   },
   cancelButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: '#fef2f2',
@@ -3625,8 +3784,10 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   editButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: '#f0f9ff',
@@ -3677,5 +3838,42 @@ const styles = StyleSheet.create({
     color: Colors.text.muted,
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  // Item Image Styles
+  itemImageContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  itemImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  itemImagePlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  itemImageIcon: {
+    fontSize: 48,
+    opacity: 0.8,
+  },
+  orderDetailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
 }); 

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, TextInput, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, FlatList, ScrollView, Dimensions, Modal, Platform } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { View, Text, TextInput, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, FlatList, ScrollView, Dimensions, Modal, Platform, Animated, LayoutAnimation, UIManager, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
@@ -10,20 +10,18 @@ import { Colors } from '../../constants/Colors';
 import SuccessModal from '../../components/SuccessModal';
 import ARMeasurementScreen from '../screens/ARMeasurementScreen';
 import MeasurementValidationWarning from '../../components/MeasurementValidationWarning';
+import ClothingTypeCatalog from '../../components/ClothingTypeCatalog';
+import { MEASUREMENT_REQUIREMENTS, CLOTHING_TYPES } from '../../constants/ClothingTypes';
 import { MeasurementData, CompleteMeasurements, normalizeMeasurementData } from '../../types/measurements';
 
 const { width } = Dimensions.get('window');
 
-const RENTAL_TYPES = [
-  { id: 'gown', label: 'Gown', icon: '👗', description: 'Elegant formal gowns' },
-  { id: 'barong', label: 'Barong', icon: '👔', description: 'Traditional Filipino formal wear' },
-  { id: 'suit', label: 'Suit', icon: '🤵', description: 'Professional business suits' },
-  { id: 'dress', label: 'Dress', icon: '👗', description: 'Casual and formal dresses' },
-  { id: 'tuxedo', label: 'Tuxedo', icon: '🎩', description: 'Black tie formal wear' },
-  { id: 'uniform', label: 'Uniform', icon: '👮', description: 'Professional uniforms' },
-  { id: 'costume', label: 'Costume', icon: '🎭', description: 'Special event costumes' },
-  { id: 'other', label: 'Other', icon: '👕', description: 'Other clothing types' }
-];
+// LayoutAnimation is deprecated in New Architecture - using LayoutAnimation.configureNext instead
+// if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+//   UIManager.setLayoutAnimationEnabledExperimental(true);
+// }
+
+// RENTAL_TYPES moved to constants/ClothingTypes.ts
 
 
 
@@ -542,7 +540,7 @@ export default function RentalOrderFlow() {
 
       const payload = {
         item_name: formData.rentalType === 'other' ? formData.otherType : 
-                   RENTAL_TYPES.find(t => t.id === formData.rentalType)?.label,
+                   CLOTHING_TYPES.find(t => t.id === formData.rentalType)?.label,
         rental_type: formData.rentalType,
         start_date: formData.startDate,
         special_requests: formData.specialRequests,
@@ -552,7 +550,7 @@ export default function RentalOrderFlow() {
         // Add missing required fields
         rental_date: formData.startDate, // Use start_date as rental_date
         clothing_type: formData.rentalType === 'other' ? formData.otherType : 
-                      RENTAL_TYPES.find(t => t.id === formData.rentalType)?.label,
+                      CLOTHING_TYPES.find(t => t.id === formData.rentalType)?.label,
         measurements: measurements,
         measurement_method: measurementMethod // Track measurement method
       };
@@ -695,104 +693,132 @@ export default function RentalOrderFlow() {
     }
   };
 
-  const renderRentalTypeCard = (type: any) => (
-    <TouchableOpacity
-      key={type.id}
-      style={[
-        styles.rentalTypeCard,
-        formData.rentalType === type.id && styles.selectedRentalType
-      ]}
-      onPress={() => setFormData({...formData, rentalType: type.id})}
-      activeOpacity={0.7}
-    >
-      <Text style={styles.rentalTypeIcon}>{type.icon}</Text>
-      <Text style={styles.rentalTypeLabel}>{type.label}</Text>
-      <Text style={styles.rentalTypeDescription}>{type.description}</Text>
-      {formData.rentalType === type.id && (
-        <View style={styles.selectedIndicator}>
-          <Ionicons name="checkmark-circle" size={24} color={Colors.secondary} />
+  // renderRentalTypeCard replaced by ClothingTypeCatalog component
+
+
+
+  const renderOrderCard = (order: RentalOrder, index: number) => {
+    const cardAnim = new Animated.Value(0);
+    const scaleAnim = new Animated.Value(1);
+
+    // Start entrance animation immediately
+    Animated.timing(cardAnim, {
+      toValue: 1,
+      duration: 300,
+      delay: index * 100,
+      useNativeDriver: true,
+    }).start();
+
+    const handlePressIn = () => {
+      Animated.spring(scaleAnim, {
+        toValue: 0.95,
+        useNativeDriver: true,
+      }).start();
+    };
+
+    const handlePressOut = () => {
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
+    };
+
+    return (
+      <Animated.View
+        style={[
+          {
+            opacity: cardAnim,
+            transform: [
+              {
+                translateY: cardAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [50, 0],
+                }),
+              },
+              { scale: scaleAnim },
+            ],
+          },
+        ]}
+      >
+        <TouchableOpacity
+          key={order.id}
+          style={styles.historyItem}
+          onPress={() => {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setSelectedOrder(order);
+            setShowOrderDetails(true);
+          }}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          activeOpacity={0.8}
+        >
+      <View style={styles.itemHeader}>
+        <View style={styles.itemTypeContainer}>
+          <View style={[
+            styles.typeBadge,
+            { backgroundColor: '#014D40' }
+          ]}>
+            <Ionicons 
+              name="shirt" 
+              size={16} 
+              color="#fff" 
+            />
+          </View>
+          <View style={styles.itemInfo}>
+            <Text style={styles.itemName} numberOfLines={1}>
+              {order.item_name}
+            </Text>
+            <Text style={styles.itemType}>
+              Rental
+            </Text>
+          </View>
         </View>
-      )}
-    </TouchableOpacity>
-  );
-
-
-
-  const renderOrderCard = (order: RentalOrder) => (
-    <TouchableOpacity
-      key={order.id}
-      style={styles.orderCard}
-      onPress={() => {
-        setSelectedOrder(order);
-        setShowOrderDetails(true);
-      }}
-      activeOpacity={0.7}
-    >
-      <View style={styles.orderHeader}>
-        <View style={styles.orderInfo}>
-          <Text style={styles.orderItemName}>{order.item_name}</Text>
-          <Text style={styles.orderType}>🔄 Rental</Text>
-        </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) + '20' }]}>
-          <Text style={[styles.statusText, { color: getStatusColor(order.status) }]}>
-            {getStatusText(order.status)}
-          </Text>
+        <View style={styles.statusContainer}>
+          <View style={[
+            styles.statusBadge,
+            { backgroundColor: getStatusColor(order.status) + '20' }
+          ]}>
+            <Text style={[styles.statusText, { color: getStatusColor(order.status) }]}>
+              {getStatusText(order.status)}
+            </Text>
+          </View>
         </View>
       </View>
-      
-      <View style={styles.orderDetails}>
-        <View style={styles.orderDetailRow}>
-          <Ionicons name="calendar-outline" size={16} color={Colors.text.secondary} />
-          <Text style={styles.orderDetailText}>
-            {formatDate(order.rental_date)} - {formatDate(order.return_date)}
-          </Text>
+
+      <View style={styles.itemDetails}>
+        <View style={styles.detailRow}>
+          <View style={styles.detailItem}>
+            <Ionicons name="shirt-outline" size={16} color="#6B7280" />
+            <Text style={styles.detailText}>{order.clothing_type}</Text>
+          </View>
+          <View style={styles.detailItem}>
+            <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+            <Text style={styles.detailText}>{formatDate(order.rental_date)}</Text>
+          </View>
         </View>
-        <View style={styles.orderDetailRow}>
-          <Ionicons name="time-outline" size={16} color={Colors.text.secondary} />
-          <Text style={styles.orderDetailText}>
-            {calculateDuration(order.rental_date, order.return_date)}
-          </Text>
-        </View>
-        <View style={styles.orderDetailRow}>
-          <Ionicons name="cash-outline" size={16} color={Colors.text.secondary} />
-          <Text style={styles.orderDetailText}>
-            {order.quotation_amount ? `₱${order.quotation_amount.toLocaleString()}` : 'TBD'}
-          </Text>
+        <View style={styles.amountContainer}>
+          <Text style={styles.amountLabel}>Amount:</Text>
+          <View style={styles.amountRow}>
+            <Text style={styles.amount}>
+              {order.quotation_amount ? `₱${order.quotation_amount.toLocaleString()}` : 'TBD'}
+            </Text>
+            <View style={styles.transactionActions}>
+              {/* Delete Button */}
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleDeleteOrder(order);
+                }}
+              >
+                <Ionicons name="trash" size={16} color="#ef4444" />
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </View>
 
       <View style={styles.orderActions}>
-        {/* Only show Review Quotation if quotation is sent and customer hasn't responded yet */}
-        {order.status === 'quotation_sent' && 
-         order.quotation_amount && 
-         !order.quotation_responded_at && (
-          <TouchableOpacity 
-            style={styles.reviewQuotationBtn} 
-            onPress={(e) => { 
-              e.stopPropagation(); // Prevent card click
-              setSelectedOrder(order); 
-              setShowQuotationModal(true); 
-            }}
-          >
-            <Text style={styles.reviewQuotationBtnText}>Review Quotation</Text>
-          </TouchableOpacity>
-        )}
-        
-        {/* Show Review Quotation for counter offer pending (admin needs to respond) */}
-        {order.status === 'counter_offer_pending' && 
-         order.counter_offer_amount && 
-         order.counter_offer_status === 'pending' && (
-          <TouchableOpacity 
-            style={styles.reviewQuotationBtn} 
-            onPress={(e) => { 
-              e.stopPropagation(); // Prevent card click
-              setSelectedOrder(order); 
-              setShowQuotationModal(true); 
-            }}
-          >
-            <Text style={styles.reviewQuotationBtnText}>Review Counter Offer</Text>
-          </TouchableOpacity>
-        )}
         {/* Transaction Action Buttons */}
         <View style={styles.transactionActions}>
           {/* Cancel Button - Show for all statuses except completed/declined */}
@@ -822,23 +848,46 @@ export default function RentalOrderFlow() {
               <Text style={styles.editButtonText}>Edit</Text>
             </TouchableOpacity>
           )}
+        </View>
 
-          {/* View Details Button */}
+        {/* Review Quotation Button - Show below transaction actions */}
+        {order.status === 'quotation_sent' && 
+         order.quotation_amount && 
+         !order.quotation_responded_at && (
           <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => {
-              console.log('Order data being set:', order);
-              setSelectedOrder(order);
-              setShowOrderDetails(true);
+            style={styles.reviewQuotationBtn} 
+            onPress={(e) => { 
+              e.stopPropagation(); // Prevent card click
+              setSelectedOrder(order); 
+              setShowQuotationModal(true); 
             }}
           >
-            <Ionicons name="eye-outline" size={16} color={Colors.primary} />
-            <Text style={styles.actionButtonText}>View Details</Text>
+            <Ionicons name="document-text-outline" size={16} color="#3b82f6" />
+            <Text style={styles.reviewQuotationBtnText}>Review Quotation</Text>
           </TouchableOpacity>
-        </View>
+        )}
+        
+        {/* Show Review Quotation for counter offer pending (admin needs to respond) */}
+        {order.status === 'counter_offer_pending' && 
+         order.counter_offer_amount && 
+         order.counter_offer_status === 'pending' && (
+          <TouchableOpacity 
+            style={styles.reviewQuotationBtn} 
+            onPress={(e) => { 
+              e.stopPropagation(); // Prevent card click
+              setSelectedOrder(order); 
+              setShowQuotationModal(true); 
+            }}
+          >
+            <Ionicons name="document-text-outline" size={16} color="#3b82f6" />
+            <Text style={styles.reviewQuotationBtnText}>Review Counter Offer</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
-  );
+      </Animated.View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -862,7 +911,7 @@ export default function RentalOrderFlow() {
       {orders.length > 0 ? (
         <FlatList
           data={filteredOrders}
-          renderItem={({ item }) => renderOrderCard(item)}
+          renderItem={({ item, index }) => renderOrderCard(item, index)}
           keyExtractor={(item) => item.id.toString()}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.ordersList}
@@ -916,9 +965,11 @@ export default function RentalOrderFlow() {
             {/* Rental Type Selection */}
             <View style={styles.formSection}>
               <Text style={styles.formSectionTitle}>Select Rental Type</Text>
-              <View style={styles.rentalTypesGrid}>
-                {RENTAL_TYPES.map(renderRentalTypeCard)}
-              </View>
+              <ClothingTypeCatalog
+                selectedType={formData.rentalType}
+                onSelectType={(typeId) => setFormData({...formData, rentalType: typeId})}
+                showCategories={true}
+              />
               {formData.rentalType === 'other' && (
                 <TextInput
                   style={styles.textInput}
@@ -936,7 +987,10 @@ export default function RentalOrderFlow() {
             {/* Date Selection */}
             <View style={styles.styledSection}>
               <View style={styles.formSection}>
-                <Text style={styles.formSectionTitle}>Rental Date</Text>
+                <View style={styles.sectionTitleContainer}>
+                  <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+                  <Text style={styles.formSectionTitle}>Rental Date</Text>
+                </View>
                 
                 <View style={styles.dateInputRow}>
                   <View style={styles.dateInputContainer}>
@@ -967,7 +1021,10 @@ export default function RentalOrderFlow() {
             {/* Special Requests */}
             <View style={styles.styledSection}>
               <View style={styles.formSection}>
-                <Text style={styles.formSectionTitle}>Special Requests</Text>
+                <View style={styles.sectionTitleContainer}>
+                  <Ionicons name="chatbubble-outline" size={20} color={Colors.primary} />
+                  <Text style={styles.formSectionTitle}>Special Requests</Text>
+                </View>
                 <TextInput
                   style={[styles.textInput, styles.textArea]}
                   placeholder="Rush order, specific measurements, color preferences"
@@ -983,7 +1040,10 @@ export default function RentalOrderFlow() {
             {/* Measurement Method Selection */}
             <View style={styles.styledSection}>
               <View style={styles.formSection}>
-                <Text style={styles.formSectionTitle}>Measurement Method</Text>
+                <View style={styles.sectionTitleContainer}>
+                  <Ionicons name="resize-outline" size={20} color={Colors.primary} />
+                  <Text style={styles.formSectionTitle}>Measurement Method</Text>
+                </View>
                 <Text style={styles.formSectionSubtitle}>Choose how you'd like to provide your measurements</Text>
                 
                 <View style={styles.measurementMethodContainer}>
@@ -1194,11 +1254,55 @@ export default function RentalOrderFlow() {
 
             <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
               <View style={styles.orderDetailCard}>
-                <Text style={styles.orderDetailTitle}>{selectedOrder.item_name}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedOrder.status) + '20' }]}>
-                  <Text style={[styles.statusText, { color: getStatusColor(selectedOrder.status) }]}>
-                    {getStatusText(selectedOrder.status)}
-                  </Text>
+                {/* Item Image */}
+                {(() => {
+                  // Extract clothing type from item_name (e.g., "Suit Marty - Badly needed..." -> "Suit Marty")
+                  const itemText = selectedOrder.item_name || '';
+                  const clothingTypeName = itemText.split(' - ')[0] || itemText.split(',')[0] || itemText;
+                  
+                  const clothingType = CLOTHING_TYPES.find(type => 
+                    type.label === clothingTypeName || 
+                    type.label === selectedOrder.item_name ||
+                    itemText.includes(type.label)
+                  );
+                  
+                  return clothingType ? (
+                    <View style={styles.itemImageContainer}>
+                      {clothingType.image ? (
+                        <Image 
+                          source={clothingType.image} 
+                          style={styles.itemImage}
+                          resizeMode="cover"
+                        />
+                      ) : clothingType.imageUrl ? (
+                        <Image 
+                          source={{ uri: clothingType.imageUrl }} 
+                          style={styles.itemImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={[styles.itemImagePlaceholder, { backgroundColor: clothingType.color }]}>
+                          <Text style={styles.itemImageIcon}>{clothingType.icon}</Text>
+                        </View>
+                      )}
+                    </View>
+                  ) : (
+                    // Fallback image if no clothing type found
+                    <View style={styles.itemImageContainer}>
+                      <View style={[styles.itemImagePlaceholder, { backgroundColor: '#6B7280' }]}>
+                        <Ionicons name="shirt-outline" size={48} color="#fff" />
+                      </View>
+                    </View>
+                  );
+                })()}
+                
+                <View style={styles.orderDetailHeader}>
+                  <Text style={styles.orderDetailTitle}>{selectedOrder.item_name}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedOrder.status) + '20' }]}>
+                    <Text style={[styles.statusText, { color: getStatusColor(selectedOrder.status) }]}>
+                      {getStatusText(selectedOrder.status)}
+                    </Text>
+                  </View>
                 </View>
                 
                 <View style={styles.detailRow}>
@@ -1257,7 +1361,9 @@ export default function RentalOrderFlow() {
                     <View style={styles.measurementsTitleContainer}>
                       <Text style={styles.measurementsTitle}>Measurements</Text>
                     </View>
-                    {Object.entries(selectedOrder.measurements).map(([key, value]) => (
+                    {Object.entries(selectedOrder.measurements)
+                      .filter(([key]) => key !== 'thigh') // Remove thigh measurement
+                      .map(([key, value]) => (
                       <View key={key} style={styles.detailRow}>
                         <Text style={styles.detailLabel}>
                           {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}:
@@ -1945,6 +2051,111 @@ const styles = StyleSheet.create({
   ordersList: {
     paddingBottom: 20,
   },
+  // History card styles (matching RentalPurchaseHistory)
+  historyItem: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    marginHorizontal: 16,
+  },
+  itemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  itemTypeContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 16,
+    gap: 6,
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  itemType: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  statusContainer: {
+    alignItems: 'flex-end',
+  },
+  itemDetails: {
+    marginBottom: 16,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  detailText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  amountContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  amountLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  amount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  transactionActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  deleteButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -2,
+  },
   orderCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -2004,9 +2215,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   orderActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'column',
+    gap: 8,
   },
   actionButton: {
     flexDirection: 'row',
@@ -2119,11 +2329,17 @@ const styles = StyleSheet.create({
   formSection: {
     marginBottom: 32,
   },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
   formSectionTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: Colors.text.primary,
-    marginBottom: 20,
+    marginLeft: 8,
     textAlign: 'center',
     position: 'relative',
   },
@@ -2133,49 +2349,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
   },
-  rentalTypeCard: {
-    width: (width - 60) / 2,
-    backgroundColor: Colors.background.card,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.border.light,
-    shadowColor: Colors.neutral[900],
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-
-  },
-  selectedRentalType: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary + '15',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-    transform: [{ scale: 1.02 }],
-  },
-  rentalTypeIcon: {
-    fontSize: 36,
-    marginBottom: 12,
-  },
-  rentalTypeLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.text.primary,
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  rentalTypeDescription: {
-    fontSize: 13,
-    color: Colors.text.secondary,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
+  // Old rental type card styles removed - now using ClothingTypeCatalog component
   durationGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -2534,16 +2708,22 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   reviewQuotationBtn: {
-    backgroundColor: Colors.info,
-    borderRadius: 8,
-    paddingHorizontal: 16,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    alignItems: 'center'
+    backgroundColor: '#3b82f620',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
   },
   reviewQuotationBtnText: {
-    color: Colors.text.inverse,
+    color: '#3b82f6',
     fontWeight: '600',
-    fontSize: Platform.OS === 'ios' ? 15 : 14
+    fontSize: 12,
+    marginLeft: 4,
   },
   notesValue: {
     flex: 1,
@@ -3588,12 +3768,13 @@ const styles = StyleSheet.create({
   transactionActions: {
     flexDirection: 'row',
     gap: 8,
-    flexWrap: 'wrap',
     marginTop: 8,
   },
   cancelButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: '#fef2f2',
@@ -3608,8 +3789,10 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   editButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: '#f0f9ff',
@@ -3660,5 +3843,42 @@ const styles = StyleSheet.create({
     color: Colors.text.muted,
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  // Item Image Styles
+  itemImageContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  itemImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  itemImagePlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  itemImageIcon: {
+    fontSize: 48,
+    opacity: 0.8,
+  },
+  orderDetailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
 });

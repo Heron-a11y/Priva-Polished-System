@@ -68,7 +68,7 @@
     "clean:win": "rmdir /s /q node_modules .expo android\\build ios\\build",
     "reset": "npm run clean && npm install",
     "reset:win": "npm run clean:win && npm install",
-    "postinstall": "patch-package && node scripts/fix-gradle-comprehensive.js",
+    "postinstall": "patch-package",
     "test:gradle": "node scripts/test-gradle-fix.js",
     "fix:gradle": "node scripts/quick-gradle-fix.js"
   },

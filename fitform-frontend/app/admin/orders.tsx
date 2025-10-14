@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, TextInput, Platform, Dimensions, ScrollView, Modal } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, TextInput, Platform, Dimensions, ScrollView, Modal, Image } from 'react-native';
 import apiService from '../../services/api';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import { CLOTHING_TYPES } from '../../constants/ClothingTypes';
 import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
 
 interface Order {
@@ -886,8 +887,56 @@ const OrdersScreen = () => {
 
             <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
               <View style={styles.orderDetailCard}>
+                {/* Item Image */}
+                {(() => {
+                  // Extract clothing type from details (e.g., "Suit Marty - Badly needed..." -> "Suit Marty")
+                  const detailsText = selectedOrder.details || '';
+                  const clothingTypeName = detailsText.split(' - ')[0] || detailsText.split(',')[0] || detailsText;
+                  
+                  const clothingType = CLOTHING_TYPES.find(type => 
+                    type.label === clothingTypeName || 
+                    type.label === selectedOrder.details ||
+                    detailsText.includes(type.label)
+                  );
+                  
+                  return clothingType ? (
+                    <View style={styles.itemImageContainer}>
+                      {clothingType.image ? (
+                        <Image 
+                          source={clothingType.image} 
+                          style={styles.itemImage}
+                          resizeMode="cover"
+                        />
+                      ) : clothingType.imageUrl ? (
+                        <Image 
+                          source={{ uri: clothingType.imageUrl }} 
+                          style={styles.itemImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={[styles.itemImagePlaceholder, { backgroundColor: clothingType.color }]}>
+                          <Text style={styles.itemImageIcon}>{clothingType.icon}</Text>
+                        </View>
+                      )}
+                    </View>
+                  ) : (
+                    // Fallback image if no clothing type found
+                    <View style={styles.itemImageContainer}>
+                      <View style={[styles.itemImagePlaceholder, { backgroundColor: '#6B7280' }]}>
+                        <Ionicons name="shirt-outline" size={48} color="#fff" />
+                      </View>
+                    </View>
+                  );
+                })()}
+                
                 <View style={styles.orderDetailHeader}>
-                  <Text style={styles.orderDetailTitle}>{selectedOrder.details}</Text>
+                  <Text style={styles.orderDetailTitle}>
+                    {(() => {
+                      // Extract clean clothing type name (e.g., "Suit Marty - Badly needed..." -> "Suit Marty")
+                      const detailsText = selectedOrder.details || '';
+                      return detailsText.split(' - ')[0] || detailsText.split(',')[0] || detailsText;
+                    })()}
+                  </Text>
                   <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedOrder.status) + '20' }]}>
                     <Text style={[styles.statusText, { color: getStatusColor(selectedOrder.status) }]}>
                       {getStatusText(selectedOrder.status)}
@@ -2707,6 +2756,37 @@ const styles = StyleSheet.create({
   statusGroupTitleText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Item Image Styles
+  itemImageContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  itemImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  itemImagePlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: Colors.neutral[900],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  itemImageIcon: {
+    fontSize: 48,
+    opacity: 0.8,
   },
 });
 

@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import networkConfig from './network-config';
 
 // Base API configuration - will be dynamically set based on network mode
-let API_BASE_URL = 'http://192.168.1.108:8000/api'; // Updated to current IP
+let API_BASE_URL = 'http://192.168.1.56:8000/api'; // Updated to current IP
 
 class ApiService {
     constructor() {
