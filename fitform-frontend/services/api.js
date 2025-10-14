@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import networkConfig from './network-config';
 
 // Base API configuration - will be dynamically set based on network mode
-let API_BASE_URL = 'http://192.168.1.108:8000/api'; // Updated to current IP
+let API_BASE_URL = 'http://192.168.1.59:8000/api'; // Updated to current IP
 
 class ApiService {
     constructor() {
@@ -119,7 +119,7 @@ class ApiService {
 
             // Create AbortController for timeout
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
             const response = await fetch(url, {
                 ...options,
@@ -195,6 +195,31 @@ class ApiService {
             
             throw error;
         }
+    }
+
+    // HTTP method shortcuts
+    async get(endpoint, options = {}) {
+        return this.request(endpoint, { ...options, method: 'GET' });
+    }
+
+    async post(endpoint, data = null, options = {}) {
+        return this.request(endpoint, {
+            ...options,
+            method: 'POST',
+            body: data ? JSON.stringify(data) : undefined,
+        });
+    }
+
+    async put(endpoint, data = null, options = {}) {
+        return this.request(endpoint, {
+            ...options,
+            method: 'PUT',
+            body: data ? JSON.stringify(data) : undefined,
+        });
+    }
+
+    async delete(endpoint, options = {}) {
+        return this.request(endpoint, { ...options, method: 'DELETE' });
     }
 
     // Authentication methods
@@ -304,6 +329,23 @@ class ApiService {
     }
     async getAppointmentStats() {
         return this.request('/admin/appointments/stats');
+    }
+
+    // Admin Settings
+    async getAdminSettings() {
+        return this.request('/admin/settings');
+    }
+    async updateAdminSettings(settings) {
+        return this.request('/admin/settings', {
+            method: 'PUT',
+            body: JSON.stringify(settings),
+        });
+    }
+    async toggleAutoApproval(enabled) {
+        return this.request('/admin/settings/toggle-auto-approval', {
+            method: 'POST',
+            body: JSON.stringify({ enabled }),
+        });
     }
 
     // Rental Transactions

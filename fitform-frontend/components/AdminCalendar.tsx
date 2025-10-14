@@ -64,12 +64,19 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
       console.log('Data type:', typeof data);
       console.log('Is array:', Array.isArray(data));
       
-      // Handle different response formats
-      const appointmentsData = Array.isArray(data) ? data : (data?.data || []);
+      // Handle the new API response structure
+      const appointmentsData = data?.data?.appointments || data?.appointments || (Array.isArray(data) ? data : []);
       console.log('Processed appointments:', appointmentsData);
       
+      // Ensure appointmentsData is an array before filtering
+      if (!Array.isArray(appointmentsData)) {
+        console.error('Appointments data is not an array:', appointmentsData);
+        setAppointments([]);
+        return;
+      }
+      
       // Validate and filter appointments data
-        const validatedAppointments = appointmentsData.filter((appointment: any) => {
+      const validatedAppointments = appointmentsData.filter((appointment: any) => {
         // Check if appointment has required fields
         if (!appointment.id || !appointment.appointment_date || !appointment.status) {
           console.warn('Invalid appointment data:', appointment);

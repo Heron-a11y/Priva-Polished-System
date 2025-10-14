@@ -32,6 +32,11 @@ class User extends Authenticatable
         'country',
         'date_of_birth',
         'gender',
+        'account_status',
+        'suspension_start',
+        'suspension_end',
+        'suspension_reason',
+        'ban_reason',
     ];
 
     /**
@@ -71,5 +76,45 @@ class User extends Authenticatable
     public function isCustomer(): bool
     {
         return $this->role === 'customer';
+    }
+
+    /**
+     * Get user's orders
+     */
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    /**
+     * Get user's appointments
+     */
+    public function appointments()
+    {
+        return $this->hasMany(Appointment::class);
+    }
+
+    /**
+     * Get user's rentals
+     */
+    public function rentals()
+    {
+        return $this->hasMany(Rental::class);
+    }
+
+    /**
+     * Get user's purchases
+     */
+    public function purchases()
+    {
+        return $this->hasMany(Purchase::class);
+    }
+
+    /**
+     * Get user's measurement history
+     */
+    public function measurementHistory()
+    {
+        return $this->hasMany(\App\Models\MeasurementHistory::class);
     }
 }

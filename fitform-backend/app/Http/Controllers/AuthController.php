@@ -81,6 +81,30 @@ class AuthController extends Controller
         }
 
         $user = User::where('email', $request->email)->firstOrFail();
+        
+        // Check account status
+        if ($user->account_status === 'suspended') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your account has been suspended. Please contact the administrator for more information.',
+                'account_status' => 'suspended',
+                'suspension_details' => [
+                    'start_date' => $user->suspension_start,
+                    'end_date' => $user->suspension_end,
+                    'reason' => $user->suspension_reason,
+                ]
+            ], 403);
+        }
+        
+        if ($user->account_status === 'banned') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your account has been permanently banned. Please contact the administrator for more information.',
+                'account_status' => 'banned',
+                'ban_reason' => $user->ban_reason
+            ], 403);
+        }
+        
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([

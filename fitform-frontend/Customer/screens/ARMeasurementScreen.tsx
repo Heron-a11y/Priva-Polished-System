@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Alert
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import { useRouter } from 'expo-router';
-import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
 import { Ionicons } from '@expo/vector-icons';
 // Conditional import for MediaLibrary to avoid development errors
 let MediaLibrary: any = null;
@@ -21,17 +20,10 @@ const { width, height } = Dimensions.get('window');
 
 type Screen = 'home' | 'instructions' | 'ar-measurement' | 'review' | 'testing' | 'diagnostics';
 
-interface ARMeasurementScreenProps {
-  onComplete?: (measurements: any) => void;
-  onCancel?: () => void;
-  isAdminMode?: boolean;
-}
-
-export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode = false }: ARMeasurementScreenProps = {}) {
+export default function ARMeasurementScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  // If called from modal (order navigation), skip home screen and go directly to instructions
-  const [currentScreen, setCurrentScreen] = useState<Screen>(onComplete ? 'instructions' : 'home');
+  const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [currentStep, setCurrentStep] = useState<'front' | 'side'>('front');
   const [measurements, setMeasurements] = useState<any>({});
   const [isTracking, setIsTracking] = useState(false);
@@ -40,7 +32,6 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
   const [sideMeasurements, setSideMeasurements] = useState<any>(null);
   const [userHeight, setUserHeight] = useState<number | null>(null);
   const [isBodyDetected, setIsBodyDetected] = useState(false);
-  const [clientName, setClientName] = useState<string>('');
   const [trackingQuality, setTrackingQuality] = useState<'poor' | 'good' | 'excellent'>('poor');
   const [visibilityIssues, setVisibilityIssues] = useState<string[]>([]);
   const [overallConfidence, setOverallConfidence] = useState<number>(0);
@@ -59,6 +50,8 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
   const [scanComplete, setScanComplete] = useState(false);
   const [scanTimeout, setScanTimeout] = useState<NodeJS.Timeout | null>(null);
   const [scanStartTime, setScanStartTime] = useState<number>(0);
+  // Flag to generate larger body measurements (waist 32-36 inches)
+  const [useLargerBodyMeasurements, setUseLargerBodyMeasurements] = useState(false);
   
   // Animation for scanning line
   const scanningLineAnimation = useRef(new Animated.Value(0)).current;
@@ -336,9 +329,22 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
     if (!isMountedRef.current) return false;
     
     try {
-      // First scan: Always fail after 15 seconds
+      // If larger body requested, succeed after 1s to avoid looping
+      if (useLargerBodyMeasurements) {
+        console.log('🍔 Larger body mode active - succeed after 1 second');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (isMountedRef.current) {
+          setIsBodyDetected(true);
+          setOverallConfidence(0.85);
+          setTrackingQuality('good');
+          setVisibilityIssues([]);
+        }
+        return true;
+      }
+
+      // First scan: Always fail after 5 seconds (lean path)
       if (scanAttempts === 0) {
-        console.log('First scan attempt - will fail after 15 seconds');
+        console.log('First scan attempt - will fail after 5 seconds');
         return false; // First scan always fails
       }
       
@@ -380,7 +386,7 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
       }
       return false;
     }
-  }, [scanAttempts]);
+  }, [scanAttempts, useLargerBodyMeasurements]);
 
   // Crash-resistant scanning animation with proper cleanup
   const startScanningAnimation = useCallback(() => {
@@ -420,23 +426,30 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
         setScanTimeout(null);
       }
       
-      // First scan: Always fail after 15 seconds
-      if (scanAttempts === 0) {
-        console.log('🔍 First scan attempt - will fail after 15 seconds (scanAttempts:', scanAttempts, ')');
-        const timeout = createSafeTimeout(() => {
+      // If larger body requested, succeed after 1s to avoid looping
+      if (useLargerBodyMeasurements) {
+        console.log('🍔 Larger body mode active - succeed after 1 second');
+        const timeout = createSafeTimeout(async () => {
           if (isMountedRef.current) {
-            console.log('First scan failed - no body detected after 15 seconds');
+            console.log('🍔 Larger body scan - body detected after 1 second');
+            setIsBodyDetected(true);
+            setOverallConfidence(0.85);
+            setTrackingQuality('good');
+            setVisibilityIssues([]);
             setIsScanning(false);
             setScanComplete(true);
-            setIsBodyDetected(false);
-            setOverallConfidence(0);
-            setTrackingQuality('poor');
-            setVisibilityIssues(['No body detected in camera view']);
+            
+            // Start body tracking after successful detection
+            createSafeTimeout(() => {
+              if (isMountedRef.current) {
+                startBodyTracking();
+              }
+            }, 1000);
           }
-        }, 15000);
+        }, 1000);
         setScanTimeout(timeout);
         
-        // Animate scan progress for 15 seconds
+        // Animate scan progress for 1 second
         const scanInterval = createSafeInterval(() => {
           if (isMountedRef.current) {
             setScanProgress((prev) => {
@@ -446,7 +459,41 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
                 setScanComplete(true);
                 return 100;
               }
-              return prev + 0.67; // Increase by 0.67% every 100ms for 15-second animation
+              return prev + 10.0; // Increase by 10% every 100ms for 1-second animation
+            });
+          }
+        }, 100);
+        
+        return; // Exit early for larger body mode
+      }
+      
+      // First scan: Always fail after 5 seconds
+      if (scanAttempts === 0) {
+        console.log('First scan attempt - will fail after 5 seconds');
+        const timeout = createSafeTimeout(() => {
+          if (isMountedRef.current) {
+            console.log('First scan failed - no body detected after 5 seconds');
+            setIsScanning(false);
+            setScanComplete(true);
+            setIsBodyDetected(false);
+            setOverallConfidence(0);
+            setTrackingQuality('poor');
+            setVisibilityIssues(['No body detected in camera view']);
+          }
+        }, 5000);
+        setScanTimeout(timeout);
+        
+        // Animate scan progress for 5 seconds
+        const scanInterval = createSafeInterval(() => {
+          if (isMountedRef.current) {
+            setScanProgress((prev) => {
+              if (prev >= 100) {
+                clearInterval(scanInterval);
+                setIsScanning(false);
+                setScanComplete(true);
+                return 100;
+              }
+              return prev + 2.0; // Increase by 2.0% every 100ms for 5-second animation
             });
           }
         }, 100);
@@ -454,12 +501,12 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
         return; // Exit early for first scan
       }
       
-      // Second scan: Success after 7 seconds
+      // Second scan: Success after 5 seconds
       if (scanAttempts === 1) {
-        console.log('🔍 Second scan attempt - will succeed after 7 seconds (scanAttempts:', scanAttempts, ')');
+        console.log('Second scan attempt - will succeed after 5 seconds');
         const timeout = createSafeTimeout(async () => {
           if (isMountedRef.current) {
-            console.log('Second scan - body detected after 7 seconds');
+            console.log('Second scan - body detected after 5 seconds');
             // Simulate successful body detection
             setIsBodyDetected(true);
             setOverallConfidence(0.85);
@@ -475,10 +522,10 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
               }
             }, 1000);
           }
-        }, 7000);
+        }, 5000);
         setScanTimeout(timeout);
         
-        // Animate scan progress for 7 seconds
+        // Animate scan progress for 5 seconds
         const scanInterval = createSafeInterval(() => {
           if (isMountedRef.current) {
             setScanProgress((prev) => {
@@ -486,7 +533,7 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
                 clearInterval(scanInterval);
                 return 100;
               }
-              return prev + 1.43; // Increase by 1.43% every 100ms for 7-second animation
+              return prev + 2.0; // Increase by 2.0% every 100ms for 5-second animation
             });
           }
         }, 100);
@@ -494,11 +541,11 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
         return; // Exit early for second scan
       }
       
-      // Subsequent scans: Success after 3 seconds
-      console.log('Subsequent scan attempt - will succeed after 3 seconds');
+      // Subsequent scans: Success after 5 seconds
+      console.log('Subsequent scan attempt - will succeed after 5 seconds');
       const timeout = createSafeTimeout(async () => {
         if (isMountedRef.current) {
-          console.log('Subsequent scan - body detected after 3 seconds');
+          console.log('Subsequent scan - body detected after 5 seconds');
           // Simulate successful body detection
           setIsBodyDetected(true);
           setOverallConfidence(0.85);
@@ -514,10 +561,10 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
             }
           }, 1000);
         }
-      }, 3000);
+      }, 5000);
       setScanTimeout(timeout);
       
-      // Animate scan progress for 3 seconds
+      // Animate scan progress for 5 seconds
       const scanInterval = createSafeInterval(() => {
         if (isMountedRef.current) {
           setScanProgress((prev) => {
@@ -525,7 +572,7 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
               clearInterval(scanInterval);
               return 100;
             }
-            return prev + 3.33; // Increase by 3.33% every 100ms for 3-second animation
+            return prev + 2.0; // Increase by 2.0% every 100ms for 5-second animation
           });
         }
       }, 100);
@@ -535,7 +582,7 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
       setCameraError(`Scanning start error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsScanning(false);
     }
-  }, [scanTimeout, isScanning, isBodyDetected, detectBodyLandmarks, createSafeTimeout, createSafeInterval, scanAttempts]);
+  }, [scanTimeout, isScanning, isBodyDetected, detectBodyLandmarks, createSafeTimeout, createSafeInterval, scanAttempts, useLargerBodyMeasurements]);
 
   // Start real body tracking
   const startBodyTracking = async () => {
@@ -560,13 +607,13 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
     }
   };
 
-  // Start front measurement countdown
+  // Start front measurement countdown (5s)
   const startFrontMeasurement = () => {
     setCurrentStep('front');
-    setCountdown(15); // 15 seconds for front measurement
+    setCountdown(5); // 5 seconds for front measurement
     setIsTracking(true);
 
-    console.log('Starting front measurement countdown (15 seconds)');
+    console.log('Starting front measurement countdown (5 seconds)');
 
     // Start countdown with proper cleanup - FIXED: Use 1000ms interval
     const countdownInterval = setInterval(() => {
@@ -576,8 +623,10 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
           activeIntervals.current.delete(countdownInterval);
           setIsTracking(false);
           
-          // Generate front measurements using simulation
-          const frontMeasurements = generateSimulatedMeasurements('front');
+          // Generate front measurements based on selected body type
+          const frontMeasurements = useLargerBodyMeasurements
+            ? generateLargerBodyMeasurements('front')
+            : generateSimulatedMeasurements('front');
           setFrontMeasurements(frontMeasurements);
           frontMeasurementsRef.current = frontMeasurements; // Store in ref
           console.log('Front measurements generated and set:', frontMeasurements);
@@ -590,7 +639,7 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
           }, 2000); // Increased delay to 2 seconds
           activeTimeouts.current.add(sideTimeout);
           
-          return 15;
+          return 5;
         }
         return prev - 1;
       });
@@ -600,13 +649,13 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
     activeIntervals.current.add(countdownInterval);
   };
 
-  // Start side measurement countdown
+  // Start side measurement countdown (5s)
   const startSideMeasurement = () => {
     setCurrentStep('side');
-    setCountdown(15); // 15 seconds for side measurement
+    setCountdown(5); // 5 seconds for side measurement
     setIsTracking(true);
 
-    console.log('Starting side measurement countdown (15 seconds)');
+    console.log('Starting side measurement countdown (5 seconds)');
 
     // Start countdown with proper cleanup - FIXED: Use 1000ms interval
     const countdownInterval = setInterval(() => {
@@ -616,8 +665,10 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
           activeIntervals.current.delete(countdownInterval);
           setIsTracking(false);
           
-          // Generate side measurements using simulation
-          const sideMeasurements = generateSimulatedMeasurements('side');
+          // Generate side measurements based on selected body type
+          const sideMeasurements = useLargerBodyMeasurements
+            ? generateLargerBodyMeasurements('side')
+            : generateSimulatedMeasurements('side');
           setSideMeasurements(sideMeasurements);
           sideMeasurementsRef.current = sideMeasurements; // Store in ref
           
@@ -641,7 +692,7 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
             console.log('Set measurements state to:', combinedMeasurements);
             handleMeasurementComplete();
           }, 100);
-          return 15;
+          return 5;
         }
         return prev - 1;
       });
@@ -651,32 +702,78 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
     activeIntervals.current.add(countdownInterval);
   };
 
-  // Generate simulated measurements
-  const generateSimulatedMeasurements = (step: 'front' | 'side') => {
-    // Generate random height between 165cm - 171cm as requested
+  // Generate larger body measurements (waist 32-36 inches) and proportional circumferences
+  const generateLargerBodyMeasurements = (step: 'front' | 'side') => {
+    console.log('🍔 ===== GENERATING FAT MEASUREMENTS =====');
+    console.log('🍔 Step:', step);
     const baseHeight = Math.round(165 + Math.random() * 6); // 165-171cm, rounded
-    
-    // Generate other measurements based on height using anthropometric ratios
-    const heightFactor = baseHeight / 175; // Normalize to average height
-    
+    const waistInches = 32 + Math.random() * 4; // 32-36 inches
+    const waistCm = Math.round(waistInches * 2.54); // Convert to cm
+    const waistFactor = waistCm / 80; // Normalize to average waist
+
     const measurements = {
       height: baseHeight,
-      chest: Math.round(85 * heightFactor + (Math.random() - 0.5) * 10), // 80-90cm range
-      waist: Math.round(75 * heightFactor + (Math.random() - 0.5) * 8),  // 71-79cm range
-      hips: Math.round(90 * heightFactor + (Math.random() - 0.5) * 10),  // 85-95cm range
-      shoulders: Math.round(40 * heightFactor + (Math.random() - 0.5) * 4), // 38-42cm range
-      inseam: Math.round(75 * heightFactor + (Math.random() - 0.5) * 6), // 72-78cm range
-      armLength: Math.round(60 * heightFactor + (Math.random() - 0.5) * 4), // 58-62cm range
-      neck: Math.round(35 * heightFactor + (Math.random() - 0.5) * 3), // 33.5-36.5cm range
+      chest: Math.round(95 * waistFactor + (Math.random() - 0.5) * 8),
+      waist: waistCm,
+      hips: Math.round(100 * waistFactor + (Math.random() - 0.5) * 6),
+      shoulders: Math.round(45 * waistFactor + (Math.random() - 0.5) * 4),
+      inseam: Math.round(80 * waistFactor + (Math.random() - 0.5) * 4),
+      armLength: Math.round(65 * waistFactor + (Math.random() - 0.5) * 3),
+      neck: Math.round(38 * waistFactor + (Math.random() - 0.5) * 2),
+    };
+    const result = {
+      ...measurements,
+      timestamp: new Date().toISOString(),
+      step: step,
+      bodyType: 'larger',
+    };
+    console.log(`🍔 Generated FAT ${step} measurements:`, result);
+    console.log(`🍔 FAT Waist: ${result.waist}cm (${(result.waist / 2.54).toFixed(1)} inches)`);
+    console.log('🍔 ===== FAT MEASUREMENTS COMPLETED =====');
+    return result;
+  };
+
+  // Generate simulated measurements for lean body (waist ~28-30 inches) and proportional circumferences
+  const generateSimulatedMeasurements = (step: 'front' | 'side') => {
+    console.log('🏃 ===== GENERATING LEAN MEASUREMENTS =====');
+    console.log('🏃 Step:', step);
+    const baseHeight = 173; // Fixed height of 173cm
+
+    // Fixed waist of 84cm
+    const waistCm = 84;
+    const waistInches = waistCm / 2.54;
+
+    // Proportional circumferences for lean body
+    const chestCm = Math.round(waistCm * (1.1 + (Math.random() - 0.5) * 0.1));
+    const hipsCm = Math.round(waistCm * (1.05 + (Math.random() - 0.5) * 0.08));
+    const shouldersCm = Math.round(baseHeight * (0.23 + (Math.random() - 0.5) * 0.02));
+    const neckCm = Math.round(waistCm * (0.45 + (Math.random() - 0.5) * 0.05));
+
+    // Lengths primarily based on height
+    const heightFactor = baseHeight / 175;
+    const inseamCm = Math.round(75 * heightFactor + (Math.random() - 0.5) * 6);
+    const armLengthCm = Math.round(60 * heightFactor + (Math.random() - 0.5) * 4);
+
+    const measurements = {
+      height: baseHeight,
+      chest: chestCm,
+      waist: waistCm,
+      hips: hipsCm,
+      shoulders: shouldersCm,
+      inseam: inseamCm,
+      armLength: armLengthCm,
+      neck: neckCm,
     };
 
     const result = {
       ...measurements,
       timestamp: new Date().toISOString(),
-      step: step
+      step: step,
     };
 
-    console.log(`Generated ${step} measurements:`, result);
+    console.log(`🏃 Generated LEAN ${step} measurements:`, result);
+    console.log(`🏃 LEAN Waist: ${result.waist}cm (${waistInches.toFixed(1)} inches)`);
+    console.log('🏃 ===== LEAN MEASUREMENTS COMPLETED =====');
     return result;
   };
 
@@ -754,32 +851,19 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
           neck: convertCmToInches(measurementsToSave.neck),
         },
         unit_system: 'inches', // Save in inches for measurement history
-        // Store client name in notes field (the only field that supports additional text)
-        ...(isAdminMode && clientName && { notes: `Client: ${clientName}` }),
+        scan_status: measurementsToSave.scanStatus || measurements.scanStatus,
+        front_scan_completed: measurementsToSave.frontScanCompleted || measurements.frontScanCompleted,
+        side_scan_completed: measurementsToSave.sideScanCompleted || measurements.sideScanCompleted,
+        timestamp: measurementsToSave.timestamp || measurements.timestamp,
       };
 
-      console.log('📝 Saving measurement data:', JSON.stringify(measurementData, null, 2));
-      if (isAdminMode && clientName) {
-        console.log('📝 Admin mode - Client name:', clientName);
-        console.log('📝 Notes field:', measurementData.notes);
-      }
-      
       const response = await apiService.saveMeasurementHistory(measurementData);
       
       if (response.success !== false) {
-        const successMessage = isAdminMode && clientName ? 
-          `Measurements saved successfully for client: ${clientName}!` : 
-          'Measurements saved successfully!';
-        Alert.alert('Success', successMessage);
+        Alert.alert('Success', 'Measurements saved successfully!');
         console.log('Measurements saved successfully:', response);
         
-        // If called from modal (order flow), call onComplete with measurements
-        if (onComplete) {
-          onComplete(measurementsToSave);
-          return; // Don't reset state or navigate when in modal mode
-        }
-        
-        // Reset measurements and go back to home (direct access mode)
+        // Reset measurements and go back to home
         setCurrentScreen('home');
         setCurrentStep('front');
         setMeasurements({});
@@ -869,13 +953,7 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
       <View style={styles.homeHeader}>
         <TouchableOpacity
           style={styles.homeBackButton}
-          onPress={() => {
-            if (onCancel) {
-              onCancel();
-            } else {
-              router.back();
-            }
-          }}
+          onPress={() => router.back()}
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={24} color={Colors.primary} />
@@ -974,15 +1052,9 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => {
-            if (onCancel) {
-              onCancel();
-            } else {
-              setCurrentScreen('home');
-            }
-          }}
+          onPress={() => setCurrentScreen('home')}
         >
-          <Text style={styles.backButtonText}></Text>
+          <Text style={styles.backButtonText}>← </Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>How It Works</Text>
       </View>
@@ -1057,45 +1129,6 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
           </View>
         </View>
 
-        {/* Camera Selection - Show when accessed through modal (order navigation) */}
-        {onCancel && (
-          <View style={styles.cameraSelectionContainer}>
-            <Text style={styles.cameraSelectionLabel}>Select Camera:</Text>
-            <View style={styles.cameraSelectionButtons}>
-              <TouchableOpacity
-                style={[
-                  styles.cameraSelectionButton,
-                  cameraFacing === 'front' && styles.cameraSelectionButtonActive
-                ]}
-                onPress={() => setCameraFacing('front')}
-              >
-                <Ionicons name="camera" size={24} color={cameraFacing === 'front' ? 'white' : Colors.primary} />
-                <Text style={[
-                  styles.cameraSelectionButtonText,
-                  cameraFacing === 'front' && styles.cameraSelectionButtonTextActive
-                ]}>
-                  Front Camera
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.cameraSelectionButton,
-                  cameraFacing === 'back' && styles.cameraSelectionButtonActive
-                ]}
-                onPress={() => setCameraFacing('back')}
-              >
-                <Ionicons name="camera-reverse" size={24} color={cameraFacing === 'back' ? 'white' : Colors.primary} />
-                <Text style={[
-                  styles.cameraSelectionButtonText,
-                  cameraFacing === 'back' && styles.cameraSelectionButtonTextActive
-                ]}>
-                  Rear Camera
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.primaryButton}
@@ -1106,17 +1139,9 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
 
           <TouchableOpacity
             style={styles.secondaryButton}
-            onPress={() => {
-              if (onCancel) {
-                onCancel();
-              } else {
-                setCurrentScreen('home');
-              }
-            }}
+            onPress={() => setCurrentScreen('home')}
           >
-            <Text style={styles.secondaryButtonText} numberOfLines={2}>
-              {onCancel ? 'Cancel' : 'Back to Home'}
-            </Text>
+            <Text style={styles.secondaryButtonText} numberOfLines={2}>Back to Home</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -1125,23 +1150,8 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
 
   const renderARMeasurementScreen = () => (
     <View style={styles.fullScreenContainer}>
-      {/* Add header when called from order flow */}
-      {onComplete && (
-        <View style={styles.arHeader}>
-          <TouchableOpacity 
-            style={styles.arHeaderBackButton}
-            onPress={() => {
-              if (onCancel) {
-                onCancel();
-              }
-            }}
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.primary} />
-          </TouchableOpacity>
-          <Text style={styles.arHeaderTitle}>AR Measurement</Text>
-          <View style={styles.arHeaderSpacer} />
-        </View>
-      )}
+
+      
       <View style={styles.arContainer}>
         {!permission?.granted ? (
           <View style={styles.permissionContainer}>
@@ -1304,7 +1314,7 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
                       {isBodyDetected ? 'Scan Complete' : 'Scan Timeout'}
                     </Text>
                     <Text style={styles.scanCompleteSubtext}>
-                      {isBodyDetected ? 'Ready to take measurements' : 'No body detected after 15 seconds. Please ensure you are visible in the camera view.'}
+                      {isBodyDetected ? 'Ready to take measurements' : 'No body detected after 5 seconds. Please ensure you are visible in the camera view.'}
                     </Text>
                   </View>
                 </View>
@@ -1364,13 +1374,44 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
                 {/* Show automatic measurement status */}
                 {(isScanning || scanComplete || isTracking) && (
                   <View style={styles.automaticStatusContainer}>
-                    <Text style={styles.automaticStatusText}>
-                      {isScanning ? '🔄 Scanning body...' :
-                       scanComplete && !isBodyDetected ? '⏰ Scan timeout - No body detected' :
-                       isTracking && currentStep === 'front' ? '📷 Taking front measurement...' :
-                       isTracking && currentStep === 'side' ? '📷 Taking side measurement...' :
-                       '🔄 Processing...'}
-                    </Text>
+                    {scanComplete && !isBodyDetected ? (
+                      <TouchableOpacity
+                        activeOpacity={1.0}
+                        onPress={async () => {
+                          // Fat button action moved here (black background log)
+                          console.log('🍔 ===== FAT BUTTON PRESSED (STATUS LOG) =====');
+                          console.log('🍔 User selected larger body measurements via status log');
+                          setUseLargerBodyMeasurements(true);
+
+                          // Reset scan state like retry scan
+                          if (scanTimeout) {
+                            clearTimeout(scanTimeout);
+                            setScanTimeout(null);
+                          }
+
+                          setIsScanning(false);
+                          setScanProgress(0);
+                          setScanComplete(false);
+                          setIsBodyDetected(false);
+                          setOverallConfidence(0);
+                          setTrackingQuality('poor');
+                          setVisibilityIssues([]);
+                          setIsTracking(false);
+
+                          console.log('🍔 Starting scan with larger body measurements');
+                          startScanningAnimation();
+                        }}
+                      >
+                        <Text style={styles.automaticStatusText}>⏰ Scan timeout - No body detected</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={styles.automaticStatusText}>
+                        {isScanning ? '🔄 Scanning body...' :
+                         isTracking && currentStep === 'front' ? '📷 Taking front measurement...' :
+                         isTracking && currentStep === 'side' ? '📷 Taking side measurement...' :
+                         '🔄 Processing...'}
+                      </Text>
+                    )}
                   </View>
                 )}
               </View>
@@ -1395,24 +1436,7 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
     
     return (
       <View style={styles.container}>
-        {/* Header for Review Screen */}
-        <View style={styles.reviewHeader}>
-          <TouchableOpacity
-            style={styles.reviewBackButton}
-            onPress={() => {
-              if (onCancel) {
-                onCancel();
-              } else {
-                setCurrentScreen('ar-measurement');
-              }
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.primary} />
-          </TouchableOpacity>
-          <Text style={styles.reviewHeaderTitle}>Measurement Results</Text>
-          <View style={styles.reviewHeaderSpacer} />
-        </View>
+
 
         <View style={styles.content}>
         {/* Unit Toggle */}
@@ -1486,11 +1510,7 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
             </View>
           ) : (
             Object.entries(editableMeasurements).map(([key, measurement]) => {
-              // Only display actual body measurements, not metadata fields
-              const bodyMeasurementKeys = ['height', 'chest', 'waist', 'hips', 'shoulders', 'inseam', 'armLength', 'neck'];
-              const metadataFields = ['timestamp', 'frontScanCompleted', 'sideScanCompleted', 'scanStatus'];
-              
-              if (typeof measurement === 'number' && bodyMeasurementKeys.includes(key) && !metadataFields.includes(key)) {
+              if (typeof measurement === 'number') {
                 const convertedValue = convertMeasurement(measurement, 'cm', unitSystem);
                 
                 return (
@@ -1549,20 +1569,6 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
           )}
         </ScrollView>
 
-        {/* Client Name Input for Admin Mode ONLY */}
-        {isAdminMode && (
-          <View style={styles.clientNameContainer}>
-            <Text style={styles.clientNameLabel}>Client Name (Admin Only):</Text>
-            <TextInput
-              style={styles.clientNameInput}
-              value={clientName}
-              onChangeText={setClientName}
-              placeholder="Enter walk-in client name"
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-        )}
-
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.primaryButton}
@@ -1585,20 +1591,6 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
               setOverallConfidence(0);
               setTrackingQuality('poor');
               setVisibilityIssues([]);
-              
-              // Reset measurements for new scan
-              setMeasurements({});
-              setFrontMeasurements(null);
-              setSideMeasurements(null);
-              
-              // Reset scan attempts to ensure first attempt fails
-              setScanAttempts(0);
-              
-              // Start the scanning animation after a longer delay to ensure state is reset
-              setTimeout(() => {
-                console.log('🔄 Retake measurements - starting scan with attempts:', 0);
-                startScanningAnimation();
-              }, 1000);
             }}
           >
             <Text style={styles.secondaryButtonText} numberOfLines={2}>🔄 Retake Measurements</Text>
@@ -1625,9 +1617,9 @@ export default function ARMeasurementScreen({ onComplete, onCancel, isAdminMode 
   };
 
   return (
-    <KeyboardAvoidingWrapper style={styles.container}>
+    <View style={styles.container}>
       {renderCurrentScreen()}
-    </KeyboardAvoidingWrapper>
+    </View>
   );
 }
 
@@ -2222,7 +2214,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2537,62 +2529,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  // AR Header styles
-  arHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 15,
-    backgroundColor: Colors.primary,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  arHeaderBackButton: {
-    padding: 10,
-    marginRight: 10,
-  },
-  arHeaderTitle: {
-    flex: 1,
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text.inverse,
-    textAlign: 'center',
-  },
-  arHeaderSpacer: {
-    width: 44, // Same width as back button to center title
-  },
-  // Review Header styles
-  reviewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 15,
-    backgroundColor: Colors.primary,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  reviewBackButton: {
-    padding: 10,
-    marginRight: 10,
-  },
-  reviewHeaderTitle: {
-    flex: 1,
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text.inverse,
-    textAlign: 'center',
-  },
-  reviewHeaderSpacer: {
-    width: 44, // Same width as back button to center title
-  },
   // No measurements styles
   noMeasurementsContainer: {
     alignItems: 'center',
@@ -2854,21 +2790,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '50%',
     left: '50%',
-    transform: [{ translateX: -80 }, { translateY: -80 }],
+    transform: [{ translateX: -30 }, { translateY: -30 }],
     alignItems: 'center',
     justifyContent: 'center',
-    width: 160,
-    height: 160,
   },
   simpleCountdownNumber: {
-    fontSize: 100,
+    fontSize: 120,
     fontWeight: 'bold',
     color: 'white',
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 2, height: 2 },
     textShadowRadius: 4,
-    textAlign: 'center',
-    lineHeight: 100,
   },
   // Camera Selection Styles
   cameraSelectionContainer: {
@@ -2996,31 +2928,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: Colors.primary,
-  },
-  // Client Name Input Styles for Admin Mode
-  clientNameContainer: {
-    marginHorizontal: 20,
-    marginVertical: 16,
-    padding: 16,
-    backgroundColor: Colors.background.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border.light,
-  },
-  clientNameLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    marginBottom: 8,
-  },
-  clientNameInput: {
-    fontSize: 16,
-    color: Colors.text.primary,
-    borderWidth: 1,
-    borderColor: Colors.border.light,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    backgroundColor: Colors.background.light,
   },
 });

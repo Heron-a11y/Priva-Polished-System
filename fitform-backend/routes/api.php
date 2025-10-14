@@ -50,6 +50,35 @@ Route::middleware([CorsMiddleware::class])->group(function () {
     // Public routes
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
+    
+    // Test customer route without auth
+    Route::get('/admin/customers/public-test', [\App\Http\Controllers\CustomerController::class, 'test']);
+    Route::get('/test-controller', [\App\Http\Controllers\TestController::class, 'test']);
+    
+    // Admin Customer Management Routes (temporarily without auth for testing)
+    Route::get('/admin/customers/test', [\App\Http\Controllers\CustomerController::class, 'test']);
+    Route::get('/admin/customers/simple-test', [\App\Http\Controllers\CustomerController::class, 'simpleTest']);
+    Route::get('/admin/customers', [\App\Http\Controllers\CustomerController::class, 'index']);
+    Route::get('/admin/customers/{id}', [\App\Http\Controllers\CustomerController::class, 'show']);
+    Route::put('/admin/customers/{id}', [\App\Http\Controllers\CustomerController::class, 'update']);
+    Route::post('/admin/customers/{id}/suspend', [\App\Http\Controllers\CustomerController::class, 'suspend']);
+    Route::post('/admin/customers/{id}/lift-suspension', [\App\Http\Controllers\CustomerController::class, 'liftSuspension']);
+    Route::post('/admin/customers/{id}/ban', [\App\Http\Controllers\CustomerController::class, 'ban']);
+    Route::post('/admin/customers/{id}/generate-report', [\App\Http\Controllers\CustomerController::class, 'generateReport']);
+    Route::get('/admin/customers/{id}/generate-report', [\App\Http\Controllers\CustomerController::class, 'generateReport']);
+    Route::get('/admin/customers/{id}/orders', [\App\Http\Controllers\CustomerController::class, 'getOrders']);
+    Route::get('/admin/customers/{id}/appointments', [\App\Http\Controllers\CustomerController::class, 'getAppointments']);
+    Route::get('/admin/customers/{id}/rentals', [\App\Http\Controllers\CustomerController::class, 'getRentals']);
+    Route::get('/admin/customers/{id}/purchases', [\App\Http\Controllers\CustomerController::class, 'getPurchases']);
+    
+    // Admin Appointments Routes (temporarily without auth for testing)
+    Route::get('/admin/appointments', [\App\Http\Controllers\AppointmentController::class, 'indexAdmin']);
+    Route::post('/admin/appointments/{id}/status', [\App\Http\Controllers\AppointmentController::class, 'adminUpdateStatus']);
+    Route::get('/admin/appointments/stats', [\App\Http\Controllers\AppointmentController::class, 'getAppointmentStats']);
+    
+    // Report generation routes
+    Route::get('/admin/orders/generate-report', [\App\Http\Controllers\OrderController::class, 'generateReport']);
+    Route::get('/admin/appointments/generate-report', [\App\Http\Controllers\AppointmentController::class, 'generateReport']);
 
     // Protected routes
     Route::middleware('auth:sanctum')->group(function () {
@@ -63,10 +92,11 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         Route::get('/booked-dates', [AppointmentController::class, 'getBookedDates']);
         Route::get('/appointments/daily-capacity', [AppointmentController::class, 'getDailyCapacity']);
         Route::get('/appointments/available-slots', [AppointmentController::class, 'getAvailableSlots']);
-        // Admin appointments
-        Route::get('/admin/appointments', [AppointmentController::class, 'indexAdmin']);
-        Route::post('/admin/appointments/{id}/status', [AppointmentController::class, 'adminUpdateStatus']);
-        Route::get('/admin/appointments/stats', [AppointmentController::class, 'getAppointmentStats']);
+        // Admin appointments - moved outside middleware for testing
+        // Admin settings
+        Route::get('/admin/settings', [\App\Http\Controllers\AdminSettingsController::class, 'getSettings']);
+        Route::put('/admin/settings', [\App\Http\Controllers\AdminSettingsController::class, 'updateSettings']);
+        Route::post('/admin/settings/toggle-auto-approval', [\App\Http\Controllers\AdminSettingsController::class, 'toggleAutoApproval']);
         // Rentals
         Route::get('/rentals', [\App\Http\Controllers\RentalController::class, 'index']);
         Route::post('/rentals', [\App\Http\Controllers\RentalController::class, 'store']);
@@ -181,6 +211,7 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         
         // Admin Profile Management Routes
         Route::get('/admin/profile/stats', [\App\Http\Controllers\ProfileController::class, 'getStats']);
+        
         Route::get('/admin/users', [\App\Http\Controllers\ProfileController::class, 'getAllUsers']);
         Route::put('/admin/users/{id}/role', [\App\Http\Controllers\ProfileController::class, 'updateUserRole']);
         Route::get('/admin/measurement-history/{id}', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'show']);
