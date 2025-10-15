@@ -53,3 +53,4 @@ export default testConnection;
 if (typeof window !== 'undefined') {
     testConnection();
 }
+

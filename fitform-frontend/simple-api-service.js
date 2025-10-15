@@ -196,3 +196,4 @@ class SimpleApiService {
 // Create and export a singleton instance
 const simpleApiService = new SimpleApiService();
 export default simpleApiService;
+

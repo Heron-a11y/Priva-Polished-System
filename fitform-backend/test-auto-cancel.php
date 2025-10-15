@@ -57,3 +57,4 @@ if ($appointmentsToCancel->count() > 0) {
 echo "\nTest completed.\n";
 
 
+

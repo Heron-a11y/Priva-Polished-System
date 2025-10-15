@@ -194,3 +194,4 @@ class NetworkConnectionFix {
 
 // Export singleton instance
 export default new NetworkConnectionFix();
+

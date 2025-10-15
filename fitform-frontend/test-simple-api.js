@@ -49,3 +49,4 @@ export default testSimpleAPI;
 if (typeof window !== 'undefined') {
     testSimpleAPI();
 }
+

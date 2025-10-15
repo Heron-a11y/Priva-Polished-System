@@ -86,3 +86,4 @@ Look for these log entries:
 4. **No cancellations**: Check if there are actually pending appointments older than 2 days
 
 
+

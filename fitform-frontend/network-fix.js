@@ -87,3 +87,4 @@ class NetworkFix {
 
 // Export singleton instance
 export default new NetworkFix();
+
