@@ -14,22 +14,22 @@ class ApiService {
     // Initialize network configuration
     async initializeNetwork() {
         try {
-            // Auto-detect network configuration
-            const mode = await networkConfig.autoDetectNetwork();
-            console.log('🌐 Auto-detected network mode:', mode);
-            this.updateBaseURL();
+            // Force use the correct IP address
+            this.baseURL = 'http://192.168.1.59:8000/api';
+            console.log('🌐 Using fixed network configuration:', this.baseURL);
             
             // Test current connection
             const connectionTest = await this.testApiConnection();
             if (!connectionTest.success) {
-                console.log('🔄 Auto-detected network failed, trying local mode...');
-                await networkConfig.setNetworkMode('local');
-                this.updateBaseURL();
+                console.log('🔄 Primary connection failed, trying localhost...');
+                this.baseURL = 'http://localhost:8000/api';
                 
                 // Test local connection
                 const localTest = await this.testApiConnection();
                 if (!localTest.success) {
-                    console.log('❌ Local connection also failed, check if backend is running');
+                    console.log('❌ Both connections failed, check if backend is running');
+                    // Revert to LAN IP
+                    this.baseURL = 'http://192.168.1.59:8000/api';
                 } else {
                     console.log('✅ Local connection successful');
                 }
@@ -38,9 +38,8 @@ class ApiService {
             }
         } catch (error) {
             console.log('⚠️ Failed to initialize network config:', error);
-            // Fallback to local mode
-            await networkConfig.setNetworkMode('local');
-            this.updateBaseURL();
+            // Fallback to LAN IP
+            this.baseURL = 'http://192.168.1.59:8000/api';
         }
     }
 
@@ -645,7 +644,7 @@ class ApiService {
             
             // Create AbortController for timeout
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout for faster response
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout for faster response
             
             const response = await fetch(`${this.baseURL}/test`, {
                 method: 'GET',
@@ -677,6 +676,35 @@ class ApiService {
                 return { success: false, error: 'Connection timeout - check if backend is running' };
             }
             console.error('❌ API connection failed:', error.message);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // Reset network configuration
+    async resetNetworkConfig() {
+        try {
+            console.log('🔄 Resetting network configuration...');
+            
+            // Clear cached settings
+            await AsyncStorage.removeItem('network_mode');
+            await AsyncStorage.removeItem('last_known_ip');
+            await AsyncStorage.removeItem('network_diagnostics');
+            
+            // Force use the correct IP
+            this.baseURL = 'http://192.168.1.59:8000/api';
+            console.log('✅ Network configuration reset to:', this.baseURL);
+            
+            // Test the connection
+            const testResult = await this.testApiConnection();
+            if (testResult.success) {
+                console.log('✅ Network reset successful');
+                return { success: true, message: 'Network configuration reset successfully' };
+            } else {
+                console.log('❌ Network reset failed - backend may not be running');
+                return { success: false, error: 'Backend server may not be running' };
+            }
+        } catch (error) {
+            console.error('❌ Network reset error:', error);
             return { success: false, error: error.message };
         }
     }
