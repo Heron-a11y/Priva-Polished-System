@@ -737,10 +737,10 @@ export default function ARMeasurementScreen() {
   const generateSimulatedMeasurements = (step: 'front' | 'side') => {
     console.log('🏃 ===== GENERATING LEAN MEASUREMENTS =====');
     console.log('🏃 Step:', step);
-    const baseHeight = 173; // Fixed height of 173cm
+    const baseHeight = Math.round(165 + Math.random() * 6); // 165-171cm, rounded
 
-    // Fixed waist of 84cm
-    const waistCm = 84;
+    // Target waist 28-30 inches (71-76 cm)
+    const waistCm = Math.round(71 + Math.random() * 5); // 71-76cm range
     const waistInches = waistCm / 2.54;
 
     // Proportional circumferences for lean body
