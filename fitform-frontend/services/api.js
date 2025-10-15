@@ -183,7 +183,9 @@ class ApiService {
             
             if (error.message.includes('Failed to fetch')) {
                 console.error('❌ Failed to fetch - check LAN connection');
-                throw new Error('Cannot connect to server - please check your LAN connection');
+                console.error('💡 Current API URL:', this.baseURL);
+                console.error('💡 Make sure backend server is running on port 8000');
+                throw new Error('Cannot connect to server - please check your LAN connection and ensure backend is running');
             }
             
             // Retry logic for network errors
@@ -285,7 +287,20 @@ class ApiService {
 
     // Appointments
     async getAppointments() {
-        return this.request('/appointments');
+        try {
+            console.log('🌐 Fetching appointments...');
+            const token = await this.getToken();
+            console.log('🔑 Auth token available:', !!token);
+            
+            if (!token) {
+                throw new Error('Authentication required - please login first');
+            }
+            
+            return this.request('/appointments');
+        } catch (error) {
+            console.error('❌ Error fetching appointments:', error);
+            throw error;
+        }
     }
 
     async getBookedDates() {
