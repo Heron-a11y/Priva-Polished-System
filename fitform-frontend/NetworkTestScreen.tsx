@@ -1,147 +1,172 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
 import apiService from './services/api';
-import networkConfig from './services/network-config';
+import networkConnectionFix from './fix-network-connection';
 
 const NetworkTestScreen = () => {
-  const [testResults, setTestResults] = useState([]);
+  const [testResults, setTestResults] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [networkStatus, setNetworkStatus] = useState(null);
 
-  const addResult = (message, type = 'info') => {
-    const timestamp = new Date().toLocaleTimeString();
-    setTestResults(prev => [...prev, { message, type, timestamp }]);
-  };
+  useEffect(() => {
+    loadNetworkStatus();
+  }, []);
 
-  const clearResults = () => {
-    setTestResults([]);
-  };
-
-  const testApiConnection = async () => {
-    setIsLoading(true);
-    addResult('🧪 Starting API connection test...', 'info');
-    
+  const loadNetworkStatus = async () => {
     try {
-      const result = await apiService.testApiConnection();
+      const status = await networkConnectionFix.getNetworkStatus();
+      setNetworkStatus(status);
+    } catch (error) {
+      console.log('Error loading network status:', error);
+    }
+  };
+
+  const runNetworkTest = async () => {
+    setIsLoading(true);
+    try {
+      console.log('🧪 Starting network test...');
+      const results = await networkConnectionFix.runNetworkDiagnostics();
+      setTestResults(results);
+      console.log('✅ Network test completed:', results);
+    } catch (error) {
+      console.error('❌ Network test failed:', error);
+      Alert.alert('Test Failed', error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fixNetworkIssues = async () => {
+    setIsLoading(true);
+    try {
+      console.log('🔧 Attempting to fix network issues...');
+      const result = await networkConnectionFix.fixNetworkIssues();
+      
       if (result.success) {
-        addResult('✅ API connection successful!', 'success');
-        addResult(`📊 Response: ${JSON.stringify(result.data)}`, 'info');
+        Alert.alert('Success', 'Network configuration has been updated');
+        await loadNetworkStatus();
       } else {
-        addResult(`❌ API connection failed: ${result.error}`, 'error');
+        Alert.alert('Fix Failed', result.error);
       }
     } catch (error) {
-      addResult(`❌ API test error: ${error.message}`, 'error');
+      console.error('❌ Network fix failed:', error);
+      Alert.alert('Fix Failed', error.message);
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
 
-  const testNetworkConfig = async () => {
+  const testAppointments = async () => {
     setIsLoading(true);
-    addResult('🌐 Testing network configuration...', 'info');
-    
     try {
-      const currentConfig = networkConfig.getCurrentConfig();
-      addResult(`📡 Current config: ${JSON.stringify(currentConfig)}`, 'info');
-      
-      const backendUrl = networkConfig.getBackendUrl();
-      addResult(`🔗 Backend URL: ${backendUrl}`, 'info');
-      
-      const expoUrl = networkConfig.getExpoUrl();
-      addResult(`📱 Expo URL: ${expoUrl}`, 'info');
-      
+      console.log('🧪 Testing appointments endpoint...');
+      const result = await apiService.getAppointments();
+      console.log('✅ Appointments test successful:', result);
+      Alert.alert('Success', 'Appointments endpoint is working!');
     } catch (error) {
-      addResult(`❌ Network config error: ${error.message}`, 'error');
+      console.error('❌ Appointments test failed:', error);
+      Alert.alert('Test Failed', `Appointments endpoint failed: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
 
-  const testAllConnections = async () => {
-    setIsLoading(true);
-    clearResults();
-    addResult('🚀 Starting comprehensive network test...', 'info');
+  const renderTestResult = (title, result) => {
+    if (!result) return null;
     
-    // Test current configuration
-    await testNetworkConfig();
-    await testApiConnection();
+    const isSuccess = result.success || result.ok;
+    const statusColor = isSuccess ? '#4CAF50' : '#F44336';
+    const statusText = isSuccess ? '✅ SUCCESS' : '❌ FAILED';
     
-    // Test alternative IPs
-    const alternativeIPs = ['192.168.1.105', '192.168.1.104', 'localhost'];
-    
-    for (const ip of alternativeIPs) {
-      addResult(`🧪 Testing IP: ${ip}`, 'info');
-      try {
-        networkConfig.updateLanIp(ip);
-        const result = await apiService.testApiConnection();
-        if (result.success) {
-          addResult(`✅ IP ${ip} works!`, 'success');
-        } else {
-          addResult(`❌ IP ${ip} failed: ${result.error}`, 'error');
-        }
-      } catch (error) {
-        addResult(`❌ IP ${ip} error: ${error.message}`, 'error');
-      }
-    }
-    
-    setIsLoading(false);
-    addResult('🏁 Network test complete!', 'info');
-  };
-
-  const getResultStyle = (type) => {
-    switch (type) {
-      case 'success': return styles.successText;
-      case 'error': return styles.errorText;
-      case 'info': return styles.infoText;
-      default: return styles.infoText;
-    }
+    return (
+      <View style={styles.resultItem}>
+        <Text style={styles.resultTitle}>{title}</Text>
+        <Text style={[styles.resultStatus, { color: statusColor }]}>{statusText}</Text>
+        {result.error && (
+          <Text style={styles.errorText}>Error: {result.error}</Text>
+        )}
+        {result.data && (
+          <Text style={styles.dataText}>Data: {JSON.stringify(result.data).substring(0, 100)}...</Text>
+        )}
+      </View>
+    );
   };
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>Network Diagnostic Tool</Text>
+      <Text style={styles.title}>Network Diagnostics</Text>
       
-      <View style={styles.buttonContainer}>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Current Status</Text>
+        {networkStatus ? (
+          <Text style={styles.statusText}>
+            Last test: {new Date(networkStatus.timestamp).toLocaleString()}
+          </Text>
+        ) : (
+          <Text style={styles.statusText}>No previous test results</Text>
+        )}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Actions</Text>
+        
         <TouchableOpacity 
-          style={[styles.button, styles.primaryButton]} 
-          onPress={testAllConnections}
+          style={[styles.button, isLoading && styles.buttonDisabled]} 
+          onPress={runNetworkTest}
           disabled={isLoading}
         >
           <Text style={styles.buttonText}>
-            {isLoading ? 'Testing...' : 'Test All Connections'}
+            {isLoading ? 'Testing...' : 'Run Network Test'}
           </Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity 
-          style={[styles.button, styles.secondaryButton]} 
-          onPress={testApiConnection}
+          style={[styles.button, styles.fixButton, isLoading && styles.buttonDisabled]} 
+          onPress={fixNetworkIssues}
           disabled={isLoading}
         >
-          <Text style={styles.buttonText}>Test API Only</Text>
+          <Text style={styles.buttonText}>Fix Network Issues</Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity 
-          style={[styles.button, styles.secondaryButton]} 
-          onPress={testNetworkConfig}
+          style={[styles.button, styles.testButton, isLoading && styles.buttonDisabled]} 
+          onPress={testAppointments}
           disabled={isLoading}
         >
-          <Text style={styles.buttonText}>Test Config</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.button, styles.clearButton]} 
-          onPress={clearResults}
-        >
-          <Text style={styles.buttonText}>Clear Results</Text>
+          <Text style={styles.buttonText}>Test Appointments</Text>
         </TouchableOpacity>
       </View>
-      
-      <View style={styles.resultsContainer}>
-        <Text style={styles.resultsTitle}>Test Results:</Text>
-        {testResults.map((result, index) => (
-          <Text key={index} style={[styles.resultText, getResultStyle(result.type)]}>
-            [{result.timestamp}] {result.message}
-          </Text>
-        ))}
+
+      {testResults && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Test Results</Text>
+          
+          {renderTestResult('Basic Connection', testResults.basicConnection)}
+          
+          {testResults.authEndpoints && (
+            <View style={styles.resultItem}>
+              <Text style={styles.resultTitle}>Auth Endpoints</Text>
+              {Object.entries(testResults.authEndpoints).map(([endpoint, result]) => (
+                <Text key={endpoint} style={styles.endpointResult}>
+                  {endpoint}: {result.success ? '✅' : '❌'} ({result.status || 'Error'})
+                </Text>
+              ))}
+            </View>
+          )}
+          
+          {renderTestResult('Appointments Endpoint', testResults.appointmentsEndpoint)}
+        </View>
+      )}
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Troubleshooting Tips</Text>
+        <Text style={styles.tipText}>
+          • Make sure your backend server is running on port 8000{'\n'}
+          • Check that both devices are on the same network{'\n'}
+          • Verify your IP address is correct (192.168.1.59){'\n'}
+          • Try logging in first before testing appointments{'\n'}
+          • Check firewall settings if connection fails
+        </Text>
       </View>
     </ScrollView>
   );
@@ -156,59 +181,87 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    textAlign: 'center',
     marginBottom: 20,
+    textAlign: 'center',
+  },
+  section: {
+    backgroundColor: 'white',
+    padding: 15,
+    marginBottom: 15,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
     color: '#333',
   },
-  buttonContainer: {
-    marginBottom: 20,
+  statusText: {
+    fontSize: 14,
+    color: '#666',
   },
   button: {
-    padding: 15,
-    borderRadius: 8,
+    backgroundColor: '#2196F3',
+    padding: 12,
+    borderRadius: 6,
     marginBottom: 10,
     alignItems: 'center',
   },
-  primaryButton: {
-    backgroundColor: '#007AFF',
+  fixButton: {
+    backgroundColor: '#FF9800',
   },
-  secondaryButton: {
-    backgroundColor: '#34C759',
+  testButton: {
+    backgroundColor: '#4CAF50',
   },
-  clearButton: {
-    backgroundColor: '#FF3B30',
+  buttonDisabled: {
+    backgroundColor: '#ccc',
   },
   buttonText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
   },
-  resultsContainer: {
-    backgroundColor: 'white',
-    padding: 15,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
+  resultItem: {
+    marginBottom: 15,
+    padding: 10,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 6,
   },
-  resultsTitle: {
-    fontSize: 18,
+  resultTitle: {
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
-  },
-  resultText: {
-    fontSize: 14,
     marginBottom: 5,
-    fontFamily: 'monospace',
   },
-  successText: {
-    color: '#34C759',
+  resultStatus: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 5,
   },
   errorText: {
-    color: '#FF3B30',
+    fontSize: 12,
+    color: '#F44336',
+    fontFamily: 'monospace',
   },
-  infoText: {
-    color: '#007AFF',
+  dataText: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'monospace',
+  },
+  endpointResult: {
+    fontSize: 12,
+    color: '#333',
+    marginLeft: 10,
+    marginBottom: 2,
+  },
+  tipText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
   },
 });
 

@@ -1,53 +1,37 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import networkConfig from './network-config';
 
-// Base API configuration - will be dynamically set based on network mode
-let API_BASE_URL = 'http://192.168.1.56:8000/api'; // Updated to current IP
+// Base API configuration - fixed to current working IP
+const API_BASE_URL = 'http://192.168.1.59:8000/api';
 
 class ApiService {
     constructor() {
         this.baseURL = API_BASE_URL;
         this.token = null;
-        this.initializeNetwork();
+        console.log('🌐 ApiService initialized with URL:', this.baseURL);
     }
 
-    // Initialize network configuration
-    async initializeNetwork() {
+    // Simple network test
+    async testConnection() {
         try {
-            // Auto-detect network configuration
-            const mode = await networkConfig.autoDetectNetwork();
-            console.log('🌐 Auto-detected network mode:', mode);
-            this.updateBaseURL();
+            console.log('🧪 Testing connection to:', this.baseURL);
+            const response = await fetch(`${this.baseURL}/test`, {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' },
+                timeout: 5000
+            });
             
-            // Test current connection
-            const connectionTest = await this.testApiConnection();
-            if (!connectionTest.success) {
-                console.log('🔄 Auto-detected network failed, trying local mode...');
-                await networkConfig.setNetworkMode('local');
-                this.updateBaseURL();
-                
-                // Test local connection
-                const localTest = await this.testApiConnection();
-                if (!localTest.success) {
-                    console.log('❌ Local connection also failed, check if backend is running');
-                } else {
-                    console.log('✅ Local connection successful');
-                }
+            if (response.ok) {
+                const data = await response.json();
+                console.log('✅ Connection successful:', data);
+                return { success: true, data };
             } else {
-                console.log('✅ Connection test successful');
+                console.log('❌ Connection failed:', response.status);
+                return { success: false, error: `HTTP ${response.status}` };
             }
         } catch (error) {
-            console.log('⚠️ Failed to initialize network config:', error);
-            // Fallback to local mode
-            await networkConfig.setNetworkMode('local');
-            this.updateBaseURL();
+            console.log('❌ Connection error:', error.message);
+            return { success: false, error: error.message };
         }
-    }
-
-    // Update base URL based on current network mode
-    updateBaseURL() {
-        this.baseURL = networkConfig.getBackendUrl();
-        console.log('🌐 API Base URL updated to:', this.baseURL);
     }  
 
     // Set auth token
@@ -70,28 +54,9 @@ class ApiService {
         await AsyncStorage.removeItem('auth_token');
     }
 
-    // Network management methods
-    async setNetworkMode(mode) {
-        await networkConfig.setNetworkMode(mode);
-        this.updateBaseURL();
-    }
-
-    async getNetworkMode() {
-        return await networkConfig.getNetworkMode();
-    }
-
-    async getAvailableNetworks() {
-        return networkConfig.getAvailableModes();
-    }
-
-    async testConnection() {
-        return await networkConfig.testConnection();
-    }
-
-    async autoDetectNetwork() {
-        const mode = await networkConfig.autoDetectNetwork();
-        this.updateBaseURL();
-        return mode;
+    // Simple network management
+    getCurrentURL() {
+        return this.baseURL;
     }
 
     // Get headers for API requests
@@ -104,22 +69,13 @@ class ApiService {
         };
     }
 
-    // Make API request with retry logic
-    async request(endpoint, options = {}, retryCount = 0) {
-        const maxRetries = 2;
-        
+    // Make API request with simplified error handling
+    async request(endpoint, options = {}) {
         try {
             const headers = await this.getHeaders();
             const url = `${this.baseURL}${endpoint}`;
 
-            // Only log on first attempt to reduce spam
-            if (retryCount === 0) {
-                console.log(`🌐 Making API request to: ${url}`);
-            }
-
-            // Create AbortController for timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+            console.log(`🌐 Making API request to: ${url}`);
 
             const response = await fetch(url, {
                 ...options,
@@ -127,10 +83,8 @@ class ApiService {
                     ...headers,
                     ...options.headers,
                 },
-                signal: controller.signal,
+                timeout: 10000, // 10 second timeout
             });
-
-            clearTimeout(timeoutId);
 
             // Check if response is JSON
             const contentType = response.headers.get('content-type');
@@ -139,18 +93,8 @@ class ApiService {
                 console.error('❌ Non-JSON response received:', {
                     status: response.status,
                     contentType,
-                    response: textResponse.substring(0, 200) + (textResponse.length > 200 ? '...' : '')
+                    response: textResponse.substring(0, 200)
                 });
-                
-                // If we're not using local mode and get a non-JSON response, try local mode
-                const currentMode = await networkConfig.getNetworkMode();
-                if (currentMode !== 'local' && retryCount === 0) {
-                    console.log('🔄 Non-JSON response detected, trying local mode...');
-                    await networkConfig.fallbackToLocal();
-                    this.updateBaseURL();
-                    return this.request(endpoint, options, retryCount + 1); // Retry with local mode
-                }
-                
                 throw new Error(`Server returned non-JSON response (${response.status}): ${textResponse.substring(0, 100)}`);
             }
 
@@ -170,31 +114,47 @@ class ApiService {
             console.error('API Error:', error);
             
             // Handle specific error types
-            if (error.name === 'AbortError') {
-                console.error('❌ Request timeout - server may be down or slow');
-                throw new Error('Request timeout - please check your internet connection and try again');
-            }
-            
             if (error.message.includes('fetch') || error.message.includes('network')) {
                 console.error('❌ Network error - check LAN connection');
-                console.error('💡 Make sure both devices are on the same network');
-                throw new Error('Network error - please check your LAN connection');
+                console.error('💡 Current API URL:', this.baseURL);
+                console.error('💡 Make sure backend server is running on port 8000');
+                throw new Error('Network error - please check your LAN connection and ensure backend is running');
             }
             
             if (error.message.includes('Failed to fetch')) {
                 console.error('❌ Failed to fetch - check LAN connection');
-                throw new Error('Cannot connect to server - please check your LAN connection');
-            }
-            
-            // Retry logic for network errors
-            if (retryCount < maxRetries && (error.message.includes('network') || error.message.includes('timeout'))) {
-                console.log(`🔄 Retrying request (${retryCount + 1}/${maxRetries})...`);
-                await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
-                return this.request(endpoint, options, retryCount + 1);
+                console.error('💡 Current API URL:', this.baseURL);
+                console.error('💡 Make sure backend server is running on port 8000');
+                throw new Error('Cannot connect to server - please check your LAN connection and ensure backend is running');
             }
             
             throw error;
         }
+    }
+
+    // HTTP method shortcuts
+    async get(endpoint, options = {}) {
+        return this.request(endpoint, { ...options, method: 'GET' });
+    }
+
+    async post(endpoint, data = null, options = {}) {
+        return this.request(endpoint, {
+            ...options,
+            method: 'POST',
+            body: data ? JSON.stringify(data) : undefined,
+        });
+    }
+
+    async put(endpoint, data = null, options = {}) {
+        return this.request(endpoint, {
+            ...options,
+            method: 'PUT',
+            body: data ? JSON.stringify(data) : undefined,
+        });
+    }
+
+    async delete(endpoint, options = {}) {
+        return this.request(endpoint, { ...options, method: 'DELETE' });
     }
 
     // Authentication methods
@@ -260,7 +220,20 @@ class ApiService {
 
     // Appointments
     async getAppointments() {
-        return this.request('/appointments');
+        try {
+            console.log('🌐 Fetching appointments...');
+            const token = await this.getToken();
+            console.log('🔑 Auth token available:', !!token);
+            
+            if (!token) {
+                throw new Error('Authentication required - please login first');
+            }
+            
+            return this.request('/appointments');
+        } catch (error) {
+            console.error('❌ Error fetching appointments:', error);
+            throw error;
+        }
     }
 
     async getBookedDates() {
@@ -304,6 +277,23 @@ class ApiService {
     }
     async getAppointmentStats() {
         return this.request('/admin/appointments/stats');
+    }
+
+    // Admin Settings
+    async getAdminSettings() {
+        return this.request('/admin/settings');
+    }
+    async updateAdminSettings(settings) {
+        return this.request('/admin/settings', {
+            method: 'PUT',
+            body: JSON.stringify(settings),
+        });
+    }
+    async toggleAutoApproval(enabled) {
+        return this.request('/admin/settings/toggle-auto-approval', {
+            method: 'POST',
+            body: JSON.stringify({ enabled }),
+        });
     }
 
     // Rental Transactions
@@ -581,47 +571,9 @@ class ApiService {
         });
     }
 
-    // Test API connectivity
+    // Simple connection test
     async testApiConnection() {
-        try {
-            console.log('🧪 Testing API connection to:', this.baseURL);
-            
-            // Create AbortController for timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout for faster response
-            
-            const response = await fetch(`${this.baseURL}/test`, {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                },
-                signal: controller.signal,
-            });
-
-            clearTimeout(timeoutId);
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                const textResponse = await response.text();
-                throw new Error(`Non-JSON response: ${textResponse.substring(0, 100)}`);
-            }
-
-            const data = await response.json();
-            console.log('✅ API connection successful:', data);
-            return { success: true, data };
-        } catch (error) {
-            if (error.name === 'AbortError') {
-                console.error('❌ API connection timeout - server may be down');
-                return { success: false, error: 'Connection timeout - check if backend is running' };
-            }
-            console.error('❌ API connection failed:', error.message);
-            return { success: false, error: error.message };
-        }
+        return await this.testConnection();
     }
 
     // Sizing System Methods

@@ -73,6 +73,15 @@ const ManageAppointmentsScreen = () => {
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [imageLoadErrors, setImageLoadErrors] = useState<{ [id: number]: boolean }>({});
   const [imageRefreshKey, setImageRefreshKey] = useState(0);
+  
+  // Admin settings state
+  const [adminSettings, setAdminSettings] = useState({
+    auto_approve_appointments: false,
+    max_appointments_per_day: 5,
+    business_start_time: '10:00',
+    business_end_time: '19:00'
+  });
+  const [settingsLoading, setSettingsLoading] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -80,20 +89,31 @@ const ManageAppointmentsScreen = () => {
 
   const fetchData = async () => {
     try {
-      const [appointmentsRes, statsRes] = await Promise.all([
+      const [appointmentsRes, statsRes, settingsRes] = await Promise.all([
         apiService.getAllAppointments(),
-        apiService.getAppointmentStats()
+        apiService.getAppointmentStats(),
+        apiService.getAdminSettings()
       ]);
       
-      console.log('🔍 Admin Appointments API Response:', appointmentsRes);
-      console.log('🔍 First appointment data:', appointmentsRes[0]);
-      if (appointmentsRes[0]) {
-        console.log('🔍 Customer profile image:', appointmentsRes[0].customer_profile_image);
-        console.log('🔍 Customer name:', appointmentsRes[0].customer_name);
+      console.log('🔍 Admin Appointments API Response:', JSON.stringify(appointmentsRes, null, 2));
+      
+      // Handle the new API response structure
+      const appointmentsData = appointmentsRes.data?.appointments || appointmentsRes.appointments || [];
+      const statsData = statsRes.data || statsRes;
+      
+      if (appointmentsData.length > 0) {
+        console.log('🔍 First appointment data:', appointmentsData[0]);
+        console.log('🔍 Customer profile image:', appointmentsData[0].customer_profile_image);
+        console.log('🔍 Customer name:', appointmentsData[0].customer_name);
       }
       
-      setAppointments(Array.isArray(appointmentsRes) ? appointmentsRes : appointmentsRes.data || []);
-      setStats(statsRes);
+      setAppointments(Array.isArray(appointmentsData) ? appointmentsData : []);
+      setStats(statsData);
+      
+      // Update admin settings
+      if (settingsRes && settingsRes.settings) {
+        setAdminSettings(settingsRes.settings);
+      }
       
       // Reset image load errors when fetching new data
       setImageLoadErrors({});
@@ -110,6 +130,47 @@ const ManageAppointmentsScreen = () => {
   const onRefresh = () => {
     setRefreshing(true);
     fetchData();
+  };
+
+  const handleGenerateReport = async () => {
+    try {
+      const { Linking } = require('react-native');
+      const reportUrl = `http://192.168.1.59:8000/api/admin/appointments/generate-report`;
+      await Linking.openURL(reportUrl);
+      Alert.alert('Success', 'Report opened in browser');
+    } catch (error) {
+      console.error('Error generating report:', error);
+      Alert.alert('Error', 'Failed to generate report');
+    }
+  };
+
+  const handleToggleAutoApproval = async () => {
+    setSettingsLoading(true);
+    try {
+      const newValue = !adminSettings.auto_approve_appointments;
+      await apiService.toggleAutoApproval(newValue);
+      setAdminSettings(prev => ({ ...prev, auto_approve_appointments: newValue }));
+      
+      if (newValue) {
+        Alert.alert(
+          'Auto-Approval Enabled', 
+          'New appointments will be automatically approved if they meet all conditions.\n\nNote: Existing pending appointments will be processed automatically within 1 minute.',
+          [
+            { text: 'OK', style: 'default' }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Auto-Approval Disabled', 
+          'All new appointments will require manual approval.'
+        );
+      }
+    } catch (error) {
+      console.error('Error toggling auto-approval:', error);
+      Alert.alert('Error', 'Failed to update auto-approval setting.');
+    } finally {
+      setSettingsLoading(false);
+    }
   };
 
   const handleStatus = async (id: number, status: 'pending' | 'confirmed' | 'cancelled') => {
@@ -225,7 +286,17 @@ const ManageAppointmentsScreen = () => {
     const processedUrl = getLocalImageUrl(imageUrl);
     const imageStyle = isModal ? styles.modalCustomerProfileImage : styles.customerProfileImage;
     const fallbackStyle = isModal ? styles.modalProfileIconFallback : styles.profileIconFallback;
-    const iconSize = isModal ? 12 : 24;
+    const iconSize = isModal ? 18 : 24;
+
+    // Check if image URL is valid
+    if (!imageUrl || imageUrl.trim() === '') {
+      console.log('⚠️ No profile image URL provided for appointment:', appointmentId);
+      return (
+        <View style={fallbackStyle}>
+          <Ionicons name="person-circle" size={iconSize} color="#014D40" />
+        </View>
+      );
+    }
 
     return (
       <Image 
@@ -236,24 +307,30 @@ const ManageAppointmentsScreen = () => {
         }} 
         style={imageStyle}
         resizeMode="cover"
-          onError={(error) => {
-            console.log('❌ Profile image error occurred');
-            console.log('❌ Original URL:', imageUrl);
-            console.log('❌ Processed URL:', processedUrl);
-            console.log('❌ Error type:', typeof error);
-            console.log('❌ Error details:', error);
-            setImageLoadErrors(prev => ({ ...prev, [appointmentId]: true }));
-          }}
+        onError={(error) => {
+          console.log('❌ Profile image error occurred');
+          console.log('❌ Original URL:', imageUrl);
+          console.log('❌ Processed URL:', processedUrl);
+          console.log('❌ Error type:', typeof error);
+          console.log('❌ Error details:', error);
+          setImageLoadErrors(prev => ({ ...prev, [appointmentId]: true }));
+        }}
         onLoad={() => {
           console.log('✅ Profile image loaded successfully');
           console.log('✅ Image URL:', processedUrl);
+          // Clear any previous error for this appointment
+          setImageLoadErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors[appointmentId];
+            return newErrors;
+          });
         }}
         onLoadStart={() => {
-          console.log('🔄 Starting to load profile image');
-          testImageUrl(processedUrl);
+          console.log('🔄 Starting to load profile image for appointment:', appointmentId);
+          console.log('🔄 Image URL:', processedUrl);
         }}
         onLoadEnd={() => {
-          console.log('🏁 Finished loading profile image');
+          console.log('🏁 Finished loading profile image for appointment:', appointmentId);
         }}
       />
     );
@@ -549,10 +626,59 @@ const ManageAppointmentsScreen = () => {
             onPress={refreshAllImages}
           >
             <Ionicons name="refresh" size={20} color="#014D40" />
-            <Text style={styles.refreshImagesText}>Refresh Images</Text>
+            <Text style={styles.refreshImagesText}>Refresh</Text>
           </TouchableOpacity>
         </View>
-        
+      </View>
+      
+      {/* Auto-Approval Toggle */}
+      <View style={styles.autoApprovalContainer}>
+        <View style={styles.autoApprovalHeader}>
+          <Ionicons name="settings" size={20} color="#014D40" />
+          <Text style={styles.autoApprovalTitle}>Auto-Approval Settings</Text>
+        </View>
+        <View style={styles.autoApprovalContent}>
+          <View style={styles.autoApprovalInfo}>
+            <Text style={styles.autoApprovalDescription}>
+              Automatically approve appointments that meet all conditions (including existing pending ones):
+            </Text>
+            <Text style={styles.autoApprovalConditions}>
+              • Within business hours ({adminSettings.business_start_time} - {adminSettings.business_end_time})
+            </Text>
+            <Text style={styles.autoApprovalConditions}>
+              • Daily limit not exceeded ({adminSettings.max_appointments_per_day} appointments/day)
+            </Text>
+            <Text style={styles.autoApprovalConditions}>
+              • First-come-first-served priority for time slots
+            </Text>
+            <Text style={styles.autoApprovalConditions}>
+              • Later appointments automatically cancelled if time slot taken
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.autoApprovalToggle,
+              adminSettings.auto_approve_appointments ? styles.autoApprovalToggleActive : styles.autoApprovalToggleInactive
+            ]}
+            onPress={handleToggleAutoApproval}
+            disabled={settingsLoading}
+          >
+            {settingsLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons 
+                  name={adminSettings.auto_approve_appointments ? "checkmark" : "close"} 
+                  size={16} 
+                  color="#fff" 
+                />
+                <Text style={styles.autoApprovalToggleText}>
+                  {adminSettings.auto_approve_appointments ? 'Enabled' : 'Disabled'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
       
       {/* Statistics Cards */}
@@ -617,20 +743,28 @@ const ManageAppointmentsScreen = () => {
           </View>
         </View>
         
-        {/* Remove All Cancelled Button */}
-        {appointments.some(app => app.status === 'cancelled') && (
-          <View style={styles.removeAllContainer}>
+        {/* Action Buttons */}
+        <View style={styles.actionButtonsContainer}>
+          <TouchableOpacity 
+            style={styles.reportButton}
+            onPress={handleGenerateReport}
+          >
+            <Ionicons name="document-text" size={18} color="#014D40" />
+            <Text style={styles.reportButtonText}>Generate Report</Text>
+          </TouchableOpacity>
+          
+          {appointments.some(app => app.status === 'cancelled') && (
             <TouchableOpacity
               style={styles.removeAllButton}
               onPress={handleRemoveAllCancelled}
             >
               <Ionicons name="trash" size={18} color="#fff" />
               <Text style={styles.removeAllButtonText}>
-                Remove All Cancelled Appointments ({appointments.filter(app => app.status === 'cancelled').length})
+                Remove All Cancelled ({appointments.filter(app => app.status === 'cancelled').length})
               </Text>
             </TouchableOpacity>
-          </View>
-        )}
+          )}
+        </View>
         
         {/* Results Count */}
         <View style={styles.resultsInfo}>
@@ -841,13 +975,15 @@ const styles = StyleSheet.create({
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    flex: 1,
     gap: 12,
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#014D40',
+    flex: 1,
+    flexWrap: 'wrap',
   },
   statsContainer: {
     paddingHorizontal: 20,
@@ -1045,20 +1181,20 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    borderWidth: 3,
-    borderColor: '#ff0000', // Red border to make it very visible
-    backgroundColor: '#e0e0e0', // Changed to make it more visible
+    borderWidth: 2,
+    borderColor: '#014D40', // Green border consistent with app palette
+    backgroundColor: '#f8f9fa',
     marginTop: 2, // Slight offset to align with first line of text
   },
   profileIconFallback: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#f8f9fa',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#ff0000', // Red border to make it very visible
+    borderWidth: 2,
+    borderColor: '#014D40', // Green border consistent with app palette
     marginTop: 2, // Slight offset to align with first line of text
   },
   customerDetailContainer: {
@@ -1072,18 +1208,18 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#014D40',
-    backgroundColor: '#f0f0f0',
+    borderColor: '#014D40', // Green border consistent with app palette
+    backgroundColor: '#f8f9fa',
   },
   modalProfileIconFallback: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#f8f9fa',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#014D40',
+    borderColor: '#014D40', // Green border consistent with app palette
   },
   customerName: {
     fontSize: 16,
@@ -1356,6 +1492,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   removeAllButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1375,15 +1512,109 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f0f0f0',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 6,
     borderRadius: 6,
     gap: 4,
+    flexShrink: 0,
   },
   refreshImagesText: {
     fontSize: 12,
     color: '#014D40',
     fontWeight: '500',
+  },
+  // Auto-Approval Toggle Styles
+  autoApprovalContainer: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  autoApprovalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  autoApprovalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#014D40',
+    marginLeft: 8,
+  },
+  autoApprovalContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  autoApprovalInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  autoApprovalDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  autoApprovalConditions: {
+    fontSize: 12,
+    color: '#888',
+    marginBottom: 2,
+    lineHeight: 16,
+  },
+  autoApprovalToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    minWidth: 100,
+    justifyContent: 'center',
+  },
+  autoApprovalToggleActive: {
+    backgroundColor: '#4CAF50',
+  },
+  autoApprovalToggleInactive: {
+    backgroundColor: '#F44336',
+  },
+  autoApprovalToggleText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  reportButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderColor: '#014D40',
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  reportButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#014D40',
   },
 });
 

@@ -129,7 +129,7 @@ export default function UltraMinimalARScreen() {
     ).start();
 
     // Simulate scanning process
-    const scanDuration = 10000; // 10 seconds
+    const scanDuration = 5000; // 5 seconds
     const progressInterval = 100; // Update every 100ms
     const totalSteps = scanDuration / progressInterval;
     let currentStep = 0;

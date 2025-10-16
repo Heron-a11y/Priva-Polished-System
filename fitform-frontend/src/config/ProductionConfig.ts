@@ -10,7 +10,7 @@ export const productionConfig = {
     minPlaneDetectionConfidence: 0.85,
     minBodyLandmarksRequired: 8,
     maxMeasurementRetries: 3,
-    measurementTimeoutMs: 10000,
+    measurementTimeoutMs: 5000,
   },
 
   // Performance Configuration
@@ -78,7 +78,7 @@ export const productionConfig = {
       // Android-specific production settings
       ar: {
         minConfidenceThreshold: 0.8, // Higher threshold for Android
-        measurementTimeoutMs: 12000, // Longer timeout for Android
+        measurementTimeoutMs: 5000, // Reduced timeout for faster measurements
       },
       performance: {
         frameProcessingInterval: {
@@ -92,7 +92,7 @@ export const productionConfig = {
       // iOS-specific production settings
       ar: {
         minConfidenceThreshold: 0.75, // Standard threshold for iOS
-        measurementTimeoutMs: 10000,
+        measurementTimeoutMs: 5000,
       },
       performance: {
         frameProcessingInterval: {

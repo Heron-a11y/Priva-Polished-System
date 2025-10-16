@@ -502,6 +502,18 @@ const OrdersScreen = () => {
     );
   };
 
+  const handleGenerateReport = async () => {
+    try {
+      const { Linking } = require('react-native');
+      const reportUrl = `http://192.168.1.59:8000/api/admin/orders/generate-report`;
+      await Linking.openURL(reportUrl);
+      Alert.alert('Success', 'Report opened in browser');
+    } catch (error) {
+      console.error('Error generating report:', error);
+      Alert.alert('Error', 'Failed to generate report');
+    }
+  };
+
   const handleRemoveAllCancelled = async () => {
     const cancelledOrders = orders.filter(order => order.status === 'cancelled');
     Alert.alert(
@@ -819,20 +831,28 @@ const OrdersScreen = () => {
         />
       </View>
 
-      {/* Remove All Cancelled Orders Button */}
-      {orders.some(order => order.status === 'cancelled') && (
-        <View style={styles.removeAllContainer}>
+      {/* Action Buttons */}
+      <View style={styles.actionButtonsContainer}>
+        <TouchableOpacity 
+          style={styles.reportButton}
+          onPress={handleGenerateReport}
+        >
+          <Ionicons name="document-text" size={18} color="#014D40" />
+          <Text style={styles.reportButtonText}>Generate Report</Text>
+        </TouchableOpacity>
+        
+        {orders.some(order => order.status === 'cancelled') && (
           <TouchableOpacity
             style={styles.removeAllButton}
             onPress={handleRemoveAllCancelled}
           >
             <Ionicons name="trash" size={18} color="#fff" />
             <Text style={styles.removeAllButtonText}>
-              Remove All Cancelled Orders ({orders.filter(order => order.status === 'cancelled').length})
+              Remove All Cancelled ({orders.filter(order => order.status === 'cancelled').length})
             </Text>
           </TouchableOpacity>
-        </View>
-      )}
+        )}
+      </View>
 
       {/* Spacing between filters and table */}
       <View style={styles.tableSpacing} />
@@ -2714,16 +2734,43 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  // Action buttons container
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginVertical: 12,
+    paddingHorizontal: 0,
+  },
+  reportButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderColor: '#014D40',
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  reportButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#014D40',
+  },
   // Remove all cancelled orders button styles
   removeAllContainer: {
     marginVertical: 12,
     alignItems: 'center',
   },
   removeAllButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#dc2626',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 8,
     gap: 8,

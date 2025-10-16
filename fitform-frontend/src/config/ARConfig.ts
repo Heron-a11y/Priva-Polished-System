@@ -98,7 +98,7 @@ const defaultConfig: ARConfig = {
     minPlaneDetectionConfidence: 0.85,  // Increased for better plane detection
     minBodyLandmarksRequired: 10,  // Increased for more stable tracking
     maxMeasurementRetries: 5,  // Increased for better reliability
-    measurementTimeoutMs: 15000,  // Increased timeout for complex measurements
+    measurementTimeoutMs: 5000,  // Reduced timeout for faster measurements
   },
 
   performance: {
