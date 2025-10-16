@@ -3,7 +3,7 @@ import networkConfig from '../services/network-config';
 
 class ImageUrlHelper {
   constructor() {
-    this.baseUrl = 'http://192.168.1.59:8000';
+    this.baseUrl = 'http://192.168.1.56:8000';
     this.ngrokUrl = 'https://fitform-api.ngrok.io';
     this.isDevelopment = __DEV__;
   }
@@ -34,7 +34,7 @@ class ImageUrlHelper {
     console.log('🖼️ Processing image URL:', imageUrl);
 
     // If it's already a local URL, return as is
-    if (imageUrl.includes('192.168.1.59') || imageUrl.includes('192.168.1.105') || imageUrl.includes('localhost') || imageUrl.includes('192.168.1.108')) {
+    if (imageUrl.includes('192.168.1.56') || imageUrl.includes('192.168.1.105') || imageUrl.includes('localhost') || imageUrl.includes('192.168.1.108')) {
       console.log('✅ Already local URL:', imageUrl);
       return imageUrl;
     }
@@ -84,7 +84,7 @@ class ImageUrlHelper {
     }
 
     // If it's a local URL, convert to production
-    if (imageUrl.includes('192.168.1.59') || imageUrl.includes('192.168.1.105') || imageUrl.includes('localhost')) {
+    if (imageUrl.includes('192.168.1.56') || imageUrl.includes('192.168.1.105') || imageUrl.includes('localhost')) {
       return imageUrl.replace(this.baseUrl, this.ngrokUrl);
     }
 

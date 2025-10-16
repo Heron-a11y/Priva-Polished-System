@@ -1,4 +1,3 @@
-import { API_BASE_URL } from '../src/config/ARConfig';
 import { ProportionalMeasurementsCalculator, ProportionalMeasurements } from '../src/utils/ProportionalMeasurements';
 
 export interface BodyMeasurements {
@@ -23,7 +22,7 @@ class ARMeasurementService {
   private baseURL: string;
 
   constructor() {
-    this.baseURL = API_BASE_URL || 'http://localhost:8000/api';
+    this.baseURL = 'http://192.168.1.56:8000/api';
   }
 
   /**

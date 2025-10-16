@@ -505,7 +505,7 @@ const OrdersScreen = () => {
   const handleGenerateReport = async () => {
     try {
       const { Linking } = require('react-native');
-      const reportUrl = `http://192.168.1.59:8000/api/admin/orders/generate-report`;
+      const reportUrl = `http://192.168.1.56:8000/api/admin/orders/generate-report`;
       await Linking.openURL(reportUrl);
       Alert.alert('Success', 'Report opened in browser');
     } catch (error) {

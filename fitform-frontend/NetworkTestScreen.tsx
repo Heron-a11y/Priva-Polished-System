@@ -163,7 +163,7 @@ const NetworkTestScreen = () => {
         <Text style={styles.tipText}>
           • Make sure your backend server is running on port 8000{'\n'}
           • Check that both devices are on the same network{'\n'}
-          • Verify your IP address is correct (192.168.1.59){'\n'}
+          • Verify your IP address is correct (192.168.1.56){'\n'}
           • Try logging in first before testing appointments{'\n'}
           • Check firewall settings if connection fails
         </Text>

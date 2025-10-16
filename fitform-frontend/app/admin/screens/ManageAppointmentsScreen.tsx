@@ -87,40 +87,82 @@ const ManageAppointmentsScreen = () => {
     fetchData();
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = async (isRefresh = false) => {
     try {
-      const [appointmentsRes, statsRes, settingsRes] = await Promise.all([
-        apiService.getAllAppointments(),
-        apiService.getAppointmentStats(),
-        apiService.getAdminSettings()
-      ]);
-      
-      console.log('🔍 Admin Appointments API Response:', JSON.stringify(appointmentsRes, null, 2));
-      
-      // Handle the new API response structure
-      const appointmentsData = appointmentsRes.data?.appointments || appointmentsRes.appointments || [];
-      const statsData = statsRes.data || statsRes;
-      
-      if (appointmentsData.length > 0) {
-        console.log('🔍 First appointment data:', appointmentsData[0]);
-        console.log('🔍 Customer profile image:', appointmentsData[0].customer_profile_image);
-        console.log('🔍 Customer name:', appointmentsData[0].customer_name);
-      }
-      
-      setAppointments(Array.isArray(appointmentsData) ? appointmentsData : []);
-      setStats(statsData);
-      
-      // Update admin settings
-      if (settingsRes && settingsRes.settings) {
-        setAdminSettings(settingsRes.settings);
+      if (isRefresh) {
+        console.log('🔄 Quick refresh started');
+        // For refresh, prioritize appointments first for immediate UI update
+        // Add timeout to prevent hanging
+        const appointmentsRes = await Promise.race([
+          apiService.getAllAppointments(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Appointments fetch timeout')), 5000)
+          )
+        ]) as any;
+        
+        const appointmentsData = appointmentsRes.data?.appointments || appointmentsRes.appointments || [];
+        setAppointments(Array.isArray(appointmentsData) ? appointmentsData : []);
+        
+        // Then fetch stats and settings in background with timeout
+        Promise.all([
+          Promise.race([
+            apiService.getAppointmentStats(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Stats fetch timeout')), 3000)
+            )
+          ]).then(statsRes => {
+            const statsData = (statsRes as any).data || statsRes;
+            setStats(statsData);
+          }),
+          Promise.race([
+            apiService.getAdminSettings(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Settings fetch timeout')), 3000)
+            )
+          ]).then(settingsRes => {
+            if ((settingsRes as any) && (settingsRes as any).settings) {
+              setAdminSettings((settingsRes as any).settings);
+            }
+          })
+        ]).catch(error => {
+          console.warn('Background data fetch failed:', error);
+        });
+      } else {
+        // For initial load, fetch all data
+        const [appointmentsRes, statsRes, settingsRes] = await Promise.all([
+          apiService.getAllAppointments(),
+          apiService.getAppointmentStats(),
+          apiService.getAdminSettings()
+        ]);
+        
+        console.log('🔍 Admin Appointments API Response:', JSON.stringify(appointmentsRes, null, 2));
+        
+        const appointmentsData = appointmentsRes.data?.appointments || appointmentsRes.appointments || [];
+        const statsData = statsRes.data || statsRes;
+        
+        if (appointmentsData.length > 0) {
+          console.log('🔍 First appointment data:', appointmentsData[0]);
+          console.log('🔍 Customer profile image:', appointmentsData[0].customer_profile_image);
+          console.log('🔍 Customer name:', appointmentsData[0].customer_name);
+        }
+        
+        setAppointments(Array.isArray(appointmentsData) ? appointmentsData : []);
+        setStats(statsData);
+        
+        // Update admin settings
+        if (settingsRes && settingsRes.settings) {
+          setAdminSettings(settingsRes.settings);
+        }
       }
       
       // Reset image load errors when fetching new data
       setImageLoadErrors({});
     } catch (e) {
       console.error('Error fetching data:', e);
-      setAppointments([]);
-      setStats(null);
+      if (!isRefresh) {
+        setAppointments([]);
+        setStats(null);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -129,13 +171,16 @@ const ManageAppointmentsScreen = () => {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchData();
+    // Add a small delay to ensure UI shows refreshing state
+    setTimeout(() => {
+      fetchData(true); // Pass true to indicate this is a refresh
+    }, 50);
   };
 
   const handleGenerateReport = async () => {
     try {
       const { Linking } = require('react-native');
-      const reportUrl = `http://192.168.1.59:8000/api/admin/appointments/generate-report`;
+      const reportUrl = `http://192.168.1.56:8000/api/admin/appointments/generate-report`;
       await Linking.openURL(reportUrl);
       Alert.alert('Success', 'Report opened in browser');
     } catch (error) {
@@ -336,11 +381,14 @@ const ManageAppointmentsScreen = () => {
     );
   };
 
-  // Force refresh all images
+  // Force refresh all images and data
   const refreshAllImages = () => {
-    console.log('🔄 Refreshing all images...');
+    console.log('🔄 Refreshing all images and data...');
     setImageLoadErrors({});
     setImageRefreshKey(prev => prev + 1);
+    // Also refresh the data for complete refresh
+    setRefreshing(true);
+    fetchData(true);
   };
 
   const getStatusIcon = (status: string): any => {
@@ -371,8 +419,31 @@ const ManageAppointmentsScreen = () => {
   // Custom function to format appointment time without timezone conversion
   const formatAppointmentTime = (appointmentDate: string) => {
     try {
-      // Extract the time part from the appointment_date string
-      const timePart = appointmentDate.split('T')[1];
+      console.log('Formatting appointment time:', { appointmentDate });
+      
+      // Handle different date formats
+      let timePart = '';
+      
+      // Check if it's in ISO format with T separator
+      if (appointmentDate.includes('T')) {
+        timePart = appointmentDate.split('T')[1];
+      }
+      // Check if it's in format like "2025-10-31 10:00:00"
+      else if (appointmentDate.includes(' ')) {
+        timePart = appointmentDate.split(' ')[1];
+      }
+      // Check if it's a Date object or can be parsed as one
+      else {
+        const date = new Date(appointmentDate);
+        if (!isNaN(date.getTime())) {
+          // Extract time from Date object
+          const hours = date.getHours().toString().padStart(2, '0');
+          const minutes = date.getMinutes().toString().padStart(2, '0');
+          timePart = `${hours}:${minutes}:00`;
+        }
+      }
+      
+      console.log('Extracted time part:', timePart);
       
       if (timePart) {
         const [hours, minutes] = timePart.split(':');
@@ -380,8 +451,11 @@ const ManageAppointmentsScreen = () => {
         const ampm = hour >= 12 ? 'PM' : 'AM';
         const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
         const formattedTime = `${displayHour}:${minutes} ${ampm}`;
+        console.log('Time formatting result:', { hours, minutes, hour, ampm, displayHour, formattedTime });
         return formattedTime;
       }
+      
+      console.warn('No time part found, using fallback');
       return '12:00 AM'; // fallback
     } catch (error) {
       console.error('Error formatting appointment time:', error);

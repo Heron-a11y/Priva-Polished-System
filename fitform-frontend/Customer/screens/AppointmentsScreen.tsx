@@ -88,6 +88,12 @@ const AppointmentsScreen = () => {
     password?: string; 
     confirmPassword?: string; 
   }>({});
+  const [appointmentErrors, setAppointmentErrors] = useState<{
+    dailyLimit?: string;
+    timeSlot?: string;
+    capacity?: string;
+    general?: string;
+  }>({});
   const [showAppointmentDetails, setShowAppointmentDetails] = useState(false);
   const [selectedAppointmentDetails, setSelectedAppointmentDetails] = useState<Appointment | null>(null);
   const [showPolicyModal, setShowPolicyModal] = useState(false);
@@ -102,9 +108,31 @@ const AppointmentsScreen = () => {
   // Custom function to format appointment time without timezone conversion
   const formatAppointmentTime = (appointmentDate: string) => {
     try {
-      // Extract the time part from the appointment_date string
-      const timePart = appointmentDate.split('T')[1];
-      console.log('Formatting appointment time:', { appointmentDate, timePart });
+      console.log('Formatting appointment time:', { appointmentDate });
+      
+      // Handle different date formats
+      let timePart = '';
+      
+      // Check if it's in ISO format with T separator
+      if (appointmentDate.includes('T')) {
+        timePart = appointmentDate.split('T')[1];
+      }
+      // Check if it's in format like "2025-10-31 10:00:00"
+      else if (appointmentDate.includes(' ')) {
+        timePart = appointmentDate.split(' ')[1];
+      }
+      // Check if it's a Date object or can be parsed as one
+      else {
+        const date = new Date(appointmentDate);
+        if (!isNaN(date.getTime())) {
+          // Extract time from Date object
+          const hours = date.getHours().toString().padStart(2, '0');
+          const minutes = date.getMinutes().toString().padStart(2, '0');
+          timePart = `${hours}:${minutes}:00`;
+        }
+      }
+      
+      console.log('Extracted time part:', timePart);
       
       if (timePart) {
         const [hours, minutes] = timePart.split(':');
@@ -115,6 +143,8 @@ const AppointmentsScreen = () => {
         console.log('Time formatting result:', { hours, minutes, hour, ampm, displayHour, formattedTime });
         return formattedTime;
       }
+      
+      console.warn('No time part found, using fallback');
       return '12:00 AM'; // fallback
     } catch (error) {
       console.error('Error formatting appointment time:', error);
@@ -491,25 +521,30 @@ const AppointmentsScreen = () => {
         return;
       }
       
-      // Convert to the format the backend expects: YYYY-MM-DD HH:MM:SS (local time, no timezone)
-      const fullDateTime = appointmentDateTime.getFullYear() + '-' +
+      // Convert to the format the backend expects: separate date and time fields
+      const appointmentDate = appointmentDateTime.getFullYear() + '-' +
         String(appointmentDateTime.getMonth() + 1).padStart(2, '0') + '-' +
-        String(appointmentDateTime.getDate()).padStart(2, '0') + ' ' +
-        String(appointmentDateTime.getHours()).padStart(2, '0') + ':' +
-        String(appointmentDateTime.getMinutes()).padStart(2, '0') + ':00';
+        String(appointmentDateTime.getDate()).padStart(2, '0');
+      
+      const appointmentTime = String(appointmentDateTime.getHours()).padStart(2, '0') + ':' +
+        String(appointmentDateTime.getMinutes()).padStart(2, '0');
       
       const appointmentData = {
-        ...newAppointment,
-        appointment_date: fullDateTime,
+        appointment_date: appointmentDate,
+        appointment_time: appointmentTime,
+        service_type: newAppointment.service_type,
+        notes: newAppointment.notes || null,
       };
 
       console.log('Original appointment data:', newAppointment);
       console.log('Selected date:', selectedDate);
       console.log('Selected time:', selectedTime);
       console.log('Appointment DateTime object:', appointmentDateTime);
-      console.log('Full datetime string (Backend format):', fullDateTime);
+      console.log('Appointment date (Backend format):', appointmentDate);
+      console.log('Appointment time (Backend format):', appointmentTime);
       console.log('Combined appointment data:', appointmentData);
       console.log('Final appointment_date being sent:', appointmentData.appointment_date);
+      console.log('Final appointment_time being sent:', appointmentData.appointment_time);
       console.log('Current user:', user);
 
       let response;
@@ -550,21 +585,47 @@ const AppointmentsScreen = () => {
     } catch (error: any) {
       const operation = editingAppointmentId ? 'updating' : 'creating';
       console.error(`Error ${operation} appointment:`, error);
+      
+      // Clear previous errors
+      setAppointmentErrors({});
+      
+      // Handle specific backend validation errors
+      if (error.response && error.response.data) {
+        const errorData = error.response.data;
+        
+        if (errorData.error === 'daily_limit_exceeded') {
+          setAppointmentErrors({
+            dailyLimit: 'You already have an appointment scheduled for this date. Only one appointment per day is allowed.'
+          });
+          return;
+        }
+        
+        if (errorData.error === 'time_slot_taken') {
+          setAppointmentErrors({
+            timeSlot: 'This time slot is already taken. Please choose another time.'
+          });
+          return;
+        }
+        
+        if (errorData.error === 'daily_capacity_exceeded') {
+          setAppointmentErrors({
+            capacity: 'Daily capacity reached. Maximum 5 appointments per day allowed.'
+          });
+          return;
+        }
+      }
+      
+      // Handle other error types
       if (error.message && error.message.includes('already booked')) {
         Alert.alert('Date Unavailable', 'This date is already booked. Please choose another date.');
       } else if (error.message && error.message.includes('past')) {
         Alert.alert('Invalid Date', 'Cannot schedule appointments in the past. Please select a current or future date.');
       } else if (error.message && error.message.includes('business hours')) {
         setTimeError('Appointments can only be scheduled between 10:00 AM and 7:00 PM. Please select a time within business hours.');
-      } else if (error.message && error.message.includes('user already has appointment')) {
-        Alert.alert('Booked', 'You already have an appointment on this date. Only 1 appointment per customer per day is allowed.');
-      } else if (error.message && error.message.includes('time slot taken')) {
-        setTimeError('This time slot is already taken by another customer. Please select a different time.');
-      } else if (error.message && error.message.includes('daily limit reached')) {
-        Alert.alert('Daily Limit Reached', 'Maximum 5 appointments per day allowed. Please select another date.');
       } else {
-        const errorMessage = editingAppointmentId ? 'Failed to update appointment' : 'Failed to create appointment';
-        Alert.alert('Error', errorMessage);
+        setAppointmentErrors({
+          general: `Failed to ${operation} appointment. Please try again.`
+        });
       }
     }
   };
@@ -922,7 +983,15 @@ const AppointmentsScreen = () => {
               const dateInfo = formatDate(appointment.appointment_date);
               
               return (
-                <View key={appointment.id} style={styles.appointmentCard}>
+                <TouchableOpacity 
+                  key={appointment.id} 
+                  style={styles.appointmentCard}
+                  onPress={() => {
+                    setSelectedAppointmentDetails(appointment);
+                    setShowAppointmentDetails(true);
+                  }}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.cardHeader}>
                     <View style={styles.customerInfo}>
                       {user?.profile_image ? (
@@ -971,10 +1040,13 @@ const AppointmentsScreen = () => {
                   <View style={styles.cardActions}>
                     {/* Transaction Action Buttons */}
                     <View style={styles.transactionActions}>
-                      {/* Cancel Button - Show for all statuses except completed/cancelled */}
+                      {/* Cancel Button - Show for all statuses except completed/cancelled - LEFT SIDE */}
                       {!['completed', 'cancelled'].includes(appointment.status) && (
                         <TouchableOpacity 
-                          style={styles.cancelButton}
+                          style={[
+                            styles.cancelButton,
+                            !['pending', 'confirmed'].includes(appointment.status) && styles.singleButton
+                          ]}
                           onPress={(e) => {
                             e.stopPropagation();
                             handleCancelAppointment(appointment);
@@ -985,10 +1057,13 @@ const AppointmentsScreen = () => {
                         </TouchableOpacity>
                       )}
 
-                      {/* Edit Button - Show for pending and confirmed statuses */}
+                      {/* Edit Button - Show for pending and confirmed statuses - RIGHT SIDE */}
                       {['pending', 'confirmed'].includes(appointment.status) && (
                         <TouchableOpacity 
-                          style={styles.editButton}
+                          style={[
+                            styles.editButton,
+                            !['completed', 'cancelled'].includes(appointment.status) ? null : styles.singleButton
+                          ]}
                           onPress={(e) => {
                             e.stopPropagation();
                             handleEditAppointment(appointment);
@@ -999,20 +1074,9 @@ const AppointmentsScreen = () => {
                         </TouchableOpacity>
                       )}
 
-                      {/* View Details Button */}
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.viewDetailsButton]}
-                        onPress={() => {
-                          setSelectedAppointmentDetails(appointment);
-                          setShowAppointmentDetails(true);
-                        }}
-                      >
-                        <Ionicons name="eye" size={18} color="#014D40" />
-                        <Text style={styles.viewDetailsText}>View Details</Text>
-                      </TouchableOpacity>
                     </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })
           )}
@@ -1235,13 +1299,43 @@ const AppointmentsScreen = () => {
               />
             </View>
           </ScrollView>
-
+          
+          {/* Error Messages */}
+          {appointmentErrors.dailyLimit && (
+            <View style={styles.errorContainer}>
+              <Ionicons name="warning" size={16} color="#ff4444" />
+              <Text style={styles.errorText}>{appointmentErrors.dailyLimit}</Text>
+            </View>
+          )}
+          
+          {appointmentErrors.timeSlot && (
+            <View style={styles.errorContainer}>
+              <Ionicons name="warning" size={16} color="#ff4444" />
+              <Text style={styles.errorText}>{appointmentErrors.timeSlot}</Text>
+            </View>
+          )}
+          
+          {appointmentErrors.capacity && (
+            <View style={styles.errorContainer}>
+              <Ionicons name="warning" size={16} color="#ff4444" />
+              <Text style={styles.errorText}>{appointmentErrors.capacity}</Text>
+            </View>
+          )}
+          
+          {appointmentErrors.general && (
+            <View style={styles.errorContainer}>
+              <Ionicons name="warning" size={16} color="#ff4444" />
+              <Text style={styles.errorText}>{appointmentErrors.general}</Text>
+            </View>
+          )}
+          
           <View style={styles.scheduleModalFooter}>
               <TouchableOpacity
               style={styles.scheduleModalCancelButton}
                 onPress={() => {
                   setModalVisible(false);
                   setTimeError(''); // Clear time error
+                  setAppointmentErrors({}); // Clear appointment errors
                   // Reset form when cancel is pressed
                   setNewAppointment({
                     appointment_date: '',
@@ -1251,7 +1345,7 @@ const AppointmentsScreen = () => {
                   });
                 }}
               >
-                <Ionicons name="close-circle" size={20} color={Colors.text.primary} />
+                <Ionicons name="close-circle-outline" size={16} color="#dc2626" />
                 <Text style={styles.scheduleModalCancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1422,7 +1516,7 @@ const AppointmentsScreen = () => {
                       handleCancel(selectedAppointmentDetails.id);
                     }}
                   >
-                    <Ionicons name="close-circle" size={20} color={Colors.text.primary} />
+                    <Ionicons name="close-circle-outline" size={16} color="#dc2626" />
                     <Text style={styles.cancelButtonText}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
@@ -1435,7 +1529,7 @@ const AppointmentsScreen = () => {
                     handleCancel(selectedAppointmentDetails.id);
                   }}
                 >
-                  <Ionicons name="close-circle" size={20} color={Colors.text.primary} />
+                  <Ionicons name="close-circle-outline" size={16} color="#dc2626" />
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
               )}
@@ -1765,17 +1859,6 @@ const styles = StyleSheet.create({
   cardActions: {
     flexDirection: 'row',
     gap: 12,
-  },
-  viewDetailsButton: {
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    flex: 0, // Override flex: 1 from actionButton
-  },
-  viewDetailsText: {
-    color: '#014D40',
-    fontSize: 14,
-    fontWeight: '600',
   },
   // Appointment Details Modal Styles
   modalOverlay: {
@@ -2526,6 +2609,26 @@ const styles = StyleSheet.create({
     color: Colors.text.inverse,
   },
 
+  // Error Message Styles
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffebee',
+    borderColor: '#ff4444',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginHorizontal: 20,
+    marginBottom: 10,
+    gap: 8,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#ff4444',
+    fontWeight: '500',
+  },
+
   // Time Picker Styles
   timePickerButton: {
     backgroundColor: Colors.background.card,
@@ -2599,19 +2702,22 @@ const styles = StyleSheet.create({
   // Transaction Action Buttons
   transactionActions: {
     flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     marginTop: 8,
+    width: '100%',
   },
   cancelButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: '#fef2f2',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#fecaca',
+    marginRight: 4,
   },
   cancelButtonText: {
     fontSize: 14,
@@ -2620,20 +2726,29 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   editButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: '#f0f9ff',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#bae6fd',
+    marginLeft: 4,
   },
   editButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#014D40',
     marginLeft: 4,
+  },
+  singleButton: {
+    flex: 1,
+    alignSelf: 'flex-end',
+    marginRight: 0,
+    marginLeft: 0,
   },
 });
 

@@ -372,7 +372,7 @@ const ManageCustomersScreen = () => {
       const { Linking } = require('react-native');
       
       // The backend now returns a PDF file directly, so we can open the URL directly
-      const pdfUrl = `http://192.168.1.59:8000/api/admin/customers/${customer.id}/generate-report`;
+      const pdfUrl = `http://192.168.1.56:8000/api/admin/customers/${customer.id}/generate-report`;
       
       // Open the PDF in the browser
       await Linking.openURL(pdfUrl);
@@ -522,15 +522,18 @@ const ManageCustomersScreen = () => {
             </View>
 
             {/* Search */}
-            <View style={styles.searchContainer}>
-              <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search by name, email, or phone..."
-                value={search}
-                onChangeText={setSearch}
-                placeholderTextColor="#999"
-              />
+            <View style={styles.searchItem}>
+              <Text style={styles.searchLabel}>Search:</Text>
+              <View style={styles.searchContainer}>
+                <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search by name, email, or phone..."
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholderTextColor="#999"
+                />
+              </View>
             </View>
           </View>
         </View>
@@ -1390,11 +1393,15 @@ const styles = StyleSheet.create({
   },
   filtersRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end', // Align to bottom to match heights
     gap: 16,
+    flexWrap: 'wrap', // Allow wrapping on smaller screens
   },
   filterItem: {
     position: 'relative',
+    flexDirection: 'column',
+    justifyContent: 'flex-end',
+    minWidth: 140, // Ensure minimum width for dropdown
   },
   filterLabel: {
     fontSize: 14,
@@ -1408,11 +1415,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: '#f8f9fa',
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12, // Increased padding for better alignment
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e9ecef',
     minWidth: 120,
+    height: 44, // Fixed height for consistency
   },
   dropdownButtonText: {
     fontSize: 14,
@@ -1447,8 +1455,18 @@ const styles = StyleSheet.create({
     color: '#014D40',
     fontWeight: '500',
   },
-  searchContainer: {
+  searchItem: {
     flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'flex-end',
+  },
+  searchLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#014D40',
+    marginBottom: 8,
+  },
+  searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
@@ -1456,13 +1474,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e9ecef',
     paddingHorizontal: 12,
+    height: 44, // Fixed height to match dropdown
   },
   searchIcon: {
     marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 12, // Match dropdown padding
     fontSize: 14,
     color: '#014D40',
   },

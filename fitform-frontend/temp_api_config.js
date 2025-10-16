@@ -3,11 +3,11 @@
 
 const API_CONFIG = {
     // Current working IP (detected from your system)
-    baseURL: 'http://192.168.1.59:8000/api',
+    baseURL: 'http://192.168.1.56:8000/api',
     
     // Fallback URLs in case of network issues
     fallbackURLs: [
-        'http://192.168.1.59:8000/api',
+        'http://192.168.1.56:8000/api',
         'http://localhost:8000/api',
         'http://127.0.0.1:8000/api'
     ],
