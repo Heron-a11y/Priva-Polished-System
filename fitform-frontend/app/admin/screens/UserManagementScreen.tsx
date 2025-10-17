@@ -149,13 +149,13 @@ const UserManagementScreen = () => {
         </View>
       </View>
 
-      {/* Admin Protection Notice */}
-      <View style={styles.noticeContainer}>
-        <Ionicons name="shield" size={20} color="#FF6B35" />
-        <Text style={styles.noticeText}>
-          Super admins (🛡️) and regular admins cannot be demoted to customers for security reasons.
-        </Text>
-      </View>
+      {/* Super Admin Notice */}
+        <View style={styles.noticeContainer}>
+          <Ionicons name="shield" size={20} color="#FF6B35" />
+          <Text style={styles.noticeText}>
+            Super admins (🛡️) and regular admins cannot be demoted to customers for security reasons.
+          </Text>
+        </View>
 
       {/* Users List */}
       <View style={styles.usersContainer}>
@@ -205,25 +205,25 @@ const UserManagementScreen = () => {
                 </View>
               </View>
               
-              <View style={styles.userActions}>
-                {!user.is_super_admin && user.id !== currentUser?.id && user.role !== 'admin' && (
-                  <TouchableOpacity
-                    style={styles.roleButton}
-                    onPress={() => handleRoleChange(user)}
-                    disabled={actionLoading[user.id]}
-                  >
-                    {actionLoading[user.id] ? (
-                      <ActivityIndicator size="small" color="#014D40" />
-                    ) : (
-                      <>
-                        <Ionicons name="swap-horizontal" size={16} color="#014D40" />
-                        <Text style={styles.roleButtonText}>
-                          Make Admin
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                )}
+                <View style={styles.userActions}>
+                  {!user.is_super_admin && user.id !== currentUser?.id && user.role === 'customer' && (
+                    <TouchableOpacity
+                      style={styles.roleButton}
+                      onPress={() => handleRoleChange(user)}
+                      disabled={actionLoading[user.id]}
+                    >
+                      {actionLoading[user.id] ? (
+                        <ActivityIndicator size="small" color="#014D40" />
+                      ) : (
+                        <>
+                          <Ionicons name="swap-horizontal" size={16} color="#014D40" />
+                          <Text style={styles.roleButtonText}>
+                            Make Admin
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
                 
                 {user.is_super_admin && (
                   <View style={styles.protectedBadge}>
