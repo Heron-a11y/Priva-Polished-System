@@ -208,8 +208,9 @@ class MeasurementHistoryController extends Controller
 
         if (!$latest) {
             return response()->json([
+                'data' => null,
                 'message' => 'No measurements found'
-            ], 404);
+            ], 200);
         }
 
         return response()->json([

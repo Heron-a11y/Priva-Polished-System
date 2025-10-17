@@ -378,6 +378,14 @@ class ProfileController extends Controller
             ], 400);
         }
 
+        // Prevent changing super admin role
+        if ($user->isSuperAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot change super admin role. Super admin status is permanent.'
+            ], 403);
+        }
+
         $user->update(['role' => $request->role]);
 
         return response()->json([

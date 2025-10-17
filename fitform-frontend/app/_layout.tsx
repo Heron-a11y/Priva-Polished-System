@@ -7,9 +7,24 @@ import Header from '../components/Header';
 import { NotificationProvider } from '../contexts/NotificationContext';
 import { CatalogProvider } from '../contexts/CatalogContext';
 import * as Font from 'expo-font';
+import { LogBox } from 'react-native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const isMobile = SCREEN_WIDTH < 768; // More reliable mobile detection
+
+// Disable Expo error notifications and warnings
+LogBox.ignoreAllLogs(true);
+LogBox.ignoreLogs([
+  'Warning:',
+  'Error:',
+  'Remote debugger',
+  'Expo',
+  'Metro',
+  'Network request failed',
+  'fetch',
+  'connection',
+  'timeout'
+]);
 
 // Font loading configuration
 const loadFonts = async () => {
@@ -83,15 +98,48 @@ function AppContent() {
   );
 }
 
+// Custom Error Boundary Component
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error) {
+    // Update state so the next render will show the fallback UI
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    // Log error silently without showing notifications
+    console.warn('App error caught by boundary:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      // Return a minimal fallback UI without error notifications
+      return (
+        <View style={[styles.container, styles.loadingContainer]}>
+          <ActivityIndicator size="large" color="#014D40" />
+        </View>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function Layout() {
   return (
-    <AuthProvider>
-      <NotificationProvider>
-        <CatalogProvider>
-          <AppContent />
-        </CatalogProvider>
-      </NotificationProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <NotificationProvider>
+          <CatalogProvider>
+            <AppContent />
+          </CatalogProvider>
+        </NotificationProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

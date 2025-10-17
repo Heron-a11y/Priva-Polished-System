@@ -23,6 +23,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'is_super_admin',
         'profile_image',
         'phone',
         'address',
@@ -76,6 +77,22 @@ class User extends Authenticatable
     public function isCustomer(): bool
     {
         return $this->role === 'customer';
+    }
+
+    /**
+     * Check if user is a super admin
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'admin' && (bool) $this->is_super_admin;
+    }
+
+    /**
+     * Check if user can be demoted (not super admin)
+     */
+    public function canBeDemoted(): bool
+    {
+        return !$this->isSuperAdmin();
     }
 
     /**

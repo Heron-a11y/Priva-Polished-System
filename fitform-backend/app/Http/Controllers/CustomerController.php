@@ -46,7 +46,7 @@ class CustomerController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = User::where('role', 'customer');
+            $query = User::whereIn('role', ['customer', 'admin'])->where('email', '!=', 'admin@fitform.com');
 
             // Apply search filter
             if ($request->has('search') && !empty($request->search)) {
@@ -106,12 +106,12 @@ class CustomerController extends Controller
                 return $customerArray;
             });
 
-            // Calculate stats
+            // Calculate stats (excluding super admin)
             $stats = [
-                'total_customers' => User::where('role', 'customer')->count(),
-                'active_customers' => User::where('role', 'customer')->where('account_status', 'active')->count(),
-                'suspended_customers' => User::where('role', 'customer')->where('account_status', 'suspended')->count(),
-                'banned_customers' => User::where('role', 'customer')->where('account_status', 'banned')->count(),
+                'total_customers' => User::whereIn('role', ['customer', 'admin'])->where('email', '!=', 'admin@fitform.com')->count(),
+                'active_customers' => User::whereIn('role', ['customer', 'admin'])->where('email', '!=', 'admin@fitform.com')->where('account_status', 'active')->count(),
+                'suspended_customers' => User::whereIn('role', ['customer', 'admin'])->where('email', '!=', 'admin@fitform.com')->where('account_status', 'suspended')->count(),
+                'banned_customers' => User::whereIn('role', ['customer', 'admin'])->where('email', '!=', 'admin@fitform.com')->where('account_status', 'banned')->count(),
             ];
 
             return response()->json([

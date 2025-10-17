@@ -1,13 +1,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import networkConfig from './network-config';
 
-// Base API configuration - fixed to current working IP
-const API_BASE_URL = 'http://192.168.1.56:8000/api';
-
+// Base API configuration - use dynamic network config
 class ApiService {
     constructor() {
-        this.baseURL = API_BASE_URL;
+        this.baseURL = null;
         this.token = null;
-        console.log('🌐 ApiService initialized with URL:', this.baseURL);
+        this.initializeNetwork();
+    }
+
+    async initializeNetwork() {
+        try {
+            // Try to get the current network config
+            const config = await networkConfig.getCurrentConfig();
+            this.baseURL = config.backendUrl;
+            console.log('🌐 ApiService initialized with URL:', this.baseURL);
+            
+            // Test the connection
+            const testResult = await this.testConnection();
+            if (!testResult.success) {
+                console.log('⚠️ Network test failed, trying fallback');
+                this.baseURL = 'http://192.168.1.59:8000/api';
+                console.log('🌐 ApiService using fallback URL:', this.baseURL);
+            }
+        } catch (error) {
+            console.log('⚠️ Failed to get network config, using fallback');
+            this.baseURL = 'http://192.168.1.59:8000/api';
+            console.log('🌐 ApiService using fallback URL:', this.baseURL);
+        }
     }
 
     // Simple network test
@@ -72,6 +92,11 @@ class ApiService {
     // Make API request with simplified error handling
     async request(endpoint, options = {}) {
         try {
+            // Ensure baseURL is initialized
+            if (!this.baseURL) {
+                await this.initializeNetwork();
+            }
+            
             const headers = await this.getHeaders();
             let url = `${this.baseURL}${endpoint}`;
 
@@ -172,10 +197,34 @@ class ApiService {
 
     // Authentication methods
     async register(userData) {
-        return this.request('/register', {
-            method: 'POST',
-            body: JSON.stringify(userData),
-        });
+        try {
+            const response = await this.request('/register', {
+                method: 'POST',
+                body: JSON.stringify(userData),
+            });
+            return response;
+        } catch (error) {
+            console.error('Registration error:', error);
+            
+            // Provide specific error messages based on response
+            if (error.message?.includes('422') || error.message?.includes('validation')) {
+                if (error.message?.includes('email') && error.message?.includes('taken')) {
+                    throw new Error('Email already exists. Please use a different email or try logging in.');
+                } else if (error.message?.includes('email') && error.message?.includes('invalid')) {
+                    throw new Error('Invalid email format. Please enter a valid email address.');
+                } else if (error.message?.includes('password') && error.message?.includes('weak')) {
+                    throw new Error('Password is too weak. Please use a stronger password.');
+                } else if (error.message?.includes('name') && error.message?.includes('required')) {
+                    throw new Error('Name is required. Please enter your full name.');
+                } else {
+                    throw new Error('Invalid registration data. Please check your input and try again.');
+                }
+            } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+                throw new Error('Network error - please check your connection and try again.');
+            } else {
+                throw error;
+            }
+        }
     }
 
     async login(credentials) {
@@ -192,7 +241,19 @@ class ApiService {
             return response;
         } catch (error) {
             console.error('Login error:', error);
-            throw error;
+            
+            // Provide specific error messages based on response
+            if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
+                throw new Error('Invalid email or password. Please check your credentials and try again.');
+            } else if (error.message?.includes('422') || error.message?.includes('validation')) {
+                throw new Error('Invalid email or password format. Please check your input.');
+            } else if (error.message?.includes('403') || error.message?.includes('Forbidden')) {
+                throw new Error('Account access denied. Please contact support.');
+            } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+                throw new Error('Network error - please check your connection and try again.');
+            } else {
+                throw error;
+            }
         }
     }
 
@@ -369,7 +430,14 @@ class ApiService {
 
     // Unified History
     async getRentalPurchaseHistory() {
-        return this.request('/rental-purchase-history');
+        try {
+            const response = await this.request('/rental-purchase-history');
+            console.log('✅ Rental purchase history loaded');
+            return { success: true, data: response.data || response };
+        } catch (error) {
+            console.log('❌ Error loading rental purchase history:', error.message);
+            return { success: false, data: [] };
+        }
     }
 
     async deleteRentalPurchaseHistory(id) {
@@ -485,7 +553,14 @@ class ApiService {
 
     // Profile Management
     async getProfile() {
-        return this.request('/profile');
+        try {
+            const response = await this.request('/profile');
+            console.log('✅ Profile loaded');
+            return { success: true, data: response.data || response };
+        } catch (error) {
+            console.log('❌ Error loading profile:', error.message);
+            return { success: false, data: null };
+        }
     }
 
     async updateProfile(profileData) {
@@ -617,9 +692,21 @@ class ApiService {
 
     // Measurement History Methods
     async getMeasurementHistory(params = {}) {
-        const queryParams = new URLSearchParams(params).toString();
-        const url = queryParams ? `/measurement-history?${queryParams}` : '/measurement-history';
-        return this.request(url);
+        try {
+            const queryParams = new URLSearchParams(params).toString();
+            const url = queryParams ? `/measurement-history?${queryParams}` : '/measurement-history';
+            const response = await this.request(url);
+            console.log('✅ Measurement history loaded');
+            return { success: true, data: response.data || response };
+        } catch (error) {
+            // Handle 404 errors gracefully (no measurements found)
+            if (error.message.includes('No measurements found') || error.message.includes('404')) {
+                console.log('ℹ️ No measurement history found');
+                return { success: false, data: [] };
+            }
+            console.log('❌ Error loading measurement history:', error.message);
+            return { success: false, data: [] };
+        }
     }
 
     async saveMeasurementHistory(data) {
@@ -640,12 +727,12 @@ class ApiService {
     // Get latest measurements for the current user
     async getLatestMeasurements() {
         try {
-            // Skip the non-existent endpoint and go straight to fallback
-            console.log('🔄 Using fallback for latest measurements...');
+            console.log('🔄 Fetching latest measurements...');
             
             // Try measurement history latest first
             const response = await this.request('/measurement-history/latest');
             if (response && response.data) {
+                console.log('✅ Latest measurements found');
                 return { success: true, data: response.data };
             }
             
@@ -654,11 +741,18 @@ class ApiService {
             if (historyResponse && Array.isArray(historyResponse) && historyResponse.length > 0) {
                 // Get the most recent measurement
                 const latestMeasurement = historyResponse[0];
+                console.log('✅ Latest measurement from history');
                 return { success: true, data: latestMeasurement };
             }
             
+            console.log('ℹ️ No latest measurements found');
             return { success: false, data: null };
         } catch (error) {
+            // Handle 404 errors gracefully (no measurements found)
+            if (error.message.includes('No measurements found') || error.message.includes('404')) {
+                console.log('ℹ️ No latest measurements found');
+                return { success: false, data: null };
+            }
             console.log('❌ Error loading latest measurements:', error.message);
             return { success: false, data: null };
         }
@@ -667,10 +761,16 @@ class ApiService {
     // Get user's measurement history
     async getUserMeasurements() {
         try {
-            // Skip the non-existent endpoint and go straight to fallback
-            console.log('🔄 Using fallback for user measurements...');
-            return await this.request('/measurement-history');
+            console.log('🔄 Fetching user measurements...');
+            const response = await this.request('/measurement-history');
+            console.log('✅ User measurements loaded');
+            return { success: true, data: response.data || response };
         } catch (error) {
+            // Handle 404 errors gracefully (no measurements found)
+            if (error.message.includes('No measurements found') || error.message.includes('404')) {
+                console.log('ℹ️ No user measurements found');
+                return { success: false, data: [] };
+            }
             console.log('❌ Error loading user measurements:', error.message);
             return { success: false, data: [] };
         }
