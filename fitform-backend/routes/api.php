@@ -107,9 +107,12 @@ Route::middleware([CorsMiddleware::class])->group(function () {
     Route::delete('/admin/catalog/{id}', [\App\Http\Controllers\CatalogController::class, 'destroy']);
     Route::post('/admin/catalog/{id}/featured', [\App\Http\Controllers\CatalogController::class, 'updateFeaturedStatus']);
     Route::post('/admin/catalog/sort-order', [\App\Http\Controllers\CatalogController::class, 'updateSortOrder']);
+    Route::post('/admin/catalog/{id}/image', [\App\Http\Controllers\CatalogController::class, 'uploadImage']);
     
     // Customer Catalog Routes (public access)
     Route::get('/catalog', [\App\Http\Controllers\CatalogController::class, 'getCustomerCatalog']);
+    Route::get('/catalog/popular', [\App\Http\Controllers\CatalogController::class, 'getPopularItems']);
+    Route::get('/catalog/recent', [\App\Http\Controllers\CatalogController::class, 'getRecentItems']);
 
     // Appointments - temporarily moved outside auth for testing
     Route::get('/appointments', function() {

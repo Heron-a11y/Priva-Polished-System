@@ -82,7 +82,13 @@ class CatalogController extends Controller
         $data = $request->all();
         
         // Debug: Log received data
-        \Log::info('📝 Received catalog data:', $data);
+        \Log::info('📝 Received catalog data:', ['data' => $data]);
+        \Log::info('📝 Request method:', ['method' => $request->method()]);
+        \Log::info('📝 Content type:', ['content_type' => $request->header('Content-Type')]);
+        \Log::info('📝 Raw input:', ['raw_input' => $request->getContent()]);
+        \Log::info('📝 Form data:', ['form_data' => $request->input()]);
+        \Log::info('📝 All request data:', ['all_data' => $request->all()]);
+        \Log::info('📝 Request files:', ['files' => $request->allFiles()]);
 
         // Handle image upload
         if ($request->hasFile('image')) {
@@ -97,6 +103,104 @@ class CatalogController extends Controller
             'data' => $catalogItem,
             'message' => 'Catalog item created successfully'
         ], 201);
+    }
+
+    /**
+     * Upload image for a catalog item using base64 data.
+     */
+    public function uploadImage(Request $request, $id)
+    {
+        $item = CatalogItem::find($id);
+        
+        if (!$item) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Catalog item not found'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'image' => 'required|string',
+            'image_type' => 'required|string|in:image/jpeg,image/png,image/jpg,image/gif,image/webp',
+            'image_name' => 'required|string'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            // Handle base64 image upload
+            $base64Image = $request->input('image');
+            $imageType = $request->input('image_type');
+            $imageName = $request->input('image_name');
+            
+            // Validate base64 data
+            if (!preg_match('/^[a-zA-Z0-9+\/]*={0,2}$/', $base64Image)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid base64 image data'
+                ], 400);
+            }
+            
+            // Decode base64 image
+            $imageData = base64_decode($base64Image);
+            if ($imageData === false) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to decode base64 image data'
+                ], 400);
+            }
+            
+            // Generate unique filename
+            $extension = pathinfo($imageName, PATHINFO_EXTENSION) ?: 'jpg';
+            $filename = 'catalog_' . $id . '_' . time() . '.' . $extension;
+            $imagePath = 'catalog/' . $filename;
+            
+            // Store image file
+            $fullPath = storage_path('app/public/' . $imagePath);
+            $directory = dirname($fullPath);
+            
+            if (!file_exists($directory)) {
+                mkdir($directory, 0755, true);
+            }
+            
+            if (file_put_contents($fullPath, $imageData) === false) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to save image file'
+                ], 500);
+            }
+            
+            // Update item with image path
+            $item->update(['image_path' => $imagePath]);
+            
+            \Log::info('📷 Base64 image uploaded for item:', [
+                'item_id' => $id,
+                'image_path' => $imagePath,
+                'image_size' => strlen($imageData)
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $item->fresh(),
+                'message' => 'Image uploaded successfully'
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('❌ Base64 image upload error:', [
+                'item_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to upload image: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -329,5 +433,98 @@ class CatalogController extends Controller
             'success' => true,
             'message' => 'Sort order updated successfully'
         ]);
+    }
+
+    /**
+     * Get popular/featured items for customer dashboard
+     */
+    public function getPopularItems()
+    {
+        try {
+            \Log::info('📊 Getting popular items for customer dashboard');
+            
+            $popularItems = CatalogItem::where('is_featured', true)
+                ->where('is_available', true)
+                ->orderBy('sort_order', 'asc')
+                ->orderBy('created_at', 'desc')
+                ->get();
+            
+            \Log::info('📊 Popular items found:', [
+                'count' => $popularItems->count(),
+                'items' => $popularItems->pluck('name', 'id')->toArray()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $popularItems,
+                'message' => 'Popular items retrieved successfully'
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('❌ Error getting popular items:', [
+                'error' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get popular items: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get recently added items for customer notifications
+     */
+    public function getRecentItems()
+    {
+        try {
+            \Log::info('📊 Getting recent items for customer notifications');
+            
+            // Get items added in the last 24 hours
+            $recentItems = CatalogItem::where('created_at', '>=', now()->subDay())
+                ->where('is_available', true)
+                ->orderBy('created_at', 'desc')
+                ->get();
+            
+            // Add metadata for better change detection
+            $responseData = $recentItems->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'name' => $item->name,
+                    'description' => $item->description,
+                    'clothing_type' => $item->clothing_type,
+                    'category' => $item->category,
+                    'is_featured' => $item->is_featured,
+                    'is_available' => $item->is_available,
+                    'image_path' => $item->image_path,
+                    'created_at' => $item->created_at,
+                    'updated_at' => $item->updated_at,
+                    'created_timestamp' => $item->created_at->timestamp,
+                    'sort_order' => $item->sort_order
+                ];
+            });
+            
+            \Log::info('📊 Recent items found:', [
+                'count' => $recentItems->count(),
+                'items' => $recentItems->pluck('name', 'id')->toArray()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $responseData,
+                'count' => $recentItems->count(),
+                'message' => 'Recent items retrieved successfully'
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('❌ Error getting recent items:', [
+                'error' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get recent items: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

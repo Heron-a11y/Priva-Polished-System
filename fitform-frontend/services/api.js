@@ -20,12 +20,12 @@ class ApiService {
             const testResult = await this.testConnection();
             if (!testResult.success) {
                 console.log('⚠️ Network test failed, trying fallback');
-                this.baseURL = 'http://192.168.1.59:8000/api';
+                this.baseURL = 'http://192.168.1.56:8000/api';
                 console.log('🌐 ApiService using fallback URL:', this.baseURL);
             }
         } catch (error) {
             console.log('⚠️ Failed to get network config, using fallback');
-            this.baseURL = 'http://192.168.1.59:8000/api';
+            this.baseURL = 'http://192.168.1.56:8000/api';
             console.log('🌐 ApiService using fallback URL:', this.baseURL);
         }
     }
@@ -115,13 +115,20 @@ class ApiService {
 
             console.log(`🌐 Making API request to: ${url}`);
 
+            // Handle FormData - don't set Content-Type header for FormData
+            const isFormData = options.body instanceof FormData;
+            
+            const requestHeaders = isFormData 
+                ? { ...headers, ...options.headers } // Remove Content-Type for FormData
+                : { 
+                    ...headers, 
+                    ...options.headers,
+                    'Content-Type': 'application/json' // Set Content-Type for JSON
+                  };
+
             const response = await fetch(url, {
                 ...options,
-                headers: {
-                    ...headers,
-                    ...options.headers,
-                },
-                timeout: 10000, // 10 second timeout
+                headers: requestHeaders,
             });
 
             // Check if response is JSON
@@ -179,7 +186,7 @@ class ApiService {
         return this.request(endpoint, {
             ...options,
             method: 'POST',
-            body: data ? JSON.stringify(data) : undefined,
+            body: data instanceof FormData ? data : (data ? JSON.stringify(data) : undefined),
         });
     }
 
@@ -187,7 +194,7 @@ class ApiService {
         return this.request(endpoint, {
             ...options,
             method: 'PUT',
-            body: data ? JSON.stringify(data) : undefined,
+            body: data instanceof FormData ? data : (data ? JSON.stringify(data) : undefined),
         });
     }
 

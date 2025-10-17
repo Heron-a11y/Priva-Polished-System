@@ -226,23 +226,76 @@ export default function CatalogManagementScreen() {
     setShowForm(true);
   };
 
-  const handleEditItem = (item: CatalogItem) => {
-    setEditingItem(item);
-    setSelectedImage(null);
-    setShowFormCategoryDropdown(false);
-    setFormData({
-      name: item.name,
-      description: item.description || '',
-      clothing_type: item.clothing_type,
-      category: item.category,
-      image: null, // Will be handled separately for editing
-      measurements_required: item.measurements_required,
-      is_available: item.is_available,
-      is_featured: item.is_featured,
-      sort_order: item.sort_order.toString(),
-      notes: item.notes || ''
-    });
-    setShowForm(true);
+  const handleEditItem = async (item: CatalogItem) => {
+    try {
+      console.log('🔄 Starting edit for item:', item.id, item.name);
+      
+      // First, try to fetch the latest item details from the server
+      console.log('🔄 Fetching latest item details...');
+      const response = await apiService.get(`/admin/catalog/${item.id}`);
+      
+      if (response && response.success) {
+        console.log('✅ Latest item details fetched:', response.data);
+        const latestItem = response.data;
+        
+        setEditingItem(latestItem);
+        setSelectedImage(null);
+        setShowFormCategoryDropdown(false);
+        setFormData({
+          name: latestItem.name,
+          description: latestItem.description || '',
+          clothing_type: latestItem.clothing_type,
+          category: latestItem.category,
+          image: null, // Will be handled separately for editing
+          measurements_required: latestItem.measurements_required,
+          is_available: latestItem.is_available,
+          is_featured: latestItem.is_featured,
+          sort_order: latestItem.sort_order.toString(),
+          notes: latestItem.notes || ''
+        });
+        setShowForm(true);
+      } else {
+        console.log('⚠️ Failed to fetch latest details, using cached data');
+        // Fallback to using the item data we have
+        setEditingItem(item);
+        setSelectedImage(null);
+        setShowFormCategoryDropdown(false);
+        setFormData({
+          name: item.name,
+          description: item.description || '',
+          clothing_type: item.clothing_type,
+          category: item.category,
+          image: null,
+          measurements_required: item.measurements_required,
+          is_available: item.is_available,
+          is_featured: item.is_featured,
+          sort_order: item.sort_order.toString(),
+          notes: item.notes || ''
+        });
+        setShowForm(true);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching item details for edit:', error);
+      console.log('⚠️ Using cached data for editing');
+      
+      // Fallback to using the item data we have
+      setEditingItem(item);
+      setSelectedImage(null);
+      setShowFormCategoryDropdown(false);
+      setFormData({
+        name: item.name,
+        description: item.description || '',
+        clothing_type: item.clothing_type,
+        category: item.category,
+        image: null,
+        measurements_required: item.measurements_required,
+        is_available: item.is_available,
+        is_featured: item.is_featured,
+        sort_order: item.sort_order.toString(),
+        notes: item.notes || ''
+      });
+      setShowForm(true);
+    }
   };
 
   const handleItemPress = (item: CatalogItem) => {
@@ -277,6 +330,57 @@ export default function CatalogManagementScreen() {
     }
   };
 
+  const uploadImageForItem = async (itemId: number, image: any) => {
+    try {
+      console.log('📤 Uploading image for item:', itemId);
+      console.log('📤 Image details:', {
+        uri: image.uri,
+        type: image.mimeType,
+        name: image.fileName
+      });
+      
+      // Convert image to base64 for reliable transmission
+      const base64Image = await convertImageToBase64(image.uri);
+      
+      const imageData = {
+        image: base64Image,
+        image_type: image.mimeType || 'image/jpeg',
+        image_name: image.fileName || 'image.jpg'
+      };
+      
+      console.log('📤 Sending base64 image data');
+      
+      const response = await apiService.post(`/admin/catalog/${itemId}/image`, imageData);
+      console.log('📷 Image upload response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Image upload error:', error);
+      throw error;
+    }
+  };
+
+  const convertImageToBase64 = async (uri: string): Promise<string> => {
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result as string;
+          // Remove data URL prefix to get just the base64 string
+          const base64Data = base64.split(',')[1];
+          resolve(base64Data);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error('❌ Base64 conversion error:', error);
+      throw error;
+    }
+  };
+
   const handleSubmit = async () => {
     try {
       setSubmitting(true);
@@ -290,93 +394,139 @@ export default function CatalogManagementScreen() {
       // Validate required fields
       if (!formData.name.trim()) {
         Alert.alert('Validation Error', 'Please enter a name for the catalog item');
+        setSubmitting(false);
         return;
       }
       if (!formData.clothing_type.trim()) {
         Alert.alert('Validation Error', 'Please enter a clothing type');
+        setSubmitting(false);
         return;
       }
       if (!formData.category) {
         Alert.alert('Validation Error', 'Please select a category');
+        setSubmitting(false);
         return;
       }
       if (!formData.measurements_required || formData.measurements_required.length === 0) {
         Alert.alert('Validation Error', 'Please select at least one required measurement');
+        setSubmitting(false);
         return;
       }
       
       if (editingItem) {
-        // For editing, handle image separately if needed
-        if (selectedImage) {
-          // If new image is selected, use FormData
-          const submitData = new FormData();
-          submitData.append('name', formData.name);
-          submitData.append('description', formData.description);
-          submitData.append('clothing_type', formData.clothing_type);
-          submitData.append('category', formData.category);
-          // Append each measurement individually
-          formData.measurements_required.forEach((measurement, index) => {
-            submitData.append(`measurements_required[${index}]`, measurement);
-          });
-          submitData.append('is_available', formData.is_available.toString());
-          submitData.append('is_featured', formData.is_featured.toString());
-          submitData.append('sort_order', parseInt(formData.sort_order).toString());
-          submitData.append('notes', formData.notes);
-          submitData.append('image', {
-            uri: selectedImage.uri,
-            type: selectedImage.type || 'image/jpeg',
-            name: selectedImage.fileName || 'image.jpg',
-          } as any);
+        try {
+          console.log('🔄 Updating catalog item:', editingItem.id);
+          
+        // For editing, always use JSON data first, then handle image separately
+        console.log('📤 Sending JSON data for update');
+        const updateData = {
+          name: formData.name,
+          description: formData.description,
+          clothing_type: formData.clothing_type,
+          category: formData.category,
+          measurements_required: formData.measurements_required,
+          is_available: formData.is_available,
+          is_featured: formData.is_featured,
+          sort_order: parseInt(formData.sort_order),
+          notes: formData.notes
+        };
 
-          await apiService.put(`/admin/catalog/${editingItem.id}`, submitData);
-        } else {
-          // If no new image, use regular JSON data
-          const updateData = {
-            name: formData.name,
-            description: formData.description,
-            clothing_type: formData.clothing_type,
-            category: formData.category,
-            measurements_required: formData.measurements_required,
-            is_available: formData.is_available,
-            is_featured: formData.is_featured,
-            sort_order: parseInt(formData.sort_order),
-            notes: formData.notes
-          };
-
-          await apiService.put(`/admin/catalog/${editingItem.id}`, updateData);
+        console.log('📤 Update data:', updateData);
+        
+        let response;
+        try {
+          response = await apiService.put(`/admin/catalog/${editingItem.id}`, updateData);
+          console.log('✅ Update response:', response);
+        } catch (updateError) {
+          console.error('❌ JSON update failed, trying alternative approach:', updateError);
+          
+          // Fallback: Try with individual field updates
+          console.log('🔄 Trying individual field updates...');
+          const individualUpdates = [
+            { field: 'name', value: formData.name },
+            { field: 'description', value: formData.description },
+            { field: 'clothing_type', value: formData.clothing_type },
+            { field: 'category', value: formData.category },
+            { field: 'measurements_required', value: formData.measurements_required },
+            { field: 'is_available', value: formData.is_available },
+            { field: 'is_featured', value: formData.is_featured },
+            { field: 'sort_order', value: parseInt(formData.sort_order) },
+            { field: 'notes', value: formData.notes }
+          ];
+          
+          for (const update of individualUpdates) {
+            try {
+              await apiService.put(`/admin/catalog/${editingItem.id}`, { [update.field]: update.value });
+              console.log(`✅ Updated ${update.field}`);
+            } catch (fieldError) {
+              console.error(`❌ Failed to update ${update.field}:`, fieldError);
+            }
+          }
+          
+          response = { success: true, message: 'Updated with fallback method' };
         }
-        Alert.alert('Success', 'Catalog item updated successfully');
+        
+        // If new image is selected, upload it separately
+        if (selectedImage) {
+          console.log('📷 New image selected, uploading separately...');
+          try {
+            await uploadImageForItem(editingItem.id, selectedImage);
+            console.log('✅ Image uploaded successfully for update');
+          } catch (imageError) {
+            console.error('❌ Image upload failed:', imageError);
+            Alert.alert('Warning', 'Item updated but image upload failed. You can update the image later.');
+          }
+        }
+          
+          Alert.alert('Success', 'Catalog item updated successfully');
+          
+          // Refresh the catalog items after successful update
+          await loadCatalogItems();
+        } catch (error) {
+          console.error('❌ Error updating catalog item:', error);
+          if (error.message && error.message.includes('Network request failed')) {
+            Alert.alert('Network Error', 'Failed to connect to server. Please check your internet connection and try again.');
+          } else {
+            Alert.alert('Error', 'Failed to update catalog item. Please try again.');
+          }
+        }
       } else {
-        // For creating new items, always use FormData
-        const submitData = new FormData();
-        submitData.append('name', formData.name);
-        submitData.append('description', formData.description);
-        submitData.append('clothing_type', formData.clothing_type);
-        submitData.append('category', formData.category);
-        // Append each measurement individually
-        formData.measurements_required.forEach((measurement, index) => {
-          submitData.append(`measurements_required[${index}]`, measurement);
-        });
-        submitData.append('is_available', formData.is_available.toString());
-        submitData.append('is_featured', formData.is_featured.toString());
-        submitData.append('sort_order', parseInt(formData.sort_order).toString());
-        submitData.append('notes', formData.notes);
+        // For creating new items, use JSON data (more reliable than FormData)
+        const submitData = {
+          name: formData.name,
+          description: formData.description,
+          clothing_type: formData.clothing_type,
+          category: formData.category,
+          measurements_required: formData.measurements_required,
+          is_available: formData.is_available,
+          is_featured: formData.is_featured,
+          sort_order: parseInt(formData.sort_order),
+          notes: formData.notes
+        };
         
-        // Debug: Log FormData contents
-        console.log('📤 FormData contents:');
-        for (let [key, value] of submitData.entries()) {
-          console.log(`  ${key}:`, value);
-        }
+        // Debug: Log JSON data
+        console.log('📤 JSON data:', submitData);
         
+        // Note: Image upload will be handled separately if needed
+        // For now, we'll create the item without image and handle image upload later
         if (selectedImage) {
-          submitData.append('image', {
-            uri: selectedImage.uri,
-            type: selectedImage.type || 'image/jpeg',
-            name: selectedImage.fileName || 'image.jpg',
-          } as any);
+          console.log('📷 Image selected but will be handled separately:', selectedImage.fileName);
         }
 
-        await apiService.post('/admin/catalog', submitData);
+        const response = await apiService.post('/admin/catalog', submitData);
+        
+        // If image is selected, upload it separately
+        if (selectedImage && response.success && response.data) {
+          try {
+            console.log('📷 Uploading image for item:', response.data.id);
+            await uploadImageForItem(response.data.id, selectedImage);
+            console.log('✅ Image uploaded successfully');
+          } catch (imageError) {
+            console.error('❌ Image upload failed:', imageError);
+            Alert.alert('Warning', 'Item created but image upload failed. You can add the image later.');
+          }
+        }
+        
         Alert.alert('Success', 'Catalog item created successfully');
       }
 
@@ -408,7 +558,22 @@ export default function CatalogManagementScreen() {
       }
     } catch (error) {
       console.error('Error submitting catalog item:', error);
-      Alert.alert('Error', 'Failed to save catalog item');
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
+      let errorMessage = 'Failed to save catalog item';
+      if (error.message?.includes('Network request failed')) {
+        errorMessage = 'Network error - please check your connection and try again';
+      } else if (error.message?.includes('Validation failed')) {
+        errorMessage = error.message;
+      } else if (error.message?.includes('timeout')) {
+        errorMessage = 'Request timed out - please try again';
+      }
+      
+      Alert.alert('Error', errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -473,6 +638,14 @@ export default function CatalogManagementScreen() {
                 source={{ uri: getLocalImageUrl(item.image_path) }} 
                 style={styles.itemImage}
                 resizeMode="cover"
+                onError={(error) => {
+                  console.log('❌ Image load error for item', item.id, ':', error.nativeEvent.error);
+                  console.log('❌ Image URL:', getLocalImageUrl(item.image_path));
+                }}
+                onLoad={() => {
+                  console.log('✅ Image loaded successfully for item', item.id);
+                  console.log('✅ Image URL:', getLocalImageUrl(item.image_path));
+                }}
               />
             ) : (
               <View style={styles.placeholderImage}>

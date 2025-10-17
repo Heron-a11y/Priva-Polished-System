@@ -10,11 +10,14 @@ import {
   RefreshControl,
   Animated,
   Image,
-  FlatList
+  FlatList,
+  Alert
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCatalog } from '../../contexts/CatalogContext';
 import { Colors } from '../../constants/Colors';
 import apiService from '../../services/api';
 import { getLocalImageUrl } from '../../utils/imageUrlHelper';
@@ -62,6 +65,7 @@ interface PopularItem {
 export default function CustomerDashboardScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { catalogItems, getFeaturedItems, refreshCatalog, loading: catalogLoading } = useCatalog();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   
@@ -78,9 +82,38 @@ export default function CustomerDashboardScreen() {
   const [recentAppointments, setRecentAppointments] = useState<RecentAppointment[]>([]);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
   const [popularItems, setPopularItems] = useState<PopularItem[]>([]);
+  const [previousPopularCount, setPreviousPopularCount] = useState(0);
+  const [showNewItemsNotification, setShowNewItemsNotification] = useState(false);
+  const [newItemsCount, setNewItemsCount] = useState(0);
+  const [lastPopularCount, setLastPopularCount] = useState(0);
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
+  const [recentItems, setRecentItems] = useState<any[]>([]);
+  const [lastRecentCount, setLastRecentCount] = useState(0);
+  const [showNewCatalogNotification, setShowNewCatalogNotification] = useState(false);
+  const [newCatalogCount, setNewCatalogCount] = useState(0);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [lastRecentTimestamp, setLastRecentTimestamp] = useState<number>(0);
 
   useEffect(() => {
     loadDashboardData();
+    
+    // Load popular items immediately
+    loadPopularItems();
+    
+    // Load recent items immediately
+    loadRecentItems();
+    
+    // Set up auto-refresh for popular items every 3 seconds (ultra-frequent for real-time sync)
+    const popularItemsInterval = setInterval(() => {
+      console.log('🔄 Auto-refreshing popular items...');
+      loadPopularItems();
+    }, 3000);
+    
+    // Set up auto-refresh for recent items every 5 seconds
+    const recentItemsInterval = setInterval(() => {
+      console.log('🔄 Auto-refreshing recent items...');
+      loadRecentItems();
+    }, 5000);
     
     // Start floating animation
     const startFloatingAnimation = () => {
@@ -120,7 +153,75 @@ export default function CustomerDashboardScreen() {
 
     startFloatingAnimation();
     startPulseAnimation();
+    
+    // Cleanup intervals on unmount
+    return () => {
+      clearInterval(popularItemsInterval);
+      clearInterval(recentItemsInterval);
+    };
   }, []);
+
+  // Refresh popular items when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('🔄 Screen focused, refreshing popular items and recent items...');
+      loadPopularItems();
+      loadRecentItems();
+    }, [])
+  );
+
+  // Force refresh popular items and recent items every time the component mounts
+  useEffect(() => {
+    const forceRefresh = () => {
+      console.log('🔄 Force refreshing popular items and recent items on mount...');
+      loadPopularItems();
+      loadRecentItems();
+    };
+    
+    // Initial load
+    forceRefresh();
+    
+    // Also refresh after a short delay to ensure context is ready
+    const delayedRefresh = setTimeout(() => {
+      forceRefresh();
+      // Mark initial load as complete after first refresh
+      setIsInitialLoad(false);
+    }, 2000);
+    
+    return () => clearTimeout(delayedRefresh);
+  }, []);
+
+  // Sync popular items with catalog changes
+  useEffect(() => {
+    if (catalogItems.length > 0) {
+      console.log('🔄 Catalog items updated, syncing popular items...');
+      const featuredItems = getFeaturedItems();
+      
+      console.log('📊 Current popular count:', lastPopularCount);
+      console.log('📊 New featured items count:', featuredItems.length);
+      
+      // Check if new items were added
+      if (featuredItems.length > lastPopularCount && lastPopularCount > 0) {
+        const newCount = featuredItems.length - lastPopularCount;
+        console.log('🎉 New popular items detected in catalog sync!', newCount, 'new items');
+        
+        // Show notification with count
+        setNewItemsCount(newCount);
+        setShowNewItemsNotification(true);
+        
+        // Auto-hide notification after 8 seconds
+        setTimeout(() => {
+          setShowNewItemsNotification(false);
+          setNewItemsCount(0);
+        }, 8000);
+      }
+      
+      setLastPopularCount(featuredItems.length);
+      setPopularItems(featuredItems);
+      setPreviousPopularCount(featuredItems.length);
+      setLastUpdateTime(new Date());
+    }
+  }, [catalogItems, getFeaturedItems, lastPopularCount]);
 
   // Touch handlers for AR button
   const handlePressIn = () => {
@@ -246,17 +347,164 @@ export default function CustomerDashboardScreen() {
 
   const loadPopularItems = async () => {
     try {
-      const response = await apiService.get('/catalog', { params: { category: 'popular' } });
+      console.log('🔄 Loading popular items...');
+      
+      // Store current count for comparison
+      const currentCount = popularItems.length;
+      console.log('📊 Current popular items count:', currentCount);
+      
+      // Try CatalogContext first
+      try {
+        console.log('🔄 Trying CatalogContext...');
+        await refreshCatalog();
+        const featuredItems = getFeaturedItems();
+        console.log('✅ Featured items from context:', featuredItems.length);
+        
+        if (featuredItems.length > 0) {
+          console.log('📋 Featured items data:', featuredItems);
+          
+          // Check for new items and trigger notification
+          if (featuredItems.length > currentCount) {
+            const newCount = featuredItems.length - currentCount;
+            console.log('🎉 New popular items detected in context!', newCount, 'new items');
+            console.log('📊 Previous count:', currentCount, 'New count:', featuredItems.length);
+            
+            // Only show notification if we had items before (to avoid showing on first load)
+            if (currentCount > 0 && !isInitialLoad) {
+              setNewItemsCount(newCount);
+              setShowNewItemsNotification(true);
+              
+              // Auto-hide notification after 8 seconds
+              setTimeout(() => {
+                setShowNewItemsNotification(false);
+                setNewItemsCount(0);
+              }, 8000);
+            }
+          }
+          
+          setPopularItems(featuredItems);
+          setLastUpdateTime(new Date());
+          setLastPopularCount(featuredItems.length);
+          return;
+        }
+      } catch (contextError) {
+        console.log('⚠️ CatalogContext failed, trying direct API...', contextError);
+      }
+      
+      // Fallback to direct API call
+      console.log('🔄 Fallback: Direct API call...');
+      const response = await apiService.get('/catalog/popular');
+      
+      console.log('📊 Direct API response:', response);
       
       if (response && response.success) {
-        setPopularItems(response.data || []);
+        const newItems = response.data || [];
+        console.log('✅ Popular items from direct API:', newItems.length);
+        console.log('📋 Popular items data:', newItems);
+        
+        // Check for new items and trigger notification
+        if (newItems.length > currentCount) {
+          const newCount = newItems.length - currentCount;
+          console.log('🎉 New popular items detected in API!', newCount, 'new items');
+          console.log('📊 Previous count:', currentCount, 'New count:', newItems.length);
+          
+          // Only show notification if we had items before (to avoid showing on first load)
+          if (currentCount > 0 && !isInitialLoad) {
+            setNewItemsCount(newCount);
+            setShowNewItemsNotification(true);
+            
+            // Auto-hide notification after 8 seconds
+            setTimeout(() => {
+              setShowNewItemsNotification(false);
+              setNewItemsCount(0);
+            }, 8000);
+          }
+        }
+        
+        setPopularItems(newItems);
+        setLastUpdateTime(new Date());
+        setLastPopularCount(newItems.length);
       } else {
-        console.error('Failed to load popular items:', response);
+        console.error('❌ Direct API failed:', response);
         setPopularItems([]);
       }
     } catch (error) {
-      console.error('Error loading popular items:', error);
+      console.error('❌ Error loading popular items:', error);
       setPopularItems([]);
+    }
+  };
+
+  const loadRecentItems = async () => {
+    try {
+      console.log('🔄 Loading recent catalog items...');
+      
+      // Store current count for comparison
+      const currentCount = recentItems.length;
+      console.log('📊 Current recent items count:', currentCount);
+      
+      const response = await apiService.get('/catalog/recent');
+      console.log('📊 Recent items response:', response);
+      
+      if (response && response.success) {
+        const newRecentItems = response.data || [];
+        console.log('✅ Recent items from API:', newRecentItems.length);
+        console.log('📋 Recent items data:', newRecentItems);
+        
+        // Get the latest timestamp from the new items
+        const latestTimestamp = newRecentItems.length > 0 
+          ? Math.max(...newRecentItems.map(item => item.created_timestamp || 0))
+          : 0;
+        
+        console.log('📊 Latest timestamp:', latestTimestamp, 'Last timestamp:', lastRecentTimestamp);
+        
+        // Check for very recent items (created in last 5 minutes) - always show notification
+        const now = Date.now();
+        const fiveMinutesAgo = now - (5 * 60 * 1000);
+        const veryRecentItems = newRecentItems.filter(item => {
+          const itemTime = new Date(item.created_at).getTime();
+          return itemTime > fiveMinutesAgo;
+        });
+        
+        if (veryRecentItems.length > 0) {
+          console.log('🎉 Very recent items detected!', veryRecentItems.length, 'items created in last 5 minutes');
+          console.log('📋 Very recent items:', veryRecentItems.map(item => item.name));
+          
+          setNewCatalogCount(veryRecentItems.length);
+          setShowNewCatalogNotification(true);
+          
+          // Auto-hide notification after 10 seconds
+          setTimeout(() => {
+            setShowNewCatalogNotification(false);
+            setNewCatalogCount(0);
+          }, 10000);
+        }
+        // Check for new items using timestamp comparison (for subsequent loads)
+        else if (latestTimestamp > lastRecentTimestamp && !isInitialLoad) {
+          const newCount = newRecentItems.length - currentCount;
+          console.log('🎉 New catalog items detected by timestamp!', newCount, 'new items');
+          console.log('📊 Previous count:', currentCount, 'New count:', newRecentItems.length);
+          console.log('📊 Latest timestamp:', latestTimestamp, 'Last timestamp:', lastRecentTimestamp);
+          
+          setNewCatalogCount(Math.max(1, newCount)); // At least 1 new item
+          setShowNewCatalogNotification(true);
+          
+          // Auto-hide notification after 10 seconds
+          setTimeout(() => {
+            setShowNewCatalogNotification(false);
+            setNewCatalogCount(0);
+          }, 10000);
+        }
+        
+        setRecentItems(newRecentItems);
+        setLastRecentCount(newRecentItems.length);
+        setLastRecentTimestamp(latestTimestamp);
+      } else {
+        console.error('❌ Recent items API failed:', response);
+        setRecentItems([]);
+      }
+    } catch (error) {
+      console.error('❌ Error loading recent items:', error);
+      setRecentItems([]);
     }
   };
 
@@ -553,15 +801,74 @@ export default function CustomerDashboardScreen() {
         </View>
       </View>
 
+      {/* New Popular Items Notification */}
+      {showNewItemsNotification && (
+        <View style={styles.notificationBanner}>
+          <View style={styles.notificationContent}>
+            <Ionicons name="star" size={20} color="#FFD700" />
+            <View style={styles.notificationTextContainer}>
+              <Text style={styles.notificationText}>
+                {newItemsCount === 1 ? 'New popular item available!' : `${newItemsCount} new popular items available!`}
+              </Text>
+              <Text style={styles.notificationSubtext}>
+                Check out the latest featured items from our catalog
+              </Text>
+            </View>
+            <TouchableOpacity 
+              onPress={() => setShowNewItemsNotification(false)}
+              style={styles.notificationClose}
+            >
+              <Ionicons name="close" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* New Catalog Items Notification */}
+      {showNewCatalogNotification && (
+        <View style={[styles.notificationBanner, { backgroundColor: '#4CAF50' }]}>
+          <View style={styles.notificationContent}>
+            <Ionicons name="add-circle" size={20} color="#fff" />
+            <View style={styles.notificationTextContainer}>
+              <Text style={styles.notificationText}>
+                {newCatalogCount === 1 ? 'New item added to catalog!' : `${newCatalogCount} new items added to catalog!`}
+              </Text>
+              <Text style={styles.notificationSubtext}>
+                Discover the latest additions to our collection
+              </Text>
+            </View>
+            <TouchableOpacity 
+              onPress={() => setShowNewCatalogNotification(false)}
+              style={styles.notificationClose}
+            >
+              <Ionicons name="close" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Popular Items */}
-      {popularItems.length > 0 && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <View>
             <Text style={styles.sectionTitle}>Popular Items</Text>
+            <Text style={styles.debugText}>
+              Recent: {recentItems.length} | Last: {lastRecentTimestamp} | Initial: {isInitialLoad ? 'Yes' : 'No'}
+            </Text>
+          </View>
+          <View style={styles.sectionHeaderActions}>
             <TouchableOpacity onPress={() => router.push('/customer/orders' as any)}>
               <Text style={styles.viewAllText}>View All</Text>
             </TouchableOpacity>
           </View>
+        </View>
+        
+        {catalogLoading ? (
+          <View style={styles.loadingState}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.loadingText}>Loading popular items...</Text>
+          </View>
+        ) : popularItems.length > 0 ? (
           <FlatList
             data={popularItems.slice(0, 4)}
             horizontal
@@ -601,8 +908,14 @@ export default function CustomerDashboardScreen() {
             )}
             keyExtractor={(item) => item.id.toString()}
           />
-        </View>
-      )}
+        ) : (
+          <View style={styles.emptyState}>
+            <Ionicons name="shirt-outline" size={48} color={Colors.text.secondary} />
+            <Text style={styles.emptyStateText}>No popular items available</Text>
+            <Text style={styles.emptyStateSubtext}>Check back later for featured items</Text>
+          </View>
+        )}
+      </View>
 
       {/* Upcoming Appointments */}
       {recentAppointments.length > 0 && (
@@ -826,6 +1139,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+  },
+  sectionHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   sectionTitle: {
     fontSize: 18,
@@ -1115,5 +1433,75 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     lineHeight: 16,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  loadingState: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  notificationBanner: {
+    backgroundColor: '#4CAF50',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  notificationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+  },
+  notificationTextContainer: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  notificationText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  notificationSubtext: {
+    color: '#fff',
+    fontSize: 12,
+    opacity: 0.9,
+    marginTop: 2,
+  },
+  notificationClose: {
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  debugText: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginTop: 2,
   },
 }); 

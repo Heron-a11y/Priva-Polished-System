@@ -97,13 +97,14 @@ export const CatalogProvider: React.FC<CatalogProviderProps> = ({ children }) =>
     return catalogItems.filter(item => item.is_featured);
   }, [catalogItems]);
 
-  // Auto-refresh catalog data every 30 seconds to catch admin changes
+  // Auto-refresh catalog data every 5 seconds to catch admin changes (ultra-fast sync)
   useEffect(() => {
     loadCatalogItems();
     
     const interval = setInterval(() => {
+      console.log('🔄 CatalogContext: Auto-refreshing catalog...');
       refreshCatalog();
-    }, 30000); // 30 seconds
+    }, 5000); // 5 seconds for ultra-fast sync
 
     return () => clearInterval(interval);
   }, [loadCatalogItems, refreshCatalog]);

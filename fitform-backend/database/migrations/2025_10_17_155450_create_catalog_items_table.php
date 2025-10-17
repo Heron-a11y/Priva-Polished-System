@@ -13,6 +13,16 @@ return new class extends Migration
     {
         Schema::create('catalog_items', function (Blueprint $table) {
             $table->id();
+            $table->string('name');
+            $table->text('description')->nullable();
+            $table->string('clothing_type');
+            $table->enum('category', ['formal_attire', 'ph_traditional', 'evening_party_wear', 'wedding_bridal', 'special']);
+            $table->string('image_path')->nullable();
+            $table->json('measurements_required');
+            $table->boolean('is_available')->default(true);
+            $table->boolean('is_featured')->default(false);
+            $table->integer('sort_order')->default(0);
+            $table->text('notes')->nullable();
             $table->timestamps();
         });
     }
