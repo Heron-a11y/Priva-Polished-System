@@ -10,9 +10,10 @@ import { Colors } from '../../constants/Colors';
 import SuccessModal from '../../components/SuccessModal';
 import ARMeasurementScreen from '../screens/ARMeasurementScreen';
 import MeasurementValidationWarning from '../../components/MeasurementValidationWarning';
-import ClothingTypeCatalog from '../../components/ClothingTypeCatalog';
-import { MEASUREMENT_REQUIREMENTS, CLOTHING_TYPES } from '../../constants/ClothingTypes';
+import DynamicClothingTypeCatalog from '../../components/DynamicClothingTypeCatalog';
+import { MEASUREMENT_REQUIREMENTS } from '../../constants/ClothingTypes';
 import { MeasurementData, CompleteMeasurements, normalizeMeasurementData } from '../../types/measurements';
+import { useCatalogData } from '../../hooks/useCatalogData';
 
 const { width } = Dimensions.get('window');
 
@@ -136,6 +137,7 @@ export default function RentalOrderFlow() {
   const { user } = useAuth();
   const { selectedOrderForReview, clearOrderReview } = useNotificationContext();
   const router = useRouter();
+  const { catalogItems, getItemById, refreshCatalog } = useCatalogData();
 
   const handleStartDateChange = (event: any, selectedDate?: Date) => {
     setShowStartDatePicker(false);
@@ -310,7 +312,9 @@ export default function RentalOrderFlow() {
 
   useEffect(() => {
     fetchRentalOrders();
-  }, []);
+    // Refresh catalog data to ensure we have the latest items
+    refreshCatalog();
+  }, [refreshCatalog]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -539,8 +543,7 @@ export default function RentalOrderFlow() {
       }
 
       const payload = {
-        item_name: formData.rentalType === 'other' ? formData.otherType : 
-                   CLOTHING_TYPES.find(t => t.id === formData.rentalType)?.label,
+        item_name: formData.rentalType === 'other' ? formData.otherType : formData.rentalType,
         rental_type: formData.rentalType,
         start_date: formData.startDate,
         special_requests: formData.specialRequests,
@@ -549,8 +552,7 @@ export default function RentalOrderFlow() {
         status: 'pending',
         // Add missing required fields
         rental_date: formData.startDate, // Use start_date as rental_date
-        clothing_type: formData.rentalType === 'other' ? formData.otherType : 
-                      CLOTHING_TYPES.find(t => t.id === formData.rentalType)?.label,
+        clothing_type: formData.rentalType === 'other' ? formData.otherType : formData.rentalType,
         measurements: measurements,
         measurement_method: measurementMethod // Track measurement method
       };
@@ -965,7 +967,7 @@ export default function RentalOrderFlow() {
             {/* Rental Type Selection */}
             <View style={styles.formSection}>
               <Text style={styles.formSectionTitle}>Select Rental Type</Text>
-              <ClothingTypeCatalog
+              <DynamicClothingTypeCatalog
                 selectedType={formData.rentalType}
                 onSelectType={(typeId) => setFormData({...formData, rentalType: typeId})}
                 showCategories={true}
@@ -1255,46 +1257,11 @@ export default function RentalOrderFlow() {
             <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
               <View style={styles.orderDetailCard}>
                 {/* Item Image */}
-                {(() => {
-                  // Extract clothing type from item_name (e.g., "Suit Marty - Badly needed..." -> "Suit Marty")
-                  const itemText = selectedOrder.item_name || '';
-                  const clothingTypeName = itemText.split(' - ')[0] || itemText.split(',')[0] || itemText;
-                  
-                  const clothingType = CLOTHING_TYPES.find(type => 
-                    type.label === clothingTypeName || 
-                    type.label === selectedOrder.item_name ||
-                    itemText.includes(type.label)
-                  );
-                  
-                  return clothingType ? (
-                    <View style={styles.itemImageContainer}>
-                      {clothingType.image ? (
-                        <Image 
-                          source={clothingType.image} 
-                          style={styles.itemImage}
-                          resizeMode="cover"
-                        />
-                      ) : clothingType.imageUrl ? (
-                        <Image 
-                          source={{ uri: clothingType.imageUrl }} 
-                          style={styles.itemImage}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View style={[styles.itemImagePlaceholder, { backgroundColor: clothingType.color }]}>
-                          <Text style={styles.itemImageIcon}>{clothingType.icon}</Text>
-                        </View>
-                      )}
-                    </View>
-                  ) : (
-                    // Fallback image if no clothing type found
-                    <View style={styles.itemImageContainer}>
-                      <View style={[styles.itemImagePlaceholder, { backgroundColor: '#6B7280' }]}>
-                        <Ionicons name="shirt-outline" size={48} color="#fff" />
-                      </View>
-                    </View>
-                  );
-                })()}
+                <View style={styles.itemImageContainer}>
+                  <View style={[styles.itemImagePlaceholder, { backgroundColor: '#6B7280' }]}>
+                    <Ionicons name="shirt-outline" size={48} color="#fff" />
+                  </View>
+                </View>
                 
                 <View style={styles.orderDetailHeader}>
                   <Text style={styles.orderDetailTitle}>{selectedOrder.item_name}</Text>

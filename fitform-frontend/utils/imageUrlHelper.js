@@ -10,66 +10,44 @@ class ImageUrlHelper {
 
   // Get the appropriate base URL based on environment
   getBaseUrl() {
-    // Use dynamic network configuration if available
-    try {
-      const networkUrl = networkConfig.getBackendUrl();
-      if (networkUrl) {
-        // Remove /api suffix if present to get base URL
-        return networkUrl.replace('/api', '');
-      }
-    } catch (error) {
-      console.log('⚠️ Could not get network config, using fallback:', error.message);
-    }
-    
-    return this.isDevelopment ? this.baseUrl : this.ngrokUrl;
+    // Force use of the correct IP address (192.168.1.56) for images
+    // The network config might return 192.168.1.55 which doesn't work
+    return 'http://192.168.1.56:8000';
   }
 
   // Convert image URL to local development URL
   getLocalImageUrl(imageUrl) {
     if (!imageUrl) {
-      console.log('⚠️ No image URL provided');
       return null;
     }
 
-    console.log('🖼️ Processing image URL:', imageUrl);
-
     // If it's already a local URL, return as is
     if (imageUrl.includes('192.168.1.56') || imageUrl.includes('192.168.1.105') || imageUrl.includes('localhost') || imageUrl.includes('192.168.1.108')) {
-      console.log('✅ Already local URL:', imageUrl);
       return imageUrl;
     }
 
     // If it's an ngrok URL, convert to local
     if (imageUrl.includes('ngrok.io')) {
-      const localUrl = imageUrl.replace(this.ngrokUrl, this.baseUrl);
-      console.log('🔄 Converted ngrok to local:', localUrl);
-      return localUrl;
+      return imageUrl.replace(this.ngrokUrl, this.baseUrl);
     }
 
     // If it's a relative path, prepend base URL
     if (imageUrl.startsWith('/')) {
-      const fullUrl = `${this.getBaseUrl()}${imageUrl}`;
-      console.log('🔄 Added base URL to relative path:', fullUrl);
-      return fullUrl;
+      return `${this.getBaseUrl()}${imageUrl}`;
     }
 
     // If it's already a full URL, return as is
     if (imageUrl.startsWith('http')) {
-      console.log('✅ Full URL provided:', imageUrl);
       return imageUrl;
     }
 
     // For Laravel storage paths, prepend /storage/ and base URL
-    if (imageUrl.startsWith('profiles/') || imageUrl.startsWith('storage/')) {
-      const storageUrl = `${this.getBaseUrl()}/storage/${imageUrl.replace('storage/', '')}`;
-      console.log('🔄 Laravel storage URL construction:', storageUrl);
-      return storageUrl;
+    if (imageUrl.startsWith('profiles/') || imageUrl.startsWith('catalog/') || imageUrl.startsWith('storage/')) {
+      return `${this.getBaseUrl()}/storage/${imageUrl.replace('storage/', '')}`;
     }
 
     // Default: prepend base URL
-    const defaultUrl = `${this.getBaseUrl()}/${imageUrl}`;
-    console.log('🔄 Default URL construction:', defaultUrl);
-    return defaultUrl;
+    return `${this.getBaseUrl()}/${imageUrl}`;
   }
 
   // Convert image URL to production URL

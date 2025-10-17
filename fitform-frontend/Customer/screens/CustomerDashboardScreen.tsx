@@ -8,13 +8,16 @@ import {
   Dimensions,
   ActivityIndicator,
   RefreshControl,
-  Animated
+  Animated,
+  Image,
+  FlatList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { Colors } from '../../constants/Colors';
 import apiService from '../../services/api';
+import { getLocalImageUrl } from '../../utils/imageUrlHelper';
 
 const { width } = Dimensions.get('window');
 
@@ -42,6 +45,20 @@ interface RecentOrder {
   total_amount: number;
 }
 
+interface PopularItem {
+  id: number;
+  name: string;
+  description: string;
+  clothing_type: string;
+  category: string;
+  image_path: string;
+  is_featured: boolean;
+  is_available: boolean;
+  measurements_required: string[];
+  sort_order: number;
+  notes?: string;
+}
+
 export default function CustomerDashboardScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -60,6 +77,7 @@ export default function CustomerDashboardScreen() {
   });
   const [recentAppointments, setRecentAppointments] = useState<RecentAppointment[]>([]);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [popularItems, setPopularItems] = useState<PopularItem[]>([]);
 
   useEffect(() => {
     loadDashboardData();
@@ -130,7 +148,8 @@ export default function CustomerDashboardScreen() {
       await Promise.all([
         loadStatsWithData(appointments),
         loadRecentAppointmentsWithData(appointments),
-        loadRecentOrders()
+        loadRecentOrders(),
+        loadPopularItems()
       ]);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -184,6 +203,22 @@ export default function CustomerDashboardScreen() {
     } catch (error) {
       console.error('Error loading recent orders:', error);
       setRecentOrders([]);
+    }
+  };
+
+  const loadPopularItems = async () => {
+    try {
+      const response = await apiService.get('/catalog', { params: { category: 'popular' } });
+      
+      if (response && response.success) {
+        setPopularItems(response.data || []);
+      } else {
+        console.error('Failed to load popular items:', response);
+        setPopularItems([]);
+      }
+    } catch (error) {
+      console.error('Error loading popular items:', error);
+      setPopularItems([]);
     }
   };
 
@@ -379,6 +414,57 @@ export default function CustomerDashboardScreen() {
           ))}
         </View>
       </View>
+
+      {/* Popular Items */}
+      {popularItems.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Popular Items</Text>
+            <TouchableOpacity onPress={() => router.push('/customer/orders' as any)}>
+              <Text style={styles.viewAllText}>View All</Text>
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={popularItems.slice(0, 4)}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.popularItemsContainer}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.popularItemCard}
+                onPress={() => router.push('/customer/orders' as any)}
+              >
+                <View style={styles.popularItemImageContainer}>
+                  {item.image_path ? (
+                    <Image 
+                      source={{ uri: getLocalImageUrl(item.image_path) }} 
+                      style={styles.popularItemImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.popularItemPlaceholder}>
+                      <Ionicons name="shirt-outline" size={32} color="#fff" />
+                    </View>
+                  )}
+                  <View style={styles.popularBadge}>
+                    <Ionicons name="star" size={12} color="#FFD700" />
+                    <Text style={styles.popularBadgeText}>Popular</Text>
+                  </View>
+                </View>
+                <View style={styles.popularItemContent}>
+                  <Text style={styles.popularItemName} numberOfLines={2}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.popularItemDescription} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            keyExtractor={(item) => item.id.toString()}
+          />
+        </View>
+      )}
 
       {/* Upcoming Appointments */}
       {recentAppointments.length > 0 && (
@@ -824,5 +910,72 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
+  },
+  // Popular Items Styles
+  popularItemsContainer: {
+    paddingHorizontal: 4,
+  },
+  popularItemCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginRight: 12,
+    width: 160,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    overflow: 'hidden',
+  },
+  popularItemImageContainer: {
+    position: 'relative',
+    height: 120,
+    backgroundColor: '#f8f9fa',
+  },
+  popularItemImage: {
+    width: '100%',
+    height: '100%',
+  },
+  popularItemPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#e9ecef',
+  },
+  popularBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  popularBadgeText: {
+    color: '#000',
+    fontSize: 10,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  popularItemContent: {
+    padding: 12,
+  },
+  popularItemName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#014D40',
+    marginBottom: 4,
+  },
+  popularItemDescription: {
+    fontSize: 12,
+    color: '#666',
+    lineHeight: 16,
   },
 }); 

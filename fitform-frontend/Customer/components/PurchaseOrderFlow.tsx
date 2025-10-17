@@ -26,9 +26,10 @@ import { Colors } from '../../constants/Colors';
 import SuccessModal from '../../components/SuccessModal';
 import ARMeasurementScreen from '../screens/ARMeasurementScreen';
 import MeasurementValidationWarning from '../../components/MeasurementValidationWarning';
-import ClothingTypeCatalog from '../../components/ClothingTypeCatalog';
-import { MEASUREMENT_REQUIREMENTS, CLOTHING_TYPES } from '../../constants/ClothingTypes';
+import DynamicClothingTypeCatalog from '../../components/DynamicClothingTypeCatalog';
+import { MEASUREMENT_REQUIREMENTS } from '../../constants/ClothingTypes';
 import { MeasurementData, CompleteMeasurements, normalizeMeasurementData } from '../../types/measurements';
+import { useCatalogData } from '../../hooks/useCatalogData';
 
 // CLOTHING_TYPES moved to constants/ClothingTypes.ts
 
@@ -140,6 +141,7 @@ export default function PurchaseOrderFlow() {
   const { selectedOrderForReview, clearOrderReview } = useNotificationContext();
   const { user } = useAuth();
   const router = useRouter();
+  const { catalogItems, getItemById, refreshCatalog } = useCatalogData();
 
   useEffect(() => {
     if (showQuotationModal) {
@@ -419,7 +421,15 @@ export default function PurchaseOrderFlow() {
   // Helper function to get required measurements for selected clothing type
   const getRequiredMeasurements = () => {
     if (!clothingType) return [];
-    return MEASUREMENT_REQUIREMENTS[clothingType as keyof typeof MEASUREMENT_REQUIREMENTS] || MEASUREMENT_REQUIREMENTS.other;
+    
+    // Try to get measurements from catalog item
+    const catalogItem = getItemById(clothingType);
+    if (catalogItem && catalogItem.measurements_required) {
+      return catalogItem.measurements_required;
+    }
+    
+    // Fallback to default measurements
+    return ['bust', 'waist', 'hips', 'shoulder_width', 'arm_length', 'inseam'];
   };
 
   // Helper function to validate measurements based on clothing type
@@ -499,7 +509,9 @@ export default function PurchaseOrderFlow() {
 
   useEffect(() => {
     fetchPurchaseOrders();
-  }, [fetchPurchaseOrders]);
+    // Refresh catalog data to ensure we have the latest items
+    refreshCatalog();
+  }, [fetchPurchaseOrders, refreshCatalog]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -560,8 +572,7 @@ export default function PurchaseOrderFlow() {
     setErrors({});
     try {
       // Compose payload
-      const finalClothingType = clothingType === 'other' ? otherClothing.trim() : 
-                               CLOTHING_TYPES.find(t => t.id === clothingType)?.label || clothingType;
+      const finalClothingType = clothingType === 'other' ? otherClothing.trim() : clothingType;
       
       // Prepare measurements based on method
       let finalMeasurements = {
@@ -1409,7 +1420,7 @@ export default function PurchaseOrderFlow() {
               <View style={styles.formSection}>
           <Text style={styles.label}>What type of clothes do you want to purchase?</Text>
                 <Text style={styles.subtitle}>Choose from our selection of custom garments</Text>
-                <ClothingTypeCatalog
+                <DynamicClothingTypeCatalog
                   selectedType={clothingType}
                   onSelectType={(typeId) => { 
                     setClothingType(typeId); 
@@ -1692,8 +1703,7 @@ export default function PurchaseOrderFlow() {
                     <View style={styles.reviewItem}>
                       <Text style={styles.reviewLabel}>Type:</Text>
                       <Text style={styles.reviewValue}>
-                        {clothingType === 'other' ? otherClothing.trim() : 
-                         CLOTHING_TYPES.find(t => t.id === clothingType)?.label || clothingType}
+                        {clothingType === 'other' ? otherClothing.trim() : clothingType}
                       </Text>
                     </View>
                   </View>
@@ -1805,46 +1815,11 @@ export default function PurchaseOrderFlow() {
             <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
               <View style={styles.orderDetailCard}>
                 {/* Item Image */}
-                {(() => {
-                  // Extract clothing type from item_name (e.g., "Suit Marty - Badly needed..." -> "Suit Marty")
-                  const itemText = selectedOrder.item_name || '';
-                  const clothingTypeName = itemText.split(' - ')[0] || itemText.split(',')[0] || itemText;
-                  
-                  const clothingType = CLOTHING_TYPES.find(type => 
-                    type.label === clothingTypeName || 
-                    type.label === selectedOrder.item_name ||
-                    itemText.includes(type.label)
-                  );
-                  
-                  return clothingType ? (
-                    <View style={styles.itemImageContainer}>
-                      {clothingType.image ? (
-                        <Image 
-                          source={clothingType.image} 
-                          style={styles.itemImage}
-                          resizeMode="cover"
-                        />
-                      ) : clothingType.imageUrl ? (
-                        <Image 
-                          source={{ uri: clothingType.imageUrl }} 
-                          style={styles.itemImage}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View style={[styles.itemImagePlaceholder, { backgroundColor: clothingType.color }]}>
-                          <Text style={styles.itemImageIcon}>{clothingType.icon}</Text>
-                        </View>
-                      )}
-                    </View>
-                  ) : (
-                    // Fallback image if no clothing type found
-                    <View style={styles.itemImageContainer}>
-                      <View style={[styles.itemImagePlaceholder, { backgroundColor: '#6B7280' }]}>
-                        <Ionicons name="shirt-outline" size={48} color="#fff" />
-                      </View>
-                    </View>
-                  );
-                })()}
+                <View style={styles.itemImageContainer}>
+                  <View style={[styles.itemImagePlaceholder, { backgroundColor: '#6B7280' }]}>
+                    <Ionicons name="shirt-outline" size={48} color="#fff" />
+                  </View>
+                </View>
                 
                 <View style={styles.orderDetailHeader}>
                   <Text style={styles.orderDetailTitle}>{selectedOrder.item_name || 'Order Details'}</Text>

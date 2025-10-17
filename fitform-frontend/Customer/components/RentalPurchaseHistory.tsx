@@ -16,10 +16,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { CLOTHING_TYPES } from '../../constants/ClothingTypes';
+// Removed static CLOTHING_TYPES import - now using dynamic catalog
 import apiService from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
+import { useCatalogData } from '../../hooks/useCatalogData';
 
 const { width, height } = Dimensions.get('window');
 const isMobile = width < 768;
@@ -212,6 +213,7 @@ export default function RentalPurchaseHistory() {
   const [refreshing, setRefreshing] = useState(false);
 
   const { user } = useAuth();
+  const { catalogItems, getItemById, refreshCatalog } = useCatalogData();
 
   const statusOptions = [
     { value: 'all', label: 'All Status' },
@@ -233,8 +235,10 @@ export default function RentalPurchaseHistory() {
   useEffect(() => {
     if (user) {
       fetchHistory();
+      // Refresh catalog data to ensure we have the latest items
+      refreshCatalog();
     }
-  }, [user]);
+  }, [user, refreshCatalog]);
 
   useEffect(() => {
     filterHistory();
@@ -606,46 +610,11 @@ export default function RentalPurchaseHistory() {
           <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
             <View style={styles.orderDetailCard}>
               {/* Item Image */}
-              {(() => {
-                // Extract clothing type from item_name (e.g., "Suit Marty - Badly needed..." -> "Suit Marty")
-                const itemText = selectedItem.item_name || '';
-                const clothingTypeName = itemText.split(' - ')[0] || itemText.split(',')[0] || itemText;
-                
-                const clothingType = CLOTHING_TYPES.find(type => 
-                  type.label === clothingTypeName || 
-                  type.label === selectedItem.item_name ||
-                  itemText.includes(type.label)
-                );
-                
-                return clothingType ? (
-                  <View style={styles.itemImageContainer}>
-                    {clothingType.image ? (
-                      <Image 
-                        source={clothingType.image} 
-                        style={styles.itemImage}
-                        resizeMode="cover"
-                      />
-                    ) : clothingType.imageUrl ? (
-                      <Image 
-                        source={{ uri: clothingType.imageUrl }} 
-                        style={styles.itemImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={[styles.itemImagePlaceholder, { backgroundColor: clothingType.color }]}>
-                        <Text style={styles.itemImageIcon}>{clothingType.icon}</Text>
-                      </View>
-                    )}
-                  </View>
-                ) : (
-                  // Fallback image if no clothing type found
-                  <View style={styles.itemImageContainer}>
-                    <View style={[styles.itemImagePlaceholder, { backgroundColor: '#6B7280' }]}>
-                      <Ionicons name="shirt-outline" size={48} color="#fff" />
-                    </View>
-                  </View>
-                );
-              })()}
+              <View style={styles.itemImageContainer}>
+                <View style={[styles.itemImagePlaceholder, { backgroundColor: '#6B7280' }]}>
+                  <Ionicons name="shirt-outline" size={48} color="#fff" />
+                </View>
+              </View>
               
               <View style={styles.orderDetailHeader}>
                 <Text style={styles.orderDetailTitle}>{selectedItem.item_name}</Text>

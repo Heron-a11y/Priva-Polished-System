@@ -98,6 +98,18 @@ Route::middleware([CorsMiddleware::class])->group(function () {
     // Report generation routes
     Route::get('/admin/orders/generate-report', [\App\Http\Controllers\OrderController::class, 'generateReport']);
     Route::get('/admin/appointments/generate-report', [\App\Http\Controllers\AppointmentController::class, 'generateReport']);
+    
+    // Catalog Management Routes (temporarily without auth for testing)
+    Route::get('/admin/catalog', [\App\Http\Controllers\CatalogController::class, 'index']);
+    Route::post('/admin/catalog', [\App\Http\Controllers\CatalogController::class, 'store']);
+    Route::get('/admin/catalog/{id}', [\App\Http\Controllers\CatalogController::class, 'show']);
+    Route::put('/admin/catalog/{id}', [\App\Http\Controllers\CatalogController::class, 'update']);
+    Route::delete('/admin/catalog/{id}', [\App\Http\Controllers\CatalogController::class, 'destroy']);
+    Route::post('/admin/catalog/{id}/featured', [\App\Http\Controllers\CatalogController::class, 'updateFeaturedStatus']);
+    Route::post('/admin/catalog/sort-order', [\App\Http\Controllers\CatalogController::class, 'updateSortOrder']);
+    
+    // Customer Catalog Routes (public access)
+    Route::get('/catalog', [\App\Http\Controllers\CatalogController::class, 'getCustomerCatalog']);
 
     // Appointments - temporarily moved outside auth for testing
     Route::get('/appointments', function() {

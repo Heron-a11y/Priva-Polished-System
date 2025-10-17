@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, Dimensions, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Dimensions, Alert, ScrollView } from 'react-native';
 import { Link, usePathname, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -15,6 +15,7 @@ const adminMenuItems = [
   { name: 'Manage Appointments', icon: 'calendar', path: '/admin/appointments' },
   { name: 'Manage Orders', icon: 'file-tray-full', path: '/admin/orders' },
   { name: 'Manage Customers', icon: 'people', path: '/admin/customers' },
+  { name: 'Catalog Management', icon: 'shirt', path: '/admin/catalog' },
   { name: 'Measurement History', icon: 'analytics', path: '/admin/measurement-history' },
   { name: 'Sizing Standards', icon: 'resize', path: '/admin/sizing' },
 ];
@@ -99,7 +100,13 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ open, setOpen }) => {
               </>
             )}
           </View>
-          <View style={styles.menuContainer}>
+          <ScrollView 
+            style={styles.menuContainer} 
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.menuScrollContent}
+            bounces={false}
+            overScrollMode="never"
+          >
             {adminMenuItems.map((item) => (
               <Link key={item.path} href={item.path as any} asChild>
                 <TouchableOpacity
@@ -127,7 +134,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ open, setOpen }) => {
                 </TouchableOpacity>
               </Link>
             ))}
-          </View>
+          </ScrollView>
         </View>
       </>
     );
@@ -169,7 +176,13 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ open, setOpen }) => {
           </>
         )}
       </View>
-      <View style={styles.menuContainer}>
+      <ScrollView 
+        style={styles.menuContainer} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.menuScrollContent}
+        bounces={false}
+        overScrollMode="never"
+      >
         {adminMenuItems.map((item) => (
           <Link key={item.path} href={item.path as any} asChild>
             <TouchableOpacity
@@ -197,7 +210,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ open, setOpen }) => {
             </TouchableOpacity>
           </Link>
         ))}
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -261,6 +274,11 @@ const styles = StyleSheet.create({
   menuContainer: {
     padding: 10,
     marginTop: 10,
+    flex: 1,
+  },
+  menuScrollContent: {
+    paddingBottom: 20,
+    minHeight: '100%',
   },
   menuItem: {
     flexDirection: 'row',

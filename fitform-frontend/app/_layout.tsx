@@ -5,6 +5,7 @@ import Sidebar from '../components/Sidebar';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { NotificationProvider } from '../contexts/NotificationContext';
+import { CatalogProvider } from '../contexts/CatalogContext';
 import * as Font from 'expo-font';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -86,7 +87,9 @@ export default function Layout() {
   return (
     <AuthProvider>
       <NotificationProvider>
-        <AppContent />
+        <CatalogProvider>
+          <AppContent />
+        </CatalogProvider>
       </NotificationProvider>
     </AuthProvider>
   );

@@ -73,7 +73,20 @@ class ApiService {
     async request(endpoint, options = {}) {
         try {
             const headers = await this.getHeaders();
-            const url = `${this.baseURL}${endpoint}`;
+            let url = `${this.baseURL}${endpoint}`;
+
+            // Handle query parameters
+            if (options.params) {
+                // Filter out undefined values
+                const filteredParams = Object.fromEntries(
+                    Object.entries(options.params).filter(([key, value]) => value !== undefined)
+                );
+                
+                if (Object.keys(filteredParams).length > 0) {
+                    const queryString = new URLSearchParams(filteredParams).toString();
+                    url += `?${queryString}`;
+                }
+            }
 
             console.log(`🌐 Making API request to: ${url}`);
 
