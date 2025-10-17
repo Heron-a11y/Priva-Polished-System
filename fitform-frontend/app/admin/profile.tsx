@@ -79,7 +79,6 @@ export default function AdminProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showUsersModal, setShowUsersModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingField, setEditingField] = useState<string>('');
   const [passwordData, setPasswordData] = useState({
@@ -87,10 +86,8 @@ export default function AdminProfileScreen() {
     new_password: '',
     confirm_password: '',
   });
-  const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<ProfileStats | null>(null);
-  const [activeTab, setActiveTab] = useState<'profile' | 'users' | 'stats'>('profile');
-  const [showUsersTable, setShowUsersTable] = useState(false); // Start collapsed
+  const [activeTab, setActiveTab] = useState<'profile' | 'stats'>('profile');
 
   useEffect(() => {
     loadProfile();
@@ -123,17 +120,6 @@ export default function AdminProfileScreen() {
     }
   };
 
-  const loadUsers = async () => {
-    try {
-      const response = await apiService.getAllUsers();
-      if (response.success) {
-        setUsers(response.data.data);
-      }
-    } catch (error) {
-      console.error('Error loading users:', error);
-      Alert.alert('Error', 'Failed to load users');
-    }
-  };
 
   const handleSave = async () => {
     try {
@@ -252,20 +238,6 @@ export default function AdminProfileScreen() {
     }
   };
 
-  const handleUpdateUserRole = async (userId: number, newRole: string) => {
-    try {
-      const response = await apiService.updateUserRole(userId, newRole);
-      if (response.success) {
-        Alert.alert('Success', 'User role updated successfully');
-        loadUsers(); // Refresh users list
-      } else {
-        Alert.alert('Error', response.message || 'Failed to update user role');
-      }
-    } catch (error) {
-      console.error('Error updating user role:', error);
-      Alert.alert('Error', 'Failed to update user role');
-    }
-  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -661,20 +633,6 @@ export default function AdminProfileScreen() {
     </ScrollView>
   );
 
-  const renderUsersTab = () => (
-    <View style={styles.tabContent}>
-      <TouchableOpacity
-        style={styles.loadUsersButton}
-        onPress={() => {
-          setShowUsersModal(true);
-          loadUsers();
-        }}
-      >
-        <Ionicons name="people-outline" size={20} color={Colors.primary} />
-        <Text style={styles.loadUsersText}>View All Users</Text>
-      </TouchableOpacity>
-    </View>
-  );
 
   if (loading) {
     return (
@@ -713,19 +671,11 @@ export default function AdminProfileScreen() {
           <Text style={[styles.tabText, activeTab === 'stats' && styles.activeTabText]}>Stats</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'users' && styles.activeTab]}
-          onPress={() => setActiveTab('users')}
-        >
-          <Ionicons name="people" size={20} color={activeTab === 'users' ? Colors.primary : Colors.text.secondary} />
-          <Text style={[styles.tabText, activeTab === 'users' && styles.activeTabText]}>Users</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Tab Content */}
       {activeTab === 'profile' && renderProfileTab()}
       {activeTab === 'stats' && renderStatsTab()}
-      {activeTab === 'users' && renderUsersTab()}
 
       {/* Change Password Modal */}
       <Modal
@@ -794,82 +744,6 @@ export default function AdminProfileScreen() {
         </View>
       </Modal>
 
-      {/* Users Modal */}
-      <Modal
-        visible={showUsersModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowUsersModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.usersModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>All Users</Text>
-              <TouchableOpacity onPress={() => setShowUsersModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.text.secondary} />
-              </TouchableOpacity>
-            </View>
-            
-            {/* Collapsible Customer Monitoring Section */}
-            <View style={styles.collapsibleSection}>
-              <TouchableOpacity 
-                style={styles.collapsibleHeader}
-                onPress={() => setShowUsersTable(!showUsersTable)}
-              >
-                <View style={styles.collapsibleHeaderContent}>
-                  <View style={styles.collapsibleHeaderLeft}>
-                    <Text style={styles.collapsibleTitle}>Customer Monitoring</Text>
-                    {!showUsersTable && users.length > 0 && (
-                      <Text style={styles.collapsibleSubtitle}>
-                        Tap to view {users.length} users • {users.filter(u => u.role === 'customer').length} customers, {users.filter(u => u.role === 'admin').length} admins
-                      </Text>
-                    )}
-                  </View>
-                  <View style={styles.collapsibleHeaderRight}>
-                    <Text style={styles.userCount}>{users.length} users</Text>
-                    <Ionicons 
-                      name={showUsersTable ? "chevron-up" : "chevron-down"} 
-                      size={20} 
-                      color={Colors.text.secondary} 
-                    />
-                  </View>
-                </View>
-              </TouchableOpacity>
-              
-              {showUsersTable && (
-                <View style={styles.collapsibleContent}>
-                  <FlatList
-                    data={users}
-                    keyExtractor={(item) => item.id.toString()}
-                    renderItem={({ item }) => (
-                      <View style={styles.userItem}>
-                        <View style={styles.userInfo}>
-                          <Text style={styles.userName}>{item.name}</Text>
-                          <Text style={styles.userEmail}>{item.email}</Text>
-                          <Text style={styles.userRole}>{item.role}</Text>
-                        </View>
-                        <View style={styles.userActions}>
-                          <TouchableOpacity
-                            style={[
-                              styles.roleButton,
-                              item.role === 'admin' ? styles.adminButton : styles.customerButton
-                            ]}
-                            onPress={() => handleUpdateUserRole(item.id, item.role === 'admin' ? 'customer' : 'admin')}
-                          >
-                            <Text style={styles.roleButtonText}>
-                              {item.role === 'admin' ? 'Make Customer' : 'Make Admin'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    )}
-                  />
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Edit Field Modal */}
       <EditModal
@@ -1262,6 +1136,17 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.success,
   },
   roleButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'white',
+  },
+  adminBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#4CAF50',
+  },
+  adminBadgeText: {
     fontSize: 12,
     fontWeight: '600',
     color: 'white',

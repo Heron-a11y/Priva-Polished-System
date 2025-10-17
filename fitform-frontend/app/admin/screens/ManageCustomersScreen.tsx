@@ -25,9 +25,12 @@ interface Customer {
   name: string;
   email: string;
   phone: string;
+  role: 'admin' | 'customer';
+  is_super_admin?: boolean;
   account_status: 'active' | 'suspended' | 'banned';
   last_activity: string;
   created_at: string;
+  updated_at?: string;
   suspension_start?: string;
   suspension_end?: string;
   suspension_reason?: string;
@@ -35,6 +38,10 @@ interface Customer {
   total_orders: number;
   total_appointments: number;
   total_transactions: number;
+  appointment_count?: number;
+  rental_count?: number;
+  purchase_count?: number;
+  order_count?: number;
   profile_image?: string;
 }
 
@@ -69,6 +76,11 @@ const ManageCustomersScreen = () => {
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({});
   const [categoryDetails, setCategoryDetails] = useState<{[key: string]: any}>({});
+  
+  // Role management state
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<Customer | null>(null);
+  const [newRole, setNewRole] = useState<'admin' | 'customer'>('customer');
 
   // Edit customer form state
   const [editForm, setEditForm] = useState({
@@ -107,8 +119,52 @@ const ManageCustomersScreen = () => {
 
       const response = await apiService.get(`/admin/customers?${params}`);
       
+      console.log('API Response:', response);
+      console.log('Customers from API:', response.customers);
+      
       if (response.success) {
-        setCustomers(response.customers || []);
+        // Ensure all customer objects have the required properties with safe defaults
+        const safeCustomers = (response.customers || []).map((customer: any, index: number) => {
+          console.log(`Processing customer ${index}:`, customer);
+          
+          const safeCustomer = {
+            id: customer.id || 0,
+            name: String(customer.name || 'Unknown'),
+            email: String(customer.email || ''),
+            phone: customer.phone ? String(customer.phone) : '',
+            role: customer.role || 'customer',
+            is_super_admin: Boolean(customer.is_super_admin),
+            account_status: customer.account_status || 'active',
+            last_activity: customer.last_activity || '',
+            created_at: customer.created_at || '',
+            updated_at: customer.updated_at || null,
+            suspension_start: customer.suspension_start || null,
+            suspension_end: customer.suspension_end || null,
+            suspension_reason: customer.suspension_reason || null,
+            ban_reason: customer.ban_reason || null,
+            total_orders: Number(customer.total_orders || customer.order_count || 0),
+            total_appointments: Number(customer.total_appointments || customer.appointment_count || 0),
+            total_transactions: Number(customer.total_transactions || 0),
+            appointment_count: Number(customer.appointment_count || 0),
+            rental_count: Number(customer.rental_count || 0),
+            purchase_count: Number(customer.purchase_count || 0),
+            order_count: Number(customer.order_count || 0),
+            profile_image: customer.profile_image || null,
+          };
+          
+          console.log(`Safe customer ${index}:`, safeCustomer);
+          return safeCustomer;
+        });
+        
+        console.log('All customers from API:', safeCustomers.map(c => ({ email: c.email, role: c.role, name: c.name })));
+        
+        // Check specifically for bonikobonik@gmail.com
+        const bonikoUser = safeCustomers.find(c => c.email === 'bonikobonik@gmail.com');
+        console.log('Boniko user found:', bonikoUser);
+        
+        setCustomers(safeCustomers);
+        
+        // Use stats from backend (already excludes super admin)
         setStats(response.stats || null);
       } else {
         throw new Error(response.message || 'Failed to fetch customers');
@@ -386,6 +442,95 @@ const ManageCustomersScreen = () => {
     }
   };
 
+  const handleRoleChange = (customer: Customer) => {
+    // Check if trying to change super admin role
+    if (customer.is_super_admin) {
+      Alert.alert(
+        'Super Admin Protection',
+        'This user is a super admin and cannot have their role changed. Super admin status is permanent.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    setSelectedUser(customer);
+    setNewRole(customer.role === 'admin' ? 'customer' : 'admin');
+    setShowRoleModal(true);
+  };
+
+  const handleRemoveAdmin = (customer: Customer) => {
+    // Check if trying to remove super admin
+    if (customer.email === 'admin@fitform.com') {
+      Alert.alert(
+        'Super Admin Protection',
+        'Cannot remove admin capabilities from the super admin. Super admin status is permanent.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Remove Admin Capabilities',
+      `Are you sure you want to remove admin capabilities from ${customer.name}? They will become a regular customer.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Remove Admin',
+          style: 'destructive',
+          onPress: () => confirmRemoveAdmin(customer)
+        }
+      ]
+    );
+  };
+
+  const confirmRemoveAdmin = async (customer: Customer) => {
+    try {
+      setActionLoading(prev => ({ ...prev, [customer.id]: true }));
+
+      const response = await apiService.put(`/admin/users/${customer.id}/role`, {
+        role: 'customer'
+      });
+
+      if (response.success) {
+        showNotification('Admin capabilities removed successfully', 'success');
+        fetchData(); // Refresh the data
+      } else {
+        throw new Error(response.message || 'Failed to remove admin capabilities');
+      }
+    } catch (error) {
+      console.error('Error removing admin capabilities:', error);
+      showNotification('Failed to remove admin capabilities', 'error');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [customer.id]: false }));
+    }
+  };
+
+  const confirmRoleChange = async () => {
+    if (!selectedUser) return;
+
+    try {
+      setActionLoading(prev => ({ ...prev, [selectedUser.id]: true }));
+
+      const response = await apiService.updateUserRole(selectedUser.id, newRole);
+
+      if (response.success) {
+        Alert.alert('Success', `User role updated to ${newRole}`);
+        setShowRoleModal(false);
+        await fetchData();
+      } else {
+        throw new Error(response.message || 'Failed to update user role');
+      }
+    } catch (error: any) {
+      console.error('Error updating user role:', error);
+      Alert.alert('Error', error.message || 'Failed to update user role');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [selectedUser.id]: false }));
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return '#4CAF50';
@@ -404,13 +549,31 @@ const ManageCustomersScreen = () => {
     }
   };
 
+  const validateCustomer = (customer: any): boolean => {
+    return customer && 
+           typeof customer === 'object' && 
+           customer.id && 
+           customer.name && 
+           customer.email;
+  };
+
   const filteredCustomers = customers.filter(customer => {
+    // First validate the customer object
+    if (!validateCustomer(customer)) {
+      console.warn('Invalid customer object:', customer);
+      return false;
+    }
+    
     const matchesStatus = statusFilter === 'all' || customer.account_status === statusFilter;
     const matchesSearch = !search || 
       customer.name.toLowerCase().includes(search.toLowerCase()) ||
       customer.email.toLowerCase().includes(search.toLowerCase()) ||
       customer.phone.includes(search);
-    return matchesStatus && matchesSearch;
+    
+    const shouldInclude = matchesStatus && matchesSearch;
+    console.log(`Customer ${customer.email} (${customer.role}): status=${matchesStatus}, search=${matchesSearch}, include=${shouldInclude}`);
+    
+    return shouldInclude;
   });
 
   if (loading) {
@@ -442,7 +605,7 @@ const ManageCustomersScreen = () => {
         <View style={styles.header}>
           <View style={styles.titleContainer}>
             <Ionicons name="people" size={28} color="#014D40" />
-            <Text style={styles.title}>Manage Customers</Text>
+            <Text style={styles.title}>User Management</Text>
           </View>
         </View>
 
@@ -455,7 +618,7 @@ const ManageCustomersScreen = () => {
                   <Ionicons name="people" size={24} color="#014D40" />
                 </View>
                 <Text style={styles.statValue}>{stats.total_customers}</Text>
-                <Text style={styles.statLabel}>Total Customers</Text>
+                <Text style={styles.statLabel}>Total Users</Text>
               </View>
               <View style={styles.statCard}>
                 <View style={[styles.statIconContainer, { backgroundColor: '#E8F5E8' }]}>
@@ -543,14 +706,16 @@ const ManageCustomersScreen = () => {
           {filteredCustomers.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="people-outline" size={64} color="#ccc" />
-              <Text style={styles.emptyStateTitle}>No customers found</Text>
+              <Text style={styles.emptyStateTitle}>No users found</Text>
               <Text style={styles.emptyStateText}>
-                {search ? 'Try adjusting your search criteria' : 'No customers match the current filters'}
+                {search ? 'Try adjusting your search criteria' : 'No users match the current filters'}
               </Text>
             </View>
           ) : (
-            filteredCustomers.map((customer) => (
-              <View key={customer.id} style={styles.customerCard}>
+            filteredCustomers.map((customer) => {
+              try {
+                return (
+                  <View key={customer.id} style={styles.customerCard}>
                 <View style={styles.customerHeader}>
                   <View style={styles.customerInfo}>
                     <View style={styles.customerAvatar}>
@@ -564,9 +729,9 @@ const ManageCustomersScreen = () => {
                       )}
                     </View>
                     <View style={styles.customerDetails}>
-                      <Text style={styles.customerName}>{customer.name}</Text>
-                      <Text style={styles.customerEmail}>{customer.email}</Text>
-                      <Text style={styles.customerPhone}>{customer.phone || 'No phone'}</Text>
+                      <Text style={styles.customerName}>{String(customer.name || 'Unknown')}</Text>
+                      <Text style={styles.customerEmail}>{String(customer.email || '')}</Text>
+                      <Text style={styles.customerPhone}>{customer.phone ? String(customer.phone) : 'No phone'}</Text>
                     </View>
                   </View>
                   <View style={styles.customerStatus}>
@@ -577,7 +742,7 @@ const ManageCustomersScreen = () => {
                         color={getStatusColor(customer.account_status)} 
                       />
                       <Text style={[styles.statusText, { color: getStatusColor(customer.account_status) }]}>
-                        {customer.account_status.charAt(0).toUpperCase() + customer.account_status.slice(1)}
+                        {String(customer.account_status || 'active').charAt(0).toUpperCase() + String(customer.account_status || 'active').slice(1)}
                       </Text>
                     </View>
                   </View>
@@ -585,20 +750,20 @@ const ManageCustomersScreen = () => {
 
                 <View style={styles.customerStats}>
                   <View style={styles.statItem}>
-                    <Text style={styles.statItemValue}>{customer.order_count || 0}</Text>
+                    <Text style={styles.statItemValue}>{String(customer.total_orders || 0)}</Text>
                     <Text style={styles.statItemLabel}>Orders</Text>
                   </View>
                   <View style={styles.statItem}>
-                    <Text style={styles.statItemValue}>{customer.appointment_count || 0}</Text>
+                    <Text style={styles.statItemValue}>{String(customer.total_appointments || 0)}</Text>
                     <Text style={styles.statItemLabel}>Appointments</Text>
                   </View>
                   <View style={styles.statItem}>
-                    <Text style={styles.statItemValue}>{customer.total_transactions || 0}</Text>
+                    <Text style={styles.statItemValue}>{String(customer.total_transactions || 0)}</Text>
                     <Text style={styles.statItemLabel}>Transactions</Text>
                   </View>
                   <View style={styles.statItem}>
                     <Text style={styles.statItemValue}>
-                      {customer.last_activity ? new Date(customer.last_activity).toLocaleDateString() : 'Never'}
+                      {customer.last_activity ? String(new Date(customer.last_activity).toLocaleDateString()) : 'Never'}
                     </Text>
                     <Text style={styles.statItemLabel}>Last Activity</Text>
                   </View>
@@ -615,9 +780,34 @@ const ManageCustomersScreen = () => {
                     <Ionicons name="eye" size={16} color="#014D40" />
                     <Text style={styles.actionButtonText}>View Details</Text>
                   </TouchableOpacity>
+                  
+                  {/* Role Management */}
+                  
+                  {customer.role === 'admin' && !customer.is_super_admin && (
+                    <View style={[styles.actionButton, styles.adminBadge]}>
+                      <Ionicons name="person" size={16} color="#4CAF50" />
+                      <Text style={styles.actionButtonText}>Admin</Text>
+                    </View>
+                  )}
+                  
+                  {customer.is_super_admin && (
+                    <View style={[styles.actionButton, styles.superAdminBadge]}>
+                      <Ionicons name="shield" size={16} color="#FF6B35" />
+                      <Text style={styles.actionButtonText}>Super Admin</Text>
+                    </View>
+                  )}
                 </View>
               </View>
-            ))
+                );
+              } catch (error) {
+                console.error('Error rendering customer card:', error, customer);
+                return (
+                  <View key={customer.id} style={styles.customerCard}>
+                    <Text style={styles.customerName}>Error loading user data</Text>
+                  </View>
+                );
+              }
+            })
           )}
         </View>
       </ScrollView>
@@ -630,7 +820,7 @@ const ManageCustomersScreen = () => {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Customer Details</Text>
+            <Text style={styles.modalTitle}>User Details</Text>
             <TouchableOpacity 
               style={styles.closeButton}
               onPress={() => setShowCustomerModal(false)}
@@ -736,7 +926,7 @@ const ManageCustomersScreen = () => {
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Suspension Period:</Text>
                     <Text style={styles.detailValue}>
-                      {new Date(selectedCustomer.suspension_start).toLocaleDateString()} - {new Date(selectedCustomer.suspension_end!).toLocaleDateString()}
+                      {new Date(selectedCustomer.suspension_start).toLocaleDateString()} - {selectedCustomer.suspension_end ? new Date(selectedCustomer.suspension_end).toLocaleDateString() : 'N/A'}
                     </Text>
                   </View>
                 )}
@@ -1046,8 +1236,34 @@ const ManageCustomersScreen = () => {
                   }}
                 >
                   <Ionicons name="create" size={20} color="#fff" />
-                  <Text style={[styles.modalActionButtonText, { color: '#fff' }]}>Edit Customer</Text>
+                  <Text style={[styles.modalActionButtonText, { color: '#fff' }]}>Edit User</Text>
                 </TouchableOpacity>
+
+                {selectedCustomer.role === 'customer' && (
+                  <TouchableOpacity 
+                    style={[styles.modalActionButton, styles.roleButton]}
+                    onPress={() => {
+                      setShowCustomerModal(false);
+                      handleRoleChange(selectedCustomer);
+                    }}
+                  >
+                    <Ionicons name="shield" size={20} color="#fff" />
+                    <Text style={[styles.modalActionButtonText, { color: '#fff' }]}>Make Admin</Text>
+                  </TouchableOpacity>
+                )}
+
+                {selectedCustomer.role === 'admin' && selectedCustomer.email !== 'admin@fitform.com' && (
+                  <TouchableOpacity 
+                    style={[styles.modalActionButton, styles.removeAdminButton]}
+                    onPress={() => {
+                      setShowCustomerModal(false);
+                      handleRemoveAdmin(selectedCustomer);
+                    }}
+                  >
+                    <Ionicons name="person-remove" size={20} color="#fff" />
+                    <Text style={[styles.modalActionButtonText, { color: '#fff' }]}>Remove Admin</Text>
+                  </TouchableOpacity>
+                )}
 
                 {selectedCustomer.account_status === 'suspended' && (
                   <TouchableOpacity 
@@ -1261,6 +1477,80 @@ const ManageCustomersScreen = () => {
               </Text>
             </TouchableOpacity>
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Role Change Modal */}
+      <Modal
+        visible={showRoleModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowRoleModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.roleModalContainer}>
+            <View style={styles.roleModalHeader}>
+              <Text style={styles.roleModalTitle}>Change User Role</Text>
+              <TouchableOpacity onPress={() => setShowRoleModal(false)}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.modalBody}>
+              <Text style={styles.modalText}>
+                Change role for <Text style={styles.boldText}>{selectedUser?.name}</Text> ({selectedUser?.email})
+              </Text>
+              
+              <View style={styles.roleOptions}>
+                <TouchableOpacity
+                  style={[
+                    styles.roleOption,
+                    newRole === 'admin' && styles.roleOptionSelected
+                  ]}
+                  onPress={() => setNewRole('admin')}
+                >
+                  <Ionicons name="person" size={20} color={newRole === 'admin' ? 'white' : '#4CAF50'} />
+                  <Text style={[
+                    styles.roleOptionText,
+                    newRole === 'admin' && styles.roleOptionTextSelected
+                  ]}>
+                    Admin
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.roleOption,
+                    newRole === 'customer' && styles.roleOptionSelected
+                  ]}
+                  onPress={() => setNewRole('customer')}
+                >
+                  <Ionicons name="person-outline" size={20} color={newRole === 'customer' ? 'white' : '#2196F3'} />
+                  <Text style={[
+                    styles.roleOptionText,
+                    newRole === 'customer' && styles.roleOptionTextSelected
+                  ]}>
+                    Customer
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.roleModalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowRoleModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={confirmRoleChange}
+              >
+                <Text style={styles.confirmButtonText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
 
@@ -1693,7 +1983,7 @@ const styles = StyleSheet.create({
   modalContent: {
     flex: 1,
     padding: 24,
-    paddingBottom: 60,
+    paddingBottom: 100,
   },
   detailSection: {
     backgroundColor: '#fff',
@@ -1737,7 +2027,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 12,
     marginTop: 20,
-    marginBottom: 40,
+    marginBottom: 60,
     paddingHorizontal: 0,
   },
   modalActionButton: {
@@ -2025,6 +2315,115 @@ const styles = StyleSheet.create({
   penalty_none: {
     color: '#6c757d',
     fontWeight: 'bold',
+  },
+  // Role Management Styles
+  roleButton: {
+    backgroundColor: '#4CAF50',
+  },
+  removeAdminButton: {
+    backgroundColor: '#F44336',
+  },
+  adminBadge: {
+    backgroundColor: '#4CAF50',
+  },
+  superAdminBadge: {
+    backgroundColor: '#FF6B35',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  roleModalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '90%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  roleModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  roleModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#014D40',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  modalText: {
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 20,
+  },
+  boldText: {
+    fontWeight: 'bold',
+  },
+  roleOptions: {
+    gap: 12,
+  },
+  roleOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    gap: 12,
+  },
+  roleOptionSelected: {
+    backgroundColor: '#014D40',
+    borderColor: '#014D40',
+  },
+  roleOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  roleOptionTextSelected: {
+    color: 'white',
+  },
+  roleModalActions: {
+    flexDirection: 'row',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  confirmButton: {
+    backgroundColor: '#014D40',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
