@@ -386,6 +386,14 @@ class ProfileController extends Controller
             ], 403);
         }
 
+        // Prevent demoting admin users to customers
+        if ($user->role === 'admin' && $request->role === 'customer') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot demote admin users to customers for security reasons.'
+            ], 403);
+        }
+
         $user->update(['role' => $request->role]);
 
         return response()->json([

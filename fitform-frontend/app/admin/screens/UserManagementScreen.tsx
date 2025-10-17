@@ -149,11 +149,11 @@ const UserManagementScreen = () => {
         </View>
       </View>
 
-      {/* Super Admin Notice */}
+      {/* Admin Protection Notice */}
       <View style={styles.noticeContainer}>
         <Ionicons name="shield" size={20} color="#FF6B35" />
         <Text style={styles.noticeText}>
-          Super admins (marked with 🛡️) cannot have their roles changed for security reasons.
+          Super admins (🛡️) and regular admins cannot be demoted to customers for security reasons.
         </Text>
       </View>
 
@@ -206,7 +206,7 @@ const UserManagementScreen = () => {
               </View>
               
               <View style={styles.userActions}>
-                {!user.is_super_admin && user.id !== currentUser?.id && (
+                {!user.is_super_admin && user.id !== currentUser?.id && user.role !== 'admin' && (
                   <TouchableOpacity
                     style={styles.roleButton}
                     onPress={() => handleRoleChange(user)}
@@ -218,7 +218,7 @@ const UserManagementScreen = () => {
                       <>
                         <Ionicons name="swap-horizontal" size={16} color="#014D40" />
                         <Text style={styles.roleButtonText}>
-                          {user.role === 'admin' ? 'Make Customer' : 'Make Admin'}
+                          Make Admin
                         </Text>
                       </>
                     )}
@@ -229,6 +229,13 @@ const UserManagementScreen = () => {
                   <View style={styles.protectedBadge}>
                     <Ionicons name="lock-closed" size={16} color="#666" />
                     <Text style={styles.protectedText}>Protected</Text>
+                  </View>
+                )}
+                
+                {!user.is_super_admin && user.role === 'admin' && user.id !== currentUser?.id && (
+                  <View style={styles.adminBadge}>
+                    <Ionicons name="person" size={16} color="#4CAF50" />
+                    <Text style={styles.adminText}>Admin</Text>
                   </View>
                 )}
                 
@@ -484,6 +491,20 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 14,
     fontWeight: '500',
+  },
+  adminBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#e8f5e8',
+    borderRadius: 8,
+    gap: 4,
+  },
+  adminText: {
+    color: '#4CAF50',
+    fontSize: 14,
+    fontWeight: '600',
   },
   currentUserBadge: {
     flexDirection: 'row',
