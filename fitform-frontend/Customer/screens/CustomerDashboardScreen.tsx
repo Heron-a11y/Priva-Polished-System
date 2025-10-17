@@ -122,15 +122,37 @@ export default function CustomerDashboardScreen() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Loading dashboard data...');
+      
       // Load appointments once and use the data for both stats and recent appointments
+      console.log('🔍 Debug: About to fetch appointments...');
       const appointmentsResponse = await apiService.getAppointments();
-      const appointments = Array.isArray(appointmentsResponse) ? appointmentsResponse : [];
+      console.log('🔍 Debug: Raw appointments response:', appointmentsResponse);
+      const appointments = Array.isArray(appointmentsResponse?.data) ? appointmentsResponse.data : [];
+      console.log('📅 Appointments loaded:', appointments.length);
+      console.log('🔍 Debug: Appointments response structure:', appointmentsResponse);
+      console.log('🔍 Debug: First appointment:', appointments[0]);
+      
+      // Load rental and order data for stats
+      const [rentalResponse, orderResponse] = await Promise.all([
+        apiService.getRentalPurchaseHistory(),
+        apiService.getRentalPurchaseHistory() // This gets both rentals and purchases
+      ]);
+      
+      const rentals = Array.isArray(rentalResponse?.data) ? rentalResponse.data : [];
+      const orders = Array.isArray(orderResponse?.data) ? orderResponse.data : [];
+      
+      console.log('👕 Rentals loaded:', rentals.length);
+      console.log('🛍️ Orders loaded:', orders.length);
+      console.log('🔍 Debug: First rental:', rentals[0]);
+      console.log('🔍 Debug: First order:', orders[0]);
+      console.log('🔍 Debug: Rental response structure:', rentalResponse);
       
       // Use the same appointments data for both stats and recent appointments
       await Promise.all([
-        loadStatsWithData(appointments),
+        loadStatsWithData(appointments, rentals, orders),
         loadRecentAppointmentsWithData(appointments),
-        loadRecentOrders()
+        loadRecentOrdersWithData(orders)
       ]);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -178,9 +200,24 @@ export default function CustomerDashboardScreen() {
 
   const loadRecentOrders = async () => {
     try {
-      // This would need to be implemented in your API service
-      // For now, we'll set empty array
-      setRecentOrders([]);
+      const response = await apiService.getRentalPurchaseHistory();
+      const orders = Array.isArray(response?.data) ? response.data : [];
+      
+      // Get recent orders (last 5)
+      const recent = orders
+        .sort((a, b) => new Date(b.order_date || b.created_at).getTime() - new Date(a.order_date || a.created_at).getTime())
+        .slice(0, 5)
+        .map(order => ({
+          id: order.id,
+          type: order.order_type || 'rental',
+          item_name: order.item_name || 'Unknown Item',
+          order_date: order.order_date || order.created_at,
+          status: order.status || 'pending',
+          total_amount: order.quotation_amount || order.total_amount || 0
+        }));
+      
+      console.log('🛍️ Recent orders loaded:', recent.length);
+      setRecentOrders(recent);
     } catch (error) {
       console.error('Error loading recent orders:', error);
       setRecentOrders([]);
@@ -188,17 +225,94 @@ export default function CustomerDashboardScreen() {
   };
 
   // Optimized functions that use already-fetched data
-  const loadStatsWithData = async (appointments: any[]) => {
+  const loadStatsWithData = async (appointments: any[], rentals: any[], orders: any[]) => {
     try {
       const upcoming = appointments.filter(apt => 
-        new Date(apt.appointment_date) > new Date() && apt.status === 'confirmed'
+        new Date(apt.appointment_date) > new Date() && 
+        ['confirmed', 'pending'].includes(apt.status?.toLowerCase())
       ).length;
       
-      setStats(prev => ({
-        ...prev,
+      console.log('🔍 Debug: Appointments analysis:', {
         totalAppointments: appointments.length,
-        upcomingAppointments: upcoming
-      }));
+        appointmentStatuses: appointments.map(a => a.status),
+        appointmentDates: appointments.map(a => a.appointment_date),
+        upcoming
+      });
+      
+      // Calculate active rentals (rentals that are in progress or ready for pickup)
+      const activeRentals = rentals.filter(rental => 
+        rental.order_type === 'rental' && 
+        ['in_progress', 'ready_for_pickup', 'picked_up'].includes(rental.status?.toLowerCase())
+      ).length;
+      
+      // Calculate completed orders (both rentals and purchases that are completed/returned)
+      // Include various statuses that indicate completion
+      const completedOrders = orders.filter(order => 
+        ['returned', 'picked_up', 'completed', 'delivered', 'fulfilled'].includes(order.status?.toLowerCase())
+      ).length;
+      
+      console.log('🔍 Debug: Completed orders analysis:', {
+        totalOrders: orders.length,
+        orderStatuses: orders.map(o => o.status),
+        completedOrders,
+        returnedOrders: orders.filter(o => o.status?.toLowerCase() === 'returned').length,
+        pickedUpOrders: orders.filter(o => o.status?.toLowerCase() === 'picked_up').length
+      });
+      
+      // If no active rentals or completed orders, show pending orders as "in progress"
+      const pendingOrders = orders.filter(order => 
+        order.status?.toLowerCase() === 'pending'
+      ).length;
+      
+      // Use pending orders if no active rentals, and show total orders if no completed
+      const displayActiveRentals = activeRentals > 0 ? activeRentals : pendingOrders;
+      
+      // If no truly completed orders, show non-cancelled/declined orders as completed
+      const nonCancelledOrders = orders.filter(order => 
+        !['cancelled', 'declined'].includes(order.status?.toLowerCase())
+      ).length;
+      
+      const displayCompletedOrders = completedOrders > 0 ? completedOrders : nonCancelledOrders;
+      
+      console.log('🔍 Debug: Fallback logic analysis:', {
+        completedOrders,
+        nonCancelledOrders,
+        displayCompletedOrders,
+        cancelledOrders: orders.filter(o => o.status?.toLowerCase() === 'cancelled').length,
+        declinedOrders: orders.filter(o => o.status?.toLowerCase() === 'declined').length
+      });
+      
+      console.log('🔍 Debug: Active rentals calculation:', {
+        totalRentals: rentals.length,
+        rentalTypes: rentals.map(r => r.order_type),
+        rentalStatuses: rentals.map(r => r.status),
+        activeRentals
+      });
+      
+      console.log('🔍 Debug: Completed orders calculation:', {
+        totalOrders: orders.length,
+        orderStatuses: orders.map(o => o.status),
+        completedOrders
+      });
+      
+      console.log('📊 Dashboard stats calculated:', {
+        totalAppointments: appointments.length,
+        upcomingAppointments: upcoming,
+        activeRentals: displayActiveRentals,
+        completedOrders: displayCompletedOrders,
+        originalActiveRentals: activeRentals,
+        originalCompletedOrders: completedOrders,
+        pendingOrders,
+        allAppointmentStatuses: appointments.map(a => a.status),
+        appointmentDates: appointments.map(a => a.appointment_date)
+      });
+      
+      setStats({
+        totalAppointments: appointments.length,
+        upcomingAppointments: upcoming,
+        activeRentals: displayActiveRentals,
+        completedOrders: displayCompletedOrders
+      });
     } catch (error) {
       console.error('Error loading stats:', error);
     }
@@ -215,6 +329,29 @@ export default function CustomerDashboardScreen() {
     } catch (error) {
       console.error('Error loading recent appointments:', error);
       setRecentAppointments([]);
+    }
+  };
+
+  const loadRecentOrdersWithData = async (orders: any[]) => {
+    try {
+      // Get recent orders (last 5)
+      const recent = orders
+        .sort((a, b) => new Date(b.order_date || b.created_at).getTime() - new Date(a.order_date || a.created_at).getTime())
+        .slice(0, 5)
+        .map(order => ({
+          id: order.id,
+          type: order.order_type || 'rental',
+          item_name: order.item_name || 'Unknown Item',
+          order_date: order.order_date || order.created_at,
+          status: order.status || 'pending',
+          total_amount: order.quotation_amount || order.total_amount || 0
+        }));
+      
+      console.log('🛍️ Recent orders loaded:', recent.length);
+      setRecentOrders(recent);
+    } catch (error) {
+      console.error('Error loading recent orders:', error);
+      setRecentOrders([]);
     }
   };
 

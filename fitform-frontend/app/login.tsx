@@ -59,11 +59,30 @@ export default function LoginScreen() {
           router.replace('/customer/dashboard');
         }
       } else {
-        Alert.alert('Login Failed', 'Invalid email or password. Please try again.');
+        // Handle specific login errors
+        if (result.message?.includes('password') || result.message?.includes('credentials')) {
+          Alert.alert('Login Failed', 'Incorrect password. Please check your password and try again.');
+        } else if (result.message?.includes('email') || result.message?.includes('user')) {
+          Alert.alert('Login Failed', 'Email address not found. Please check your email or create a new account.');
+        } else if (result.message?.includes('account') || result.message?.includes('disabled')) {
+          Alert.alert('Account Issue', 'Your account may be disabled. Please contact support.');
+        } else {
+          Alert.alert('Login Failed', result.message || 'Invalid credentials. Please try again.');
+        }
       }
     } catch (error) {
       console.error('Login error:', error);
-      Alert.alert('Error', 'Login failed. Please check your internet connection and try again.');
+      
+      // Handle specific network and server errors
+      if (error.message?.includes('network') || error.message?.includes('fetch')) {
+        Alert.alert('Connection Error', 'Unable to connect to server. Please check your internet connection and try again.');
+      } else if (error.message?.includes('timeout')) {
+        Alert.alert('Timeout Error', 'Request timed out. Please try again.');
+      } else if (error.message?.includes('server') || error.message?.includes('500')) {
+        Alert.alert('Server Error', 'Server is temporarily unavailable. Please try again later.');
+      } else {
+        Alert.alert('Login Error', 'An unexpected error occurred. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

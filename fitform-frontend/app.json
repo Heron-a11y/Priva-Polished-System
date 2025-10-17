@@ -114,6 +114,9 @@
         "projectId": "58025992-91da-4060-b2e3-8b123da99d7e"
       }
     },
+    "developmentClient": {
+      "silentLaunch": true
+    },
     "owner": "jerooon"
   }
 }

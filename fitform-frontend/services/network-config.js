@@ -248,11 +248,11 @@ class NetworkConfig {
             
             // Fallback: Use the configured LAN IP even if detection failed
             console.log('⚠️ Could not auto-detect LAN IP, using configured IP');
-            return currentLanIp || '192.168.1.56';
+            return currentLanIp || '192.168.1.59';
         } catch (error) {
             console.log('⚠️ Could not detect LAN IP:', error.message);
             // Return configured IP as fallback
-            return this.getCurrentLanIp() || '192.168.1.56';
+            return this.getCurrentLanIp() || '192.168.1.59';
         }
     }
 

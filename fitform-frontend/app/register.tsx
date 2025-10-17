@@ -118,7 +118,25 @@ export default function RegisterScreen() {
       }
     } catch (error) {
       console.error('Registration error:', error);
-      Alert.alert('Error', 'Registration failed. Please check your internet connection and try again.');
+      
+      // Handle specific registration errors
+      if (error.message?.includes('email') && error.message?.includes('taken')) {
+        Alert.alert('Email Already Exists', 'This email address is already registered. Please use a different email or try logging in.');
+      } else if (error.message?.includes('email') && error.message?.includes('invalid')) {
+        Alert.alert('Invalid Email', 'Please enter a valid email address.');
+      } else if (error.message?.includes('password') && error.message?.includes('weak')) {
+        Alert.alert('Weak Password', 'Password is too weak. Please use a stronger password with uppercase, lowercase, and numbers.');
+      } else if (error.message?.includes('name') && error.message?.includes('required')) {
+        Alert.alert('Name Required', 'Please enter your full name.');
+      } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+        Alert.alert('Connection Error', 'Unable to connect to server. Please check your internet connection and try again.');
+      } else if (error.message?.includes('timeout')) {
+        Alert.alert('Timeout Error', 'Request timed out. Please try again.');
+      } else if (error.message?.includes('server') || error.message?.includes('500')) {
+        Alert.alert('Server Error', 'Server is temporarily unavailable. Please try again later.');
+      } else {
+        Alert.alert('Registration Error', 'An unexpected error occurred. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

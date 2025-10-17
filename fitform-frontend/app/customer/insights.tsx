@@ -42,23 +42,50 @@ export default function InsightsScreen() {
   const loadInsights = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Loading insights for user:', user?.id);
+      console.log('🔍 Debug: User object:', user);
+      
+      // Test API connection first
+      const connectionTest = await apiService.testConnection();
+      console.log('🔍 Debug: Connection test result:', connectionTest);
+      
+      // Check authentication
+      const isAuth = await apiService.isAuthenticated();
+      console.log('🔍 Debug: Authentication status:', isAuth);
+      
+      if (!isAuth) {
+        console.log('❌ User is not authenticated, cannot load data');
+        Alert.alert('Session Expired', 'Your login session has expired. Please log in again to view your data.');
+        return;
+      }
+      
       // Load order history for insights
       const historyResponse = await apiService.getRentalPurchaseHistory();
+      console.log('🔍 Debug: History API response:', historyResponse);
       const orders = Array.isArray(historyResponse?.data) ? historyResponse.data : [];
       
       // Debug: Check if we have any orders
       if (orders.length === 0) {
         console.log('⚠️ Warning: No orders found in API response');
         console.log('🔍 Debug: Full API response:', historyResponse);
+        console.log('🔍 Debug: Response success:', historyResponse?.success);
+        console.log('🔍 Debug: Response data type:', typeof historyResponse?.data);
+      } else {
+        console.log('✅ Found orders:', orders.length);
+        console.log('🔍 Debug: First order:', orders[0]);
       }
       
       // Load measurement history
       const measurementResponse = await apiService.getMeasurementHistory();
+      console.log('🔍 Debug: Measurement API response:', measurementResponse);
       const measurements = Array.isArray(measurementResponse?.data) ? measurementResponse.data : [];
+      console.log('🔍 Debug: Measurements count:', measurements.length);
 
       // Load profile data
       const profileResponse = await apiService.getProfile();
+      console.log('🔍 Debug: Profile API response:', profileResponse);
       const profile = profileResponse?.data?.user || {};
+      console.log('🔍 Debug: Profile data:', profile);
 
       // Debug: Log the data structure
       console.log('🔍 Debug: Orders data:', orders.slice(0, 2));
@@ -83,7 +110,7 @@ export default function InsightsScreen() {
       setInsights(insightsData);
     } catch (error) {
       console.error('Error loading insights:', error);
-      Alert.alert('Error', 'Failed to load insights data');
+      Alert.alert('Data Loading Failed', 'Unable to load your insights data. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }

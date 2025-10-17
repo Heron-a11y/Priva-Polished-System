@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Alert, Platform, AppState, Animated, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Alert, Platform, AppState, Animated, ActivityIndicator, TextInput, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import { useRouter } from 'expo-router';
@@ -27,7 +27,7 @@ export default function ARMeasurementScreen() {
   const [currentStep, setCurrentStep] = useState<'front' | 'side'>('front');
   const [measurements, setMeasurements] = useState<any>({});
   const [isTracking, setIsTracking] = useState(false);
-  const [countdown, setCountdown] = useState(10);
+  const [countdown, setCountdown] = useState(0);
   const [frontMeasurements, setFrontMeasurements] = useState<any>(null);
   const [sideMeasurements, setSideMeasurements] = useState<any>(null);
   const [userHeight, setUserHeight] = useState<number | null>(null);
@@ -52,6 +52,7 @@ export default function ARMeasurementScreen() {
   const [scanStartTime, setScanStartTime] = useState<number>(0);
   // Flag to generate larger body measurements (waist 32-36 inches)
   const [useLargerBodyMeasurements, setUseLargerBodyMeasurements] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   
   // Animation for scanning line
   const scanningLineAnimation = useRef(new Animated.Value(0)).current;
@@ -813,16 +814,24 @@ export default function ARMeasurementScreen() {
       console.log('Front measurements:', frontMeasurements);
       console.log('Side measurements:', sideMeasurements);
       setCurrentScreen('review');
+      // Show the review modal after a short delay
+      setTimeout(() => {
+        setShowReviewModal(true);
+      }, 500);
     } catch (error) {
       console.error('Error completing measurement:', error);
       setCurrentScreen('review');
+      // Show the review modal even on error
+      setTimeout(() => {
+        setShowReviewModal(true);
+      }, 500);
     }
   };
 
   // Save measurements to backend
   const saveMeasurementsToBackend = async () => {
     if (!user || !measurements || Object.keys(measurements).length === 0) {
-      Alert.alert('Error', 'No measurements to save or user not logged in');
+      Alert.alert('Save Failed', 'No measurements to save. Please complete the AR measurement process first.');
       return;
     }
 
@@ -877,7 +886,7 @@ export default function ARMeasurementScreen() {
     } catch (error) {
       console.error('Error saving measurements:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      Alert.alert('Error', `Failed to save measurements: ${errorMessage}`);
+      Alert.alert('Save Failed', `Unable to save measurements: ${errorMessage}. Please check your connection and try again.`);
     }
   };
 
@@ -885,7 +894,7 @@ export default function ARMeasurementScreen() {
     if (!permission?.granted) {
       const res = await requestPermission();
       if (!res.granted) {
-        Alert.alert('Camera Permission Required', 'Please grant camera permission to use AR measurements.');
+        Alert.alert('Camera Access Required', 'Camera permission is needed for AR measurements. Please enable camera access in your device settings.');
         return;
       }
     }
@@ -950,17 +959,6 @@ export default function ARMeasurementScreen() {
 
   const renderHomeScreen = () => (
     <View style={styles.container}>
-      <View style={styles.homeHeader}>
-        <TouchableOpacity
-          style={styles.homeBackButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.primary} />
-        </TouchableOpacity>
-        <Text style={styles.homeHeaderTitle}>AR Body Measurements</Text>
-        <View style={styles.homeHeaderSpacer} />
-      </View>
 
       <ScrollView 
         style={styles.homeContent}
@@ -1049,15 +1047,6 @@ export default function ARMeasurementScreen() {
 
   const renderInstructionsScreen = () => (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => setCurrentScreen('home')}
-        >
-          <Text style={styles.backButtonText}>← </Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>How It Works</Text>
-      </View>
 
       <ScrollView 
         style={styles.content}
@@ -1126,6 +1115,44 @@ export default function ARMeasurementScreen() {
               • Remove bulky clothing for better accuracy{'\n'}
               • Stand on a flat surface
             </Text>
+          </View>
+        </View>
+
+        {/* Camera Selection */}
+        <View style={styles.instructionsCameraSelectionContainer}>
+          <Text style={styles.instructionsCameraSelectionTitle}>Choose Camera</Text>
+          <View style={styles.instructionsCameraSelectionButtons}>
+            <TouchableOpacity
+              style={[
+                styles.instructionsCameraSelectionButton,
+                cameraFacing === 'front' && styles.instructionsCameraSelectionButtonActive
+              ]}
+              onPress={() => setCameraFacing('front')}
+            >
+              <Ionicons name="camera" size={24} color={cameraFacing === 'front' ? 'white' : Colors.primary} />
+              <Text style={[
+                styles.instructionsCameraSelectionButtonText,
+                cameraFacing === 'front' && styles.instructionsCameraSelectionButtonTextActive
+              ]}>
+                Front Camera
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.instructionsCameraSelectionButton,
+                cameraFacing === 'back' && styles.instructionsCameraSelectionButtonActive
+              ]}
+              onPress={() => setCameraFacing('back')}
+            >
+              <Ionicons name="camera-reverse" size={24} color={cameraFacing === 'back' ? 'white' : Colors.primary} />
+              <Text style={[
+                styles.instructionsCameraSelectionButtonText,
+                cameraFacing === 'back' && styles.instructionsCameraSelectionButtonTextActive
+              ]}>
+                Rear Camera
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -1198,12 +1225,23 @@ export default function ARMeasurementScreen() {
               }}
             />
 
+            {/* Back Button - Always on top and clickable */}
+            <TouchableOpacity
+              style={styles.arBackButtonFixed}
+              onPress={() => setCurrentScreen('home')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-back" size={24} color="white" />
+            </TouchableOpacity>
+
             <View style={styles.overlayFill} pointerEvents="box-none">
         {/* Minimal Top Bar */}
         <View style={styles.minimalTopBar}>
+          <View style={styles.arBackButtonSpacer} />
           <Text style={styles.stepIndicator}>
             {currentStep === 'front' ? 'Front View' : 'Side View'}
           </Text>
+          <View style={styles.arBackButtonSpacer} />
         </View>
 
               {/* Camera Error Display */}
@@ -1276,7 +1314,7 @@ export default function ARMeasurementScreen() {
 
               {/* Scanning Animation Overlay */}
               {isScanning && (
-                <View style={styles.scanningOverlay}>
+                <View style={styles.scanningOverlay} pointerEvents="box-none">
                   {/* Moving scanning line across the screen */}
                   <View style={[styles.movingScanLine, { top: `${(scanProgress / 100) * 80 + 10}%` }]} />
                   
@@ -1321,7 +1359,7 @@ export default function ARMeasurementScreen() {
               )}
 
         {/* Simple Countdown - Just Number */}
-        {isTracking && (
+        {isTracking && countdown > 0 && (
           <View style={styles.simpleCountdownOverlay}>
             <Text style={styles.simpleCountdownNumber}>{countdown}</Text>
           </View>
@@ -1437,7 +1475,6 @@ export default function ARMeasurementScreen() {
     return (
       <View style={styles.container}>
 
-
         <View style={styles.content}>
         {/* Unit Toggle */}
         <View style={styles.unitToggleContainer}>
@@ -1488,12 +1525,6 @@ export default function ARMeasurementScreen() {
           </View>
         </View>
 
-        <View style={styles.infoBox}>
-          <Text style={styles.infoIcon}>ℹ️</Text>
-          <Text style={styles.infoText}>
-            Review and adjust your measurements by tapping on the values. Measurements will be saved in inches for your measurement history.
-          </Text>
-        </View>
 
         <ScrollView 
           style={styles.measurementsContainer}
@@ -1584,7 +1615,7 @@ export default function ARMeasurementScreen() {
               setCurrentStep('front');
               setIsBodyDetected(false);
               setIsTracking(false);
-              setCountdown(10);
+              setCountdown(0);
               setIsScanning(false);
               setScanProgress(0);
               setScanComplete(false);
@@ -1619,6 +1650,33 @@ export default function ARMeasurementScreen() {
   return (
     <View style={styles.container}>
       {renderCurrentScreen()}
+      
+      {/* Review Modal */}
+      <Modal
+        visible={showReviewModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowReviewModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalIcon}>ℹ️</Text>
+              <Text style={styles.modalTitle}>Review Your Measurements</Text>
+            </View>
+            <Text style={styles.modalText}>
+              Review and adjust your measurements by tapping on the values. Measurements will be saved in inches for your measurement history.
+            </Text>
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => setShowReviewModal(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalButtonText}>Got it!</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -2405,29 +2463,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  // Home screen styles
-  homeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: Colors.primary,
-  },
-  homeBackButton: {
-    padding: 10,
-    marginRight: 10,
-  },
-  homeHeaderTitle: {
-    flex: 1,
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.text.inverse,
-    textAlign: 'center',
-  },
-  homeHeaderSpacer: {
-    width: 44, // Same width as back button to center title
-  },
   homeContent: {
     flex: 1,
     backgroundColor: '#f8fafc',
@@ -2770,7 +2805,7 @@ const styles = StyleSheet.create({
   },
   simpleInstructionsTop: {
     position: 'absolute',
-    top: 60,
+    top: 80,
     left: 0,
     right: 0,
     alignItems: 'center',
@@ -2928,5 +2963,132 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: Colors.primary,
+  },
+  arBackButtonSpacer: {
+    width: 44,
+  },
+  // Fixed AR Back Button - Always clickable during scanning
+  arBackButtonFixed: {
+    position: 'absolute' as const,
+    left: 20,
+    top: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    zIndex: 9999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: 20,
+  },
+  modalContainer: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    marginBottom: 16,
+  },
+  modalIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: Colors.text.primary,
+    flex: 1,
+  },
+  modalText: {
+    fontSize: 16,
+    color: Colors.text.secondary,
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  modalButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center' as const,
+  },
+  modalButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600' as const,
+  },
+  // Simple Navigation Bar Styles
+  simpleNavBar: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingTop: 60,
+    paddingBottom: 10,
+    paddingHorizontal: 20,
+    backgroundColor: 'transparent',
+  },
+  simpleNavButton: {
+    padding: 10,
+  },
+  // Camera Selection Styles for How It Works
+  instructionsCameraSelectionContainer: {
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  instructionsCameraSelectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  instructionsCameraSelectionButtons: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  instructionsCameraSelectionButton: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    backgroundColor: 'white',
+    gap: 8,
+  },
+  instructionsCameraSelectionButtonActive: {
+    backgroundColor: Colors.primary,
+  },
+  instructionsCameraSelectionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  instructionsCameraSelectionButtonTextActive: {
+    color: 'white',
   },
 });
