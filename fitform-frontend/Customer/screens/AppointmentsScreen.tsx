@@ -363,7 +363,7 @@ const AppointmentsScreen = () => {
   const handleDateSelect = async (date: any) => {
     const selectedDateStr = date.dateString;
     
-    // Set the current view date for wait time calculation
+    // Set the current view date for service completion time calculation
     setCurrentViewDate(selectedDateStr);
     
     // Check if the date is in the past
@@ -1468,21 +1468,24 @@ const AppointmentsScreen = () => {
                 </View>
                 
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Estimated Wait Time:</Text>
+                  <Text style={styles.detailLabel}>Estimated Service Completion Time:</Text>
                   <Text style={[styles.detailValue, { color: '#014D40', fontWeight: '600' }]}>
                     {(() => {
-                      // Calculate wait time for this appointment
-                      const appointmentDateStr = selectedAppointmentDetails.appointment_date;
-                      const timeMatch = appointmentDateStr.match(/T(\d{2}):(\d{2}):(\d{2})/);
+                      // Calculate service completion time based on service type
+                      const serviceType = selectedAppointmentDetails.service_type?.toLowerCase();
                       
-                      if (timeMatch) {
-                        const hours = parseInt(timeMatch[1], 10);
-                        const waitTimeHours = hours - 10; // Hours after 10 AM
-                        const validWaitTime = Math.max(0, Math.min(waitTimeHours, 9));
-                        
-                        return validWaitTime === 0 ? 'No wait time (First appointment)' : `${validWaitTime} hours`;
-                      }
-                      return 'Unable to calculate';
+                      // Service duration mapping
+                      const serviceDurations = {
+                        'measurement': '15-20 minutes',
+                        'consultation': '20-30 minutes', 
+                        'fitting': '30-45 minutes',
+                        'alteration': '45-60 minutes'
+                      };
+                      
+                      // Get duration based on service type, default to fitting if not found
+                      const duration = serviceDurations[serviceType as keyof typeof serviceDurations] || serviceDurations['fitting'];
+                      
+                      return duration;
                     })()}
                   </Text>
                 </View>
@@ -1591,7 +1594,7 @@ const AppointmentsScreen = () => {
                     <Text style={styles.agreementTermTitle}>Service Duration</Text>
                   </View>
                   <Text style={styles.agreementTermDescription}>
-                    Each appointment has an estimated wait time of 1 hour per client.
+                    Each appointment has an estimated service completion time based on the service type (15-60 minutes).
                   </Text>
                 </View>
                 

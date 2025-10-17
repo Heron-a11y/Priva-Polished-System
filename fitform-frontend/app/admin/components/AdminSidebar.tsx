@@ -15,6 +15,7 @@ const adminMenuItems = [
   { name: 'Manage Appointments', icon: 'calendar', path: '/admin/appointments' },
   { name: 'Manage Orders', icon: 'file-tray-full', path: '/admin/orders' },
   { name: 'Manage Customers', icon: 'people', path: '/admin/customers' },
+  { name: 'User Management', icon: 'people-circle', path: '/admin/user-management' },
   { name: 'Measurement History', icon: 'analytics', path: '/admin/measurement-history' },
   { name: 'Sizing Standards', icon: 'resize', path: '/admin/sizing' },
 ];
