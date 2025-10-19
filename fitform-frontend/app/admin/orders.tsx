@@ -1346,6 +1346,24 @@ const OrdersScreen = () => {
                         ✅ Purchase transaction completed successfully!
                       </Text>
                     </View>
+
+                    {/* Receipt Button */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#014D40', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16 }}
+                      onPress={async () => {
+                        try {
+                          const { Linking } = require('react-native');
+                          const receiptUrl = `${apiService.baseURL}/purchases/${selectedOrder.id}/receipt`;
+                          // Open receipt in browser for download
+                          await Linking.openURL(receiptUrl);
+                        } catch (error) {
+                          Alert.alert('Error', 'Failed to generate receipt.');
+                        }
+                      }}
+                    >
+                      <Ionicons name="receipt-outline" size={20} color="#FFD700" />
+                      <Text style={{ color: '#FFD700', fontWeight: 'bold', fontSize: 16 }}>Download Receipt</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
 
@@ -1451,6 +1469,24 @@ const OrdersScreen = () => {
                       </Text>
                     </View>
 
+                    {/* Receipt Button */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#2196f3', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16 }}
+                      onPress={async () => {
+                        try {
+                          const { Linking } = require('react-native');
+                          const receiptUrl = `${apiService.baseURL}/rentals/${selectedOrder.id}/receipt`;
+                          // Open receipt in browser for download
+                          await Linking.openURL(receiptUrl);
+                        } catch (error) {
+                          Alert.alert('Error', 'Failed to generate receipt.');
+                        }
+                      }}
+                    >
+                      <Ionicons name="receipt-outline" size={20} color="#fff" />
+                      <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Download Receipt</Text>
+                    </TouchableOpacity>
+
                     {/* Mark as Returned button */}
                     <TouchableOpacity
                       style={{ backgroundColor: '#014D40', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16 }}
@@ -1532,6 +1568,24 @@ const OrdersScreen = () => {
                         ✅ Rental transaction completed successfully!
                       </Text>
                     </View>
+
+                    {/* Receipt Button */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#014D40', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16 }}
+                      onPress={async () => {
+                        try {
+                          const { Linking } = require('react-native');
+                          const receiptUrl = `${apiService.baseURL}/rentals/${selectedOrder.id}/receipt`;
+                          // Open receipt in browser for download
+                          await Linking.openURL(receiptUrl);
+                        } catch (error) {
+                          Alert.alert('Error', 'Failed to generate receipt.');
+                        }
+                      }}
+                    >
+                      <Ionicons name="receipt-outline" size={20} color="#FFD700" />
+                      <Text style={{ color: '#FFD700', fontWeight: 'bold', fontSize: 16 }}>Download Receipt</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
 

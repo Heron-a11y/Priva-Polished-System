@@ -11,6 +11,7 @@ import SuccessModal from '../../components/SuccessModal';
 import ARMeasurementScreen from '../screens/ARMeasurementScreen';
 import MeasurementValidationWarning from '../../components/MeasurementValidationWarning';
 import ClothingTypeCatalog from '../../components/ClothingTypeCatalog';
+import CollapsibleSortButton from '../../components/CollapsibleSortButton';
 import { MEASUREMENT_REQUIREMENTS, CLOTHING_TYPES } from '../../constants/ClothingTypes';
 import { MeasurementData, CompleteMeasurements, normalizeMeasurementData } from '../../types/measurements';
 
@@ -317,11 +318,93 @@ export default function RentalOrderFlow() {
     fetchRentalOrders(false);
   }, []);
 
-  // Memoize filtered orders to avoid re-filtering on every render
-  const filteredOrders = useMemo(() => 
-    orders.filter(order => order.customer_email === user?.email),
-    [orders, user?.email]
-  );
+  // Sort options state
+  const [sortOption, setSortOption] = useState('status');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Sort options configuration
+  const sortOptions = [
+    { key: 'status', label: 'Status', icon: 'flag' },
+    { key: 'date', label: 'Date Created', icon: 'calendar' },
+    { key: 'rental_date', label: 'Rental Date', icon: 'time' },
+    { key: 'return_date', label: 'Return Date', icon: 'return-up-back' },
+    { key: 'amount', label: 'Amount', icon: 'cash' },
+    { key: 'item_name', label: 'Item Name', icon: 'shirt' },
+    { key: 'clothing_type', label: 'Clothing Type', icon: 'layers' },
+  ];
+
+  // Memoize filtered and sorted orders
+  const filteredOrders = useMemo(() => {
+    let filtered = orders.filter(order => order.customer_email === user?.email);
+    
+    // Sort orders based on selected option
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortOption) {
+        case 'status':
+          // Priority order: pending, quotation_sent, counter_offer_pending, ready_for_pickup, picked_up, returned, declined
+          const statusPriority = {
+            'pending': 1,
+            'quotation_sent': 2,
+            'counter_offer_pending': 3,
+            'ready_for_pickup': 4,
+            'picked_up': 5,
+            'returned': 6,
+            'declined': 7
+          };
+          const aPriority = statusPriority[a.status as keyof typeof statusPriority] || 8;
+          const bPriority = statusPriority[b.status as keyof typeof statusPriority] || 8;
+          comparison = aPriority - bPriority;
+          break;
+          
+        case 'date':
+          const aDate = new Date(a.created_at).getTime();
+          const bDate = new Date(b.created_at).getTime();
+          comparison = aDate - bDate;
+          break;
+          
+        case 'rental_date':
+          const aRentalDate = new Date(a.rental_date).getTime();
+          const bRentalDate = new Date(b.rental_date).getTime();
+          comparison = aRentalDate - bRentalDate;
+          break;
+          
+        case 'return_date':
+          const aReturnDate = a.return_date ? new Date(a.return_date).getTime() : 0;
+          const bReturnDate = b.return_date ? new Date(b.return_date).getTime() : 0;
+          comparison = aReturnDate - bReturnDate;
+          break;
+          
+        case 'amount':
+          const aAmount = a.quotation_amount || 0;
+          const bAmount = b.quotation_amount || 0;
+          comparison = aAmount - bAmount;
+          break;
+          
+        case 'item_name':
+          comparison = (a.item_name || '').localeCompare(b.item_name || '');
+          break;
+          
+        case 'clothing_type':
+          comparison = (a.clothing_type || '').localeCompare(b.clothing_type || '');
+          break;
+          
+        default:
+          comparison = 0;
+      }
+      
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+    
+    return filtered;
+  }, [orders, user?.email, sortOption, sortDirection]);
+
+  // Handle sort change
+  const handleSortChange = (option: string, direction: 'asc' | 'desc') => {
+    setSortOption(option);
+    setSortDirection(direction);
+  };
 
   useEffect(() => {
     if (selectedOrder && __DEV__) {
@@ -891,20 +974,31 @@ export default function RentalOrderFlow() {
 
   return (
     <View style={styles.container}>
-      {/* Header with New Rental Button */}
+      {/* Header with New Rental Button and Sort */}
       <View style={styles.sectionHeader}>
         <View>
           <Text style={styles.sectionTitle}>Rental Orders</Text>
           <Text style={styles.sectionSubtitle}>Manage your garment rentals</Text>
         </View>
+        <View style={styles.headerActions}>
+          {/* Collapsible Sort Button */}
+          <CollapsibleSortButton
+            sortOption={sortOption}
+            sortDirection={sortDirection}
+            onSortChange={handleSortChange}
+            sortOptions={sortOptions}
+            style={styles.sortButtonContainer}
+          />
+          
         <TouchableOpacity
           style={styles.newRentalButton}
           onPress={() => setShowNewRentalModal(true)}
           activeOpacity={0.8}
         >
-          <Ionicons name="add" size={20} color={Colors.text.inverse} />
+          <Ionicons name="add" size={16} color={Colors.text.inverse} />
           <Text style={styles.newRentalButtonText}>New Rental</Text>
         </TouchableOpacity>
+        </View>
       </View>
 
       {/* Orders List */}
@@ -2015,9 +2109,21 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 20,
     paddingHorizontal: 12,
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
+  sortButtonContainer: {
+    flex: 0,
   },
   sectionTitle: {
     fontSize: Platform.OS === 'ios' ? 20 : 19,
@@ -2033,20 +2139,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.primary,
-    paddingHorizontal: Platform.OS === 'ios' ? 12 : 10,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 2,
+    minWidth: 120,
   },
   newRentalButtonText: {
     color: Colors.text.inverse,
     fontWeight: '600',
-    marginLeft: 6,
-    fontSize: Platform.OS === 'ios' ? 13 : 12,
+    marginLeft: 4,
+    fontSize: 11,
   },
   ordersList: {
     paddingBottom: 20,

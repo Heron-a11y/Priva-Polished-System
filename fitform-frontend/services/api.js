@@ -20,12 +20,12 @@ class ApiService {
             const testResult = await this.testConnection();
             if (!testResult.success) {
                 console.log('⚠️ Network test failed, trying fallback');
-                this.baseURL = 'http://192.168.1.59:8000/api';
+                this.baseURL = 'http://192.168.2.113:8000/api';
                 console.log('🌐 ApiService using fallback URL:', this.baseURL);
             }
         } catch (error) {
             console.log('⚠️ Failed to get network config, using fallback');
-            this.baseURL = 'http://192.168.1.59:8000/api';
+            this.baseURL = 'http://192.168.2.113:8000/api';
             console.log('🌐 ApiService using fallback URL:', this.baseURL);
         }
     }

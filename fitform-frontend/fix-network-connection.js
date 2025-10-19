@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 class NetworkConnectionFix {
     constructor() {
-        this.currentIP = '192.168.1.56'; // Your current IP
+        this.currentIP = '192.168.0.36'; // Your current IP
         this.baseURL = `http://${this.currentIP}:8000/api`;
         this.testEndpoints = [
             '/test',
@@ -194,5 +194,6 @@ class NetworkConnectionFix {
 
 // Export singleton instance
 export default new NetworkConnectionFix();
+
 
 
