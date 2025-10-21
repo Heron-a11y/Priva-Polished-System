@@ -274,4 +274,8 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         Route::post('/admin/measurement-history/{id}/restore', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'restore']);
         Route::post('/admin/measurement-history/sync', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'syncFromMeasurementHistory']);
     });
-}); 
+});
+
+// Receipt Generation Routes (outside auth middleware for direct URL access)
+Route::get('/receipts/rental/{id}', [\App\Http\Controllers\ReceiptController::class, 'generateRentalReceipt']);
+Route::get('/receipts/purchase/{id}', [\App\Http\Controllers\ReceiptController::class, 'generatePurchaseReceipt']); 

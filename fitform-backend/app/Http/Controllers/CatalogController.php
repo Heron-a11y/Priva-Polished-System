@@ -4,11 +4,71 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\CatalogItem;
+use App\Models\User;
+use App\Models\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 
 class CatalogController extends Controller
 {
+    /**
+     * Create notification for catalog events
+     */
+    private function createCatalogNotification($userId, $senderRole, $message, $catalogItemId = null)
+    {
+        Notification::create([
+            'user_id' => $userId,
+            'sender_role' => $senderRole,
+            'message' => $message,
+            'read' => false,
+            'order_id' => $catalogItemId,
+            'order_type' => 'catalog'
+        ]);
+    }
+
+    /**
+     * Notify all customers about catalog events
+     */
+    private function notifyAllCustomers($message, $catalogItemId = null)
+    {
+        $customers = User::where('role', 'customer')->get();
+        foreach ($customers as $customer) {
+            $this->createCatalogNotification($customer->id, 'admin', $message, $catalogItemId);
+        }
+    }
+
+    /**
+     * Notify customers about new popular items
+     */
+    private function notifyCustomersAboutPopularItem($catalogItem)
+    {
+        $message = "New popular item added: {$catalogItem->name} - {$catalogItem->clothing_type}";
+        $this->notifyAllCustomers($message, $catalogItem->id);
+        
+        Log::info('Popular item notification sent to customers', [
+            'catalog_item_id' => $catalogItem->id,
+            'item_name' => $catalogItem->name,
+            'customers_notified' => User::where('role', 'customer')->count()
+        ]);
+    }
+
+    /**
+     * Notify customers about catalog updates
+     */
+    private function notifyCustomersAboutCatalogUpdate($catalogItem, $action = 'updated')
+    {
+        $message = "Catalog item {$action}: {$catalogItem->name} - {$catalogItem->clothing_type}";
+        $this->notifyAllCustomers($message, $catalogItem->id);
+        
+        Log::info("Catalog {$action} notification sent to customers", [
+            'catalog_item_id' => $catalogItem->id,
+            'item_name' => $catalogItem->name,
+            'action' => $action,
+            'customers_notified' => User::where('role', 'customer')->count()
+        ]);
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -97,6 +157,14 @@ class CatalogController extends Controller
         }
 
         $catalogItem = CatalogItem::create($data);
+
+        // Notify customers about new catalog item
+        $this->notifyCustomersAboutCatalogUpdate($catalogItem, 'created');
+
+        // If item is featured (popular), send special notification
+        if ($catalogItem->is_featured) {
+            $this->notifyCustomersAboutPopularItem($catalogItem);
+        }
 
         return response()->json([
             'success' => true,
@@ -278,6 +346,14 @@ class CatalogController extends Controller
             $item->updateCategoryBasedOnFeatured();
         }
 
+        // Notify customers about catalog item update
+        $this->notifyCustomersAboutCatalogUpdate($item, 'updated');
+
+        // If item became featured (popular), send special notification
+        if ($item->is_featured && $request->has('is_featured')) {
+            $this->notifyCustomersAboutPopularItem($item);
+        }
+
         return response()->json([
             'success' => true,
             'data' => $item,
@@ -398,6 +474,11 @@ class CatalogController extends Controller
 
         // Handle category management based on featured status
         $item->updateCategoryBasedOnFeatured();
+
+        // Notify customers if item became featured (added to popular category)
+        if ($item->is_featured) {
+            $this->notifyCustomersAboutPopularItem($item);
+        }
 
         return response()->json([
             'success' => true,

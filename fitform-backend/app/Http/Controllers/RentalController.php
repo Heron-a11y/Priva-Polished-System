@@ -100,6 +100,23 @@ class RentalController extends Controller
         
         $rental = Rental::create($rentalData);
         
+        // Get customer information for notifications
+        $customer = \App\Models\User::find($rental->user_id);
+        $customerName = $customer ? $customer->name : 'Unknown Customer';
+        
+        // Notify all admins about new rental order
+        $admins = \App\Models\User::where('role', 'admin')->get();
+        foreach ($admins as $admin) {
+            Notification::create([
+                'user_id' => $admin->id,
+                'sender_role' => 'customer',
+                'message' => $customerName . ' created a new rental order #' . $rental->id . ' for ' . $rental->item_name,
+                'read' => false,
+                'order_id' => $rental->id,
+                'order_type' => 'Rental',
+            ]);
+        }
+        
         // Automatically create history entry
         \App\Models\RentalPurchaseHistory::create([
             'user_id' => $rental->user_id,
@@ -292,13 +309,17 @@ class RentalController extends Controller
         
         // Update history entry
         $this->updateRentalHistory($rental);
+        // Get customer information for notifications
+        $customer = \App\Models\User::find($rental->user_id);
+        $customerName = $customer ? $customer->name : 'Unknown Customer';
+        
         // Notify all admins
         $admins = \App\Models\User::where('role', 'admin')->get();
         foreach ($admins as $admin) {
             Notification::create([
                 'user_id' => $admin->id,
                 'sender_role' => 'customer',
-                'message' => 'Customer accepted the quotation for rental order #' . $rental->id,
+                'message' => $customerName . ' accepted the quotation for rental order #' . $rental->id,
                 'read' => false,
                 'order_id' => $rental->id,
                 'order_type' => 'Rental',
@@ -317,13 +338,17 @@ class RentalController extends Controller
         
         // Update history entry
         $this->updateRentalHistory($rental);
+        // Get customer information for notifications
+        $customer = \App\Models\User::find($rental->user_id);
+        $customerName = $customer ? $customer->name : 'Unknown Customer';
+        
         // Notify all admins
         $admins = \App\Models\User::where('role', 'admin')->get();
         foreach ($admins as $admin) {
             Notification::create([
                 'user_id' => $admin->id,
                 'sender_role' => 'customer',
-                'message' => 'Customer rejected the quotation for rental order #' . $rental->id . '. Transaction declined.',
+                'message' => $customerName . ' rejected the quotation for rental order #' . $rental->id . '. Transaction declined.',
                 'read' => false,
                 'order_id' => $rental->id,
                 'order_type' => 'Rental',
@@ -539,13 +564,17 @@ class RentalController extends Controller
         $rental->status = 'counter_offer_pending';
         $rental->save();
 
+        // Get customer information for notifications
+        $customer = \App\Models\User::find($rental->user_id);
+        $customerName = $customer ? $customer->name : 'Unknown Customer';
+        
         // Notify all admins
         $admins = \App\Models\User::where('role', 'admin')->get();
         foreach ($admins as $admin) {
             Notification::create([
                 'user_id' => $admin->id,
                 'sender_role' => 'customer',
-                'message' => 'Customer made a counter offer of ₱' . number_format($data['counter_offer_amount'], 2) . ' for rental order #' . $rental->id,
+                'message' => $customerName . ' made a counter offer of ₱' . number_format($data['counter_offer_amount'], 2) . ' for rental order #' . $rental->id,
                 'read' => false,
                 'order_id' => $rental->id,
                 'order_type' => 'Rental',

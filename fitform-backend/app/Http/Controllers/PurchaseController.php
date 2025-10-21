@@ -191,13 +191,17 @@ class PurchaseController extends Controller
         
         // Update history entry
         $this->updatePurchaseHistory($purchase);
+        // Get customer information for notifications
+        $customer = \App\Models\User::find($purchase->user_id);
+        $customerName = $customer ? $customer->name : 'Unknown Customer';
+        
         // Notify all admins
         $admins = \App\Models\User::where('role', 'admin')->get();
         foreach ($admins as $admin) {
             Notification::create([
                 'user_id' => $admin->id,
                 'sender_role' => 'customer',
-                'message' => 'Customer accepted the quotation for purchase order #' . $purchase->id,
+                'message' => $customerName . ' accepted the quotation for purchase order #' . $purchase->id,
                 'read' => false,
                 'order_id' => $purchase->id,
                 'order_type' => 'Purchase',
@@ -215,13 +219,17 @@ class PurchaseController extends Controller
         
         // Update history entry
         $this->updatePurchaseHistory($purchase);
+        // Get customer information for notifications
+        $customer = \App\Models\User::find($purchase->user_id);
+        $customerName = $customer ? $customer->name : 'Unknown Customer';
+        
         // Notify all admins
         $admins = \App\Models\User::where('role', 'admin')->get();
         foreach ($admins as $admin) {
             Notification::create([
                 'user_id' => $admin->id,
                 'sender_role' => 'customer',
-                'message' => 'Customer rejected the quotation for purchase order #' . $purchase->id . '. Transaction declined.',
+                'message' => $customerName . ' rejected the quotation for purchase order #' . $purchase->id . '. Transaction declined.',
                 'read' => false,
                 'order_id' => $purchase->id,
                 'order_type' => 'Purchase',
@@ -257,13 +265,17 @@ class PurchaseController extends Controller
         $purchase->status = 'counter_offer_pending';
         $purchase->save();
 
+        // Get customer information for notifications
+        $customer = \App\Models\User::find($purchase->user_id);
+        $customerName = $customer ? $customer->name : 'Unknown Customer';
+        
         // Notify all admins
         $admins = \App\Models\User::where('role', 'admin')->get();
         foreach ($admins as $admin) {
             Notification::create([
                 'user_id' => $admin->id,
                 'sender_role' => 'customer',
-                'message' => 'Customer made a counter offer of ₱' . number_format($data['counter_offer_amount'], 2) . ' for purchase order #' . $purchase->id,
+                'message' => $customerName . ' made a counter offer of ₱' . number_format($data['counter_offer_amount'], 2) . ' for purchase order #' . $purchase->id,
                 'read' => false,
                 'order_id' => $purchase->id,
                 'order_type' => 'Purchase',
@@ -384,6 +396,23 @@ class PurchaseController extends Controller
         $data['customer_name'] = $request->user()->name;
         $data['status'] = 'pending';
         $purchase = Purchase::create($data);
+        
+        // Get customer information for notifications
+        $customer = \App\Models\User::find($purchase->user_id);
+        $customerName = $customer ? $customer->name : 'Unknown Customer';
+        
+        // Notify all admins about new purchase order
+        $admins = \App\Models\User::where('role', 'admin')->get();
+        foreach ($admins as $admin) {
+            Notification::create([
+                'user_id' => $admin->id,
+                'sender_role' => 'customer',
+                'message' => $customerName . ' created a new purchase order #' . $purchase->id . ' for ' . $purchase->item_name,
+                'read' => false,
+                'order_id' => $purchase->id,
+                'order_type' => 'Purchase',
+            ]);
+        }
         
         // Automatically create history entry
         \App\Models\RentalPurchaseHistory::create([

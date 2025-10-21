@@ -6,6 +6,9 @@ use Illuminate\Http\Request;
 use App\Models\Appointment;
 use App\Models\User;
 use App\Models\Notification;
+use App\Models\AdminSettings;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class AppointmentController extends Controller
 {
@@ -291,6 +294,9 @@ class AppointmentController extends Controller
                 'notes' => $validated['notes'] ?? null,
                 'status' => 'pending'
             ]);
+
+            // Check auto approval after creating the appointment
+            $this->checkAutoApproval($appointment);
 
             // Get customer information for notifications
             $customer = User::find($userId);
@@ -580,6 +586,122 @@ class AppointmentController extends Controller
                 'message' => 'Failed to update appointment status',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Check and apply auto approval logic for an appointment
+     */
+    private function checkAutoApproval($appointment)
+    {
+        try {
+            $settings = AdminSettings::getSettings();
+            
+            // Check if auto-approval is enabled
+            if (!$settings->auto_approve_appointments) {
+                Log::info('Auto-approval check skipped: Auto-approval disabled', [
+                    'appointment_id' => $appointment->id
+                ]);
+                return;
+            }
+            
+            $appointmentDate = Carbon::parse($appointment->appointment_date);
+            $appointmentDateOnly = $appointmentDate->format('Y-m-d');
+            
+            // Check if appointment is within business hours
+            $appointmentTime = $appointmentDate->format('H:i');
+            $businessStart = $settings->business_start_time->format('H:i');
+            $businessEnd = $settings->business_end_time->format('H:i');
+            
+            if ($appointmentTime < $businessStart || $appointmentTime > $businessEnd) {
+                Log::info('Auto-approval check skipped: Outside business hours', [
+                    'appointment_id' => $appointment->id,
+                    'appointment_time' => $appointmentTime,
+                    'business_hours' => "{$businessStart} - {$businessEnd}"
+                ]);
+                return;
+            }
+            
+            // Check for time slot conflicts with first-come-first-served priority
+            $appointmentStart = $appointmentDate->copy()->subMinutes(15);
+            $appointmentEnd = $appointmentDate->copy()->addMinutes(15);
+            
+            $conflictingAppointments = Appointment::whereDate('appointment_date', $appointmentDateOnly)
+                ->where('status', '!=', 'cancelled')
+                ->where('id', '!=', $appointment->id)
+                ->where(function ($query) use ($appointmentStart, $appointmentEnd) {
+                    $query->whereBetween('appointment_date', [$appointmentStart, $appointmentEnd]);
+                })
+                ->orderBy('created_at', 'asc')
+                ->get();
+            
+            if ($conflictingAppointments->count() > 0) {
+                // Check if this appointment was created before any conflicting ones
+                $thisAppointmentCreatedAt = $appointment->created_at;
+                $earliestConflictCreatedAt = $conflictingAppointments->first()->created_at;
+                
+                if ($thisAppointmentCreatedAt->gt($earliestConflictCreatedAt)) {
+                    // This appointment was created later - cancel it
+                    $appointment->update(['status' => 'cancelled']);
+                    
+                    Log::info('Appointment auto-cancelled: Time slot conflict (first-come-first-served)', [
+                        'appointment_id' => $appointment->id,
+                        'user_id' => $appointment->user_id,
+                        'appointment_date' => $appointment->appointment_date,
+                        'created_at' => $thisAppointmentCreatedAt,
+                        'earliest_conflict_created_at' => $earliestConflictCreatedAt,
+                        'reason' => 'Time slot already taken by earlier appointment'
+                    ]);
+                    return;
+                } else {
+                    // This appointment was created first - cancel the conflicting ones
+                    foreach ($conflictingAppointments as $conflictingAppointment) {
+                        if ($conflictingAppointment->status === 'pending') {
+                            $conflictingAppointment->update(['status' => 'cancelled']);
+                            
+                            Log::info('Conflicting appointment auto-cancelled: First-come-first-served priority', [
+                                'cancelled_appointment_id' => $conflictingAppointment->id,
+                                'cancelled_user_id' => $conflictingAppointment->user_id,
+                                'priority_appointment_id' => $appointment->id,
+                                'priority_user_id' => $appointment->user_id,
+                                'appointment_date' => $conflictingAppointment->appointment_date,
+                                'reason' => 'Time slot taken by earlier appointment'
+                            ]);
+                        }
+                    }
+                }
+            }
+            
+            // Check daily appointment limit
+            $appointmentsToday = Appointment::whereDate('appointment_date', $appointmentDateOnly)
+                ->where('status', '!=', 'cancelled')
+                ->count();
+            
+            if ($appointmentsToday >= $settings->max_appointments_per_day) {
+                Log::info('Auto-approval check skipped: Daily limit reached', [
+                    'appointment_id' => $appointment->id,
+                    'appointments_today' => $appointmentsToday,
+                    'max_appointments' => $settings->max_appointments_per_day
+                ]);
+                return;
+            }
+            
+            // All conditions met - approve the appointment
+            $appointment->update(['status' => 'confirmed']);
+            
+            Log::info('Appointment auto-approved with first-come-first-served priority', [
+                'appointment_id' => $appointment->id,
+                'user_id' => $appointment->user_id,
+                'appointment_date' => $appointment->appointment_date,
+                'service_type' => $appointment->service_type,
+                'created_at' => $appointment->created_at
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error in auto-approval check', [
+                'appointment_id' => $appointment->id,
+                'error' => $e->getMessage()
+            ]);
         }
     }
 } 

@@ -59,3 +59,6 @@ echo "   📁 Total files in storage: " . count(glob($backendStoragePath . '*'))
 echo "\n🎉 Image copying completed!\n";
 echo "💡 Remember to run 'php artisan db:seed --class=CatalogItemSeeder' to update the database\n";
 
+
+
+

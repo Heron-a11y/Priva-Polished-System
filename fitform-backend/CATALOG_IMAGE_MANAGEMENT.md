@@ -120,3 +120,6 @@ The frontend catalog management screen includes:
 - Fallback to placeholder for missing images
 - Error handling for failed image loads
 
+
+
+
