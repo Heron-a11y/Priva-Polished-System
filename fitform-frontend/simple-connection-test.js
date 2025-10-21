@@ -2,7 +2,7 @@
 // This script tests the API connection without complex network configuration
 
 const testConnection = async () => {
-    const baseURL = 'http://192.168.1.56:8000/api';
+    const baseURL = 'http://192.168.0.36:8000/api';
     
     console.log('🧪 Testing simple connection to:', baseURL);
     
@@ -69,5 +69,6 @@ export default testConnection;
 if (typeof window !== 'undefined') {
     testConnection();
 }
+
 
 

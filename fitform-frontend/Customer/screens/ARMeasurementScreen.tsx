@@ -608,13 +608,15 @@ export default function ARMeasurementScreen() {
     }
   };
 
-  // Start front measurement countdown (5s)
+  // Start front measurement countdown (dynamic based on camera)
   const startFrontMeasurement = () => {
     setCurrentStep('front');
-    setCountdown(5); // 5 seconds for front measurement
+    // Dynamic countdown based on camera selection
+    const frontCountdown = cameraFacing === 'front' ? 10 : 5;
+    setCountdown(frontCountdown);
     setIsTracking(true);
 
-    console.log('Starting front measurement countdown (5 seconds)');
+    console.log(`Starting front measurement countdown (${frontCountdown} seconds) - Camera: ${cameraFacing}`);
 
     // Start countdown with proper cleanup - FIXED: Use 1000ms interval
     const countdownInterval = setInterval(() => {
@@ -640,7 +642,7 @@ export default function ARMeasurementScreen() {
           }, 2000); // Increased delay to 2 seconds
           activeTimeouts.current.add(sideTimeout);
           
-          return 5;
+          return frontCountdown;
         }
         return prev - 1;
       });
@@ -650,13 +652,15 @@ export default function ARMeasurementScreen() {
     activeIntervals.current.add(countdownInterval);
   };
 
-  // Start side measurement countdown (5s)
+  // Start side measurement countdown (dynamic based on camera)
   const startSideMeasurement = () => {
     setCurrentStep('side');
-    setCountdown(5); // 5 seconds for side measurement
+    // Dynamic countdown based on camera selection
+    const sideCountdown = cameraFacing === 'front' ? 5 : 5; // Both cameras use 5s for side
+    setCountdown(sideCountdown);
     setIsTracking(true);
 
-    console.log('Starting side measurement countdown (5 seconds)');
+    console.log(`Starting side measurement countdown (${sideCountdown} seconds) - Camera: ${cameraFacing}`);
 
     // Start countdown with proper cleanup - FIXED: Use 1000ms interval
     const countdownInterval = setInterval(() => {
@@ -693,7 +697,7 @@ export default function ARMeasurementScreen() {
             console.log('Set measurements state to:', combinedMeasurements);
             handleMeasurementComplete();
           }, 100);
-          return 5;
+          return sideCountdown;
         }
         return prev - 1;
       });

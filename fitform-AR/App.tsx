@@ -254,6 +254,7 @@ export default function App() {
   const [scanComplete, setScanComplete] = useState(false);
   const [scanTimeout, setScanTimeout] = useState<NodeJS.Timeout | null>(null);
   const [scanStartTime, setScanStartTime] = useState<number>(0);
+  const [cameraFacing, setCameraFacing] = useState<'front' | 'back'>('front');
   
   // Animation for scanning line
   const scanningLineAnimation = useRef(new Animated.Value(0)).current;
@@ -2100,7 +2101,9 @@ export default function App() {
   // Start front measurement countdown
   const startFrontMeasurement = () => {
     setCurrentStep('front');
-    setCountdown(10);
+    // Dynamic countdown based on camera selection
+    const frontCountdown = cameraFacing === 'front' ? 10 : 5;
+    setCountdown(frontCountdown);
     setIsTracking(true);
 
     // Start countdown with proper cleanup
@@ -2117,7 +2120,7 @@ export default function App() {
           }, 1000);
           activeTimeouts.current.add(sideTimeout);
           
-          return 10;
+          return frontCountdown;
         }
         return prev - 1;
       });
@@ -2130,7 +2133,9 @@ export default function App() {
   // Start side measurement countdown
   const startSideMeasurement = () => {
     setCurrentStep('side');
-    setCountdown(10);
+    // Dynamic countdown based on camera selection
+    const sideCountdown = cameraFacing === 'front' ? 5 : 5; // Both cameras use 5s for side
+    setCountdown(sideCountdown);
     setIsTracking(true);
 
     // Start countdown with proper cleanup
@@ -2141,7 +2146,7 @@ export default function App() {
           activeIntervals.current.delete(countdownInterval);
           setIsTracking(false);
           handleMeasurementComplete();
-          return 10;
+          return sideCountdown;
         }
         return prev - 1;
       });

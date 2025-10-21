@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
+import CollapsibleSortButton from '../../components/CollapsibleSortButton';
 import { getLocalImageUrl } from '../../utils/imageUrlHelper';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -50,6 +51,73 @@ const AppointmentsScreen = () => {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // Sort options state
+  const [sortOption, setSortOption] = useState('status');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Sort options configuration
+  const sortOptions = [
+    { key: 'status', label: 'Status', icon: 'flag' },
+    { key: 'date', label: 'Appointment Date', icon: 'calendar' },
+    { key: 'service', label: 'Service Type', icon: 'construct' },
+    { key: 'created', label: 'Date Created', icon: 'time' },
+  ];
+  
+  // Memoize sorted appointments
+  const sortedAppointments = useMemo(() => {
+    const sorted = [...appointments];
+    
+    sorted.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortOption) {
+        case 'status':
+          // Priority order: pending, confirmed, completed
+          const statusPriority = {
+            'pending': 1,
+            'confirmed': 2,
+            'completed': 3
+          };
+          const aPriority = statusPriority[a.status as keyof typeof statusPriority] || 4;
+          const bPriority = statusPriority[b.status as keyof typeof statusPriority] || 4;
+          comparison = aPriority - bPriority;
+          break;
+          
+        case 'date':
+          const aDate = new Date(a.appointment_date).getTime();
+          const bDate = new Date(b.appointment_date).getTime();
+          comparison = aDate - bDate;
+          break;
+          
+        case 'service':
+          const aService = a.service_type.toLowerCase();
+          const bService = b.service_type.toLowerCase();
+          comparison = aService.localeCompare(bService);
+          break;
+          
+        case 'created':
+          // Assuming appointments have a created_at field, fallback to appointment_date
+          const aCreated = new Date(a.created_at || a.appointment_date).getTime();
+          const bCreated = new Date(b.created_at || b.appointment_date).getTime();
+          comparison = aCreated - bCreated;
+          break;
+          
+        default:
+          comparison = 0;
+      }
+      
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+    
+    return sorted;
+  }, [appointments, sortOption, sortDirection]);
+
+  // Handle sort change
+  const handleSortChange = (option: string, direction: 'asc' | 'desc') => {
+    setSortOption(option);
+    setSortDirection(direction);
+  };
   
   // Helper function to get appointment status color
   const getAppointmentStatusColor = (status: string) => {
@@ -971,7 +1039,17 @@ const AppointmentsScreen = () => {
 
         {/* Appointments List */}
         <View style={styles.appointmentsSection}>
-          <Text style={styles.sectionTitle}>Your Appointments</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Your Appointments</Text>
+            {/* Collapsible Sort Button */}
+            <CollapsibleSortButton
+              sortOption={sortOption}
+              sortDirection={sortDirection}
+              onSortChange={handleSortChange}
+              sortOptions={sortOptions}
+              style={styles.sortButtonContainer}
+            />
+          </View>
           {appointments.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="calendar-outline" size={48} color="#ccc" />
@@ -979,7 +1057,7 @@ const AppointmentsScreen = () => {
               <Text style={styles.emptySubtext}>Tap the + button to schedule your first appointment</Text>
             </View>
           ) : (
-            appointments.map((appointment) => {
+            sortedAppointments.map((appointment) => {
               const dateInfo = formatDate(appointment.appointment_date);
               
               return (
@@ -1763,11 +1841,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 16,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#014D40',
-    marginBottom: 16,
+  },
+  sortButtonContainer: {
+    flex: 0,
   },
   emptyState: {
     alignItems: 'center',

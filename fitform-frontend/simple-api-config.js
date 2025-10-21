@@ -3,11 +3,11 @@
 
 const SIMPLE_API_CONFIG = {
     // Fixed backend URL - no dynamic detection
-    baseURL: 'http://192.168.1.56:8000/api',
+    baseURL: 'http://192.168.0.36:8000/api',
     
     // Fallback URLs if needed
     fallbackURLs: [
-        'http://192.168.1.56:8000/api',
+        'http://192.168.0.36:8000/api',
         'http://localhost:8000/api'
     ],
     
@@ -49,5 +49,6 @@ const SIMPLE_API_CONFIG = {
 };
 
 export default SIMPLE_API_CONFIG;
+
 
 
