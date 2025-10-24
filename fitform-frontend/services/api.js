@@ -360,6 +360,36 @@ class ApiService {
         return this.request('/admin/appointments/stats');
     }
 
+    // Admin Dashboard Statistics
+    async getAdminDashboardStats() {
+        return this.request('/admin/dashboard/stats');
+    }
+
+    async getOrderStats() {
+        return this.request('/admin/orders/stats');
+    }
+
+    async getCustomerStats() {
+        return this.request('/admin/customers/stats');
+    }
+
+    async getCatalogStats() {
+        return this.request('/admin/catalog/stats');
+    }
+
+    async getMeasurementStats() {
+        return this.request('/admin/measurement-history/stats');
+    }
+
+    // Activity Log APIs
+    async getRecentActivities() {
+        return this.request('/admin/activity-logs/recent');
+    }
+
+    async getActivityStats() {
+        return this.request('/admin/activity-logs/stats');
+    }
+
     // Admin Settings
     async getAdminSettings() {
         return this.request('/admin/settings');
@@ -435,15 +465,81 @@ class ApiService {
         });
     }
 
-    // Unified History
-    async getRentalPurchaseHistory() {
+    // Unified History with pagination support
+    async getRentalPurchaseHistory(params = {}) {
         try {
-            const response = await this.request('/rental-purchase-history');
-            console.log('✅ Rental purchase history loaded');
-            return { success: true, data: response.data || response };
+            console.log('🔄 Fetching rental purchase history with params:', params);
+            
+            const queryParams = new URLSearchParams();
+            
+            // Add pagination parameters
+            if (params.page) queryParams.append('page', params.page);
+            if (params.per_page) queryParams.append('per_page', params.per_page);
+            if (params.search) queryParams.append('search', params.search);
+            if (params.sort_by) queryParams.append('sort_by', params.sort_by);
+            if (params.sort_order) queryParams.append('sort_order', params.sort_order);
+            
+            // Add filters
+            if (params.filters) {
+                Object.entries(params.filters).forEach(([key, value]) => {
+                    if (value !== undefined && value !== null && value !== '') {
+                        queryParams.append(`filters[${key}]`, value);
+                    }
+                });
+            }
+            
+            const queryString = queryParams.toString();
+            const url = `/rental-purchase-history${queryString ? `?${queryString}` : ''}`;
+            
+            console.log('🌐 Making request to:', url);
+            const response = await this.request(url);
+            
+            // Ensure response has the expected structure
+            if (response && response.success !== false) {
+                console.log('✅ Rental purchase history loaded successfully');
+                return {
+                    success: true,
+                    data: response.data || response,
+                    pagination: response.pagination || null,
+                    filters: response.filters || {}
+                };
+            } else {
+                console.log('⚠️ API returned unsuccessful response:', response);
+                return { 
+                    success: false, 
+                    data: [], 
+                    pagination: null,
+                    message: response.message || 'Failed to load history'
+                };
+            }
         } catch (error) {
-            console.log('❌ Error loading rental purchase history:', error.message);
-            return { success: false, data: [] };
+            console.error('❌ Error loading rental purchase history:', error);
+            
+            // Handle specific error types
+            if (error.message.includes('404')) {
+                console.log('ℹ️ No history found (404)');
+                return { 
+                    success: true, 
+                    data: [], 
+                    pagination: null,
+                    message: 'No history found'
+                };
+            } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+                console.log('🔐 Authentication required');
+                return { 
+                    success: false, 
+                    data: [], 
+                    pagination: null,
+                    message: 'Authentication required'
+                };
+            } else {
+                return { 
+                    success: false, 
+                    data: [], 
+                    pagination: null,
+                    message: error.message || 'Failed to load history'
+                };
+            }
         }
     }
 
@@ -451,6 +547,64 @@ class ApiService {
         return this.request(`/rental-purchase-history/${id}`, {
             method: 'DELETE',
         });
+    }
+
+    // Performance Monitoring
+    async getPerformanceMetrics() {
+        try {
+            const response = await this.request('/admin/performance/metrics');
+            console.log('✅ Performance metrics loaded');
+            return response;
+        } catch (error) {
+            console.log('❌ Error loading performance metrics:', error.message);
+            return { success: false, data: null };
+        }
+    }
+
+    async getPaginationMetrics() {
+        try {
+            const response = await this.request('/admin/performance/pagination');
+            console.log('✅ Pagination metrics loaded');
+            return response;
+        } catch (error) {
+            console.log('❌ Error loading pagination metrics:', error.message);
+            return { success: false, data: null };
+        }
+    }
+
+    async getPerformanceRecommendations() {
+        try {
+            const response = await this.request('/admin/performance/recommendations');
+            console.log('✅ Performance recommendations loaded');
+            return response;
+        } catch (error) {
+            console.log('❌ Error loading performance recommendations:', error.message);
+            return { success: false, data: null };
+        }
+    }
+
+    async getPerformanceOverview() {
+        try {
+            const response = await this.request('/admin/performance/overview');
+            console.log('✅ Performance overview loaded');
+            return response;
+        } catch (error) {
+            console.log('❌ Error loading performance overview:', error.message);
+            return { success: false, data: null };
+        }
+    }
+
+    async optimizeDatabase() {
+        try {
+            const response = await this.request('/admin/performance/optimize', {
+                method: 'POST',
+            });
+            console.log('✅ Database optimization completed');
+            return response;
+        } catch (error) {
+            console.log('❌ Error optimizing database:', error.message);
+            return { success: false, data: null };
+        }
     }
 
     // Counter offer methods
@@ -929,6 +1083,27 @@ class ApiService {
         return this.request(`/purchases/${id}/cancel`, {
             method: 'POST',
         });
+    }
+
+    // Generate receipt for rental or purchase
+    async generateReceipt(id, type) {
+        try {
+            console.log(`🔄 Generating receipt for ${type} ID: ${id}`);
+            
+            const endpoint = type === 'rental' 
+                ? `/rentals/${id}/generate-receipt`
+                : `/purchases/${id}/generate-receipt`;
+            
+            const response = await this.request(endpoint, {
+                method: 'POST',
+            });
+            
+            console.log('✅ Receipt generated successfully:', response);
+            return response;
+        } catch (error) {
+            console.error('❌ Error generating receipt:', error);
+            throw error;
+        }
     }
 
 }

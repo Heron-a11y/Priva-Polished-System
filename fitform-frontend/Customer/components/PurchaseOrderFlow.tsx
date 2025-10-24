@@ -30,6 +30,9 @@ import DynamicClothingTypeCatalog from '../../components/DynamicClothingTypeCata
 import { MEASUREMENT_REQUIREMENTS } from '../../constants/ClothingTypes';
 import { MeasurementData, CompleteMeasurements, normalizeMeasurementData } from '../../types/measurements';
 import { useCatalogData } from '../../hooks/useCatalogData';
+import { getLocalImageUrl } from '../../utils/imageUrlHelper';
+import { Linking } from 'react-native';
+import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
 
 // CLOTHING_TYPES moved to constants/ClothingTypes.ts
 
@@ -142,6 +145,14 @@ export default function PurchaseOrderFlow() {
   const { user } = useAuth();
   const router = useRouter();
   const { catalogItems, getItemById, refreshCatalog } = useCatalogData();
+
+  // Function to get catalog item by clothing type
+  const getCatalogItemByType = (clothingType: string) => {
+    return catalogItems.find(item => 
+      item.clothing_type.toLowerCase() === clothingType.toLowerCase() ||
+      item.name.toLowerCase().includes(clothingType.toLowerCase())
+    );
+  };
 
   useEffect(() => {
     if (showQuotationModal) {
@@ -494,24 +505,48 @@ export default function PurchaseOrderFlow() {
   const fetchPurchaseOrders = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
-      const res = await apiService.getPurchases();
-      setOrders(Array.isArray(res) ? res : res.data || []);
-    } catch (e: any) {
-      if (__DEV__) {
-        console.error('Error fetching purchase orders:', e);
+      console.log('🔄 Fetching purchase orders...');
+      
+      // Check if user is authenticated first
+      if (!user) {
+        console.log('⚠️ User not authenticated, skipping fetch');
+        setOrders([]);
+        return;
       }
-      setOrders([]);
+      
+      const response = await apiService.getPurchases();
+      console.log('📥 Purchase orders response:', response);
+      
+      // Handle different response structures
+      let purchaseOrders = [];
+      if (response && response.success !== false) {
+        purchaseOrders = Array.isArray(response.data) ? response.data : (Array.isArray(response) ? response : []);
+        console.log('✅ Purchase orders loaded successfully, count:', purchaseOrders.length);
+      } else {
+        console.log('⚠️ No purchase orders or API error:', response?.message);
+        purchaseOrders = [];
+      }
+      
+      setOrders(purchaseOrders);
+    } catch (error) {
+      console.error('❌ Error fetching purchase orders:', error);
+      
+      // Handle authentication errors
+      if (error.message?.includes('401') || error.message?.includes('Unauthenticated')) {
+        console.log('🔐 Authentication required - user needs to log in');
+        setOrders([]);
+      } else {
+        setOrders([]);
+      }
     } finally {
       if (showLoading) setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     fetchPurchaseOrders();
-    // Refresh catalog data to ensure we have the latest items
-    refreshCatalog();
-  }, [fetchPurchaseOrders, refreshCatalog]);
+  }, [fetchPurchaseOrders]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -520,8 +555,8 @@ export default function PurchaseOrderFlow() {
 
   // Memoize filtered orders to avoid re-filtering on every render
   const filteredOrders = useMemo(() => 
-    orders.filter(order => order.customer_email === user?.email && order.status !== 'cancelled'),
-    [orders, user?.email]
+    orders.filter(order => order.status !== 'cancelled'),
+    [orders]
   );
 
 
@@ -664,7 +699,7 @@ export default function PurchaseOrderFlow() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container}>
       {/* Header with New Purchase Button */}
       <View style={styles.sectionHeader}>
         <View>
@@ -1816,9 +1851,25 @@ export default function PurchaseOrderFlow() {
               <View style={styles.orderDetailCard}>
                 {/* Item Image */}
                 <View style={styles.itemImageContainer}>
-                  <View style={[styles.itemImagePlaceholder, { backgroundColor: '#6B7280' }]}>
-                    <Ionicons name="shirt-outline" size={48} color="#fff" />
-                  </View>
+                  {(() => {
+                    const catalogItem = getCatalogItemByType(selectedOrder.clothing_type || '');
+                    const imageUrl = catalogItem?.image_path ? getLocalImageUrl(catalogItem.image_path) : null;
+                    
+                    return imageUrl ? (
+                      <Image 
+                        source={{ uri: imageUrl }} 
+                        style={styles.itemImage}
+                        resizeMode="cover"
+                        onError={() => {
+                          console.log('Failed to load image:', imageUrl);
+                        }}
+                      />
+                    ) : (
+                      <View style={[styles.itemImagePlaceholder, { backgroundColor: '#6B7280' }]}>
+                        <Ionicons name="shirt-outline" size={48} color="#fff" />
+                      </View>
+                    );
+                  })()}
                 </View>
                 
                 <View style={styles.orderDetailHeader}>
@@ -1901,6 +1952,30 @@ export default function PurchaseOrderFlow() {
                   </>
                 )}
               </View>
+
+              {/* Generate Receipt Button - Only for picked_up status */}
+              {selectedOrder.status === 'picked_up' && (
+                <View style={styles.receiptButtonContainer}>
+                  <TouchableOpacity
+                    style={styles.generateReceiptButton}
+                    onPress={async () => {
+                      try {
+                        const receiptUrl = `${apiService.baseURL}/purchases/${selectedOrder.id}/receipt`;
+                        console.log('Generating receipt for purchase:', selectedOrder.id, 'URL:', receiptUrl);
+                        // Open receipt in browser for download
+                        await Linking.openURL(receiptUrl);
+                      } catch (error) {
+                        console.error('Receipt generation error:', error);
+                        Alert.alert('Error', 'Failed to generate receipt. Please make sure the order is completed and try again.');
+                      }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="receipt-outline" size={20} color="#fff" />
+                    <Text style={styles.generateReceiptButtonText}>Generate Receipt</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </ScrollView>
           </View>
         )}
@@ -1943,7 +2018,7 @@ export default function PurchaseOrderFlow() {
         message="Your purchase order has been submitted. We'll send you a quotation soon."
         orderType="purchase"
       />
-    </View>
+    </KeyboardAvoidingWrapper>
   );
 }
 
@@ -3850,5 +3925,33 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+  },
+  // Generate Receipt Button Styles
+  receiptButtonContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
+  },
+  generateReceiptButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  generateReceiptButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 8,
   },
 }); 

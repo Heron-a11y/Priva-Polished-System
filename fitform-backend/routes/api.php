@@ -77,6 +77,7 @@ Route::middleware([CorsMiddleware::class])->group(function () {
     // Admin Customer Management Routes (temporarily without auth for testing)
     Route::get('/admin/customers/test', [\App\Http\Controllers\CustomerController::class, 'test']);
     Route::get('/admin/customers/simple-test', [\App\Http\Controllers\CustomerController::class, 'simpleTest']);
+    Route::get('/admin/customers/stats', [\App\Http\Controllers\CustomerController::class, 'getStats']);
     Route::get('/admin/customers', [\App\Http\Controllers\CustomerController::class, 'index']);
     Route::get('/admin/customers/{id}', [\App\Http\Controllers\CustomerController::class, 'show']);
     Route::put('/admin/customers/{id}', [\App\Http\Controllers\CustomerController::class, 'update']);
@@ -94,6 +95,16 @@ Route::middleware([CorsMiddleware::class])->group(function () {
     Route::get('/admin/appointments', [\App\Http\Controllers\AppointmentController::class, 'indexAdmin']);
     Route::post('/admin/appointments/{id}/status', [\App\Http\Controllers\AppointmentController::class, 'adminUpdateStatus']);
     Route::get('/admin/appointments/stats', [\App\Http\Controllers\AppointmentController::class, 'getAppointmentStats']);
+    
+    // Admin Dashboard Statistics Routes
+    Route::get('/admin/orders/stats', [\App\Http\Controllers\OrderController::class, 'getStats']);
+    Route::get('/admin/catalog/stats', [\App\Http\Controllers\CatalogController::class, 'getStats']);
+    Route::get('/admin/measurement-history/stats', [\App\Http\Controllers\MeasurementHistoryController::class, 'adminStats']);
+    
+    // Activity Log Routes
+    Route::get('/admin/activity-logs', [\App\Http\Controllers\ActivityLogController::class, 'index']);
+    Route::get('/admin/activity-logs/recent', [\App\Http\Controllers\ActivityLogController::class, 'getRecentActivities']);
+    Route::get('/admin/activity-logs/stats', [\App\Http\Controllers\ActivityLogController::class, 'getActivityStats']);
     
     // Report generation routes
     Route::get('/admin/orders/generate-report', [\App\Http\Controllers\OrderController::class, 'generateReport']);
@@ -212,6 +223,10 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         Route::delete('/rentals/{id}', [\App\Http\Controllers\RentalController::class, 'destroy']);
         Route::delete('/purchases/{id}', [\App\Http\Controllers\PurchaseController::class, 'destroy']);
         
+        // Receipt generation routes
+        Route::post('/rentals/{id}/generate-receipt', [\App\Http\Controllers\RentalController::class, 'generateReceipt']);
+        Route::post('/purchases/{id}/generate-receipt', [\App\Http\Controllers\PurchaseController::class, 'generateReceipt']);
+        
         // Unified History routes
         Route::get('/rental-purchase-history', [\App\Http\Controllers\RentalPurchaseHistoryController::class, 'index']);
         Route::delete('/rental-purchase-history/{id}', [\App\Http\Controllers\RentalPurchaseHistoryController::class, 'destroy']);
@@ -248,9 +263,16 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         Route::get('/body-measurements/latest', [BodyMeasurementController::class, 'latest']);
         Route::post('/body-measurements/validate', [BodyMeasurementController::class, 'validate']);
         
-        // Admin Measurement History Routes (New Table)
-        Route::get('/admin/measurement-history', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'index']);
-        Route::get('/admin/measurement-history/stats', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'stats']);
+    // Admin Measurement History Routes (New Table)
+    Route::get('/admin/measurement-history', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'index']);
+    Route::get('/admin/measurement-history/stats', [\App\Http\Controllers\AdminMeasurementHistoryController::class, 'stats']);
+    
+    // Performance Monitoring Routes
+    Route::get('/admin/performance/metrics', [\App\Http\Controllers\PerformanceController::class, 'getMetrics']);
+    Route::get('/admin/performance/pagination', [\App\Http\Controllers\PerformanceController::class, 'getPaginationMetrics']);
+    Route::get('/admin/performance/recommendations', [\App\Http\Controllers\PerformanceController::class, 'getRecommendations']);
+    Route::get('/admin/performance/overview', [\App\Http\Controllers\PerformanceController::class, 'getOverview']);
+    Route::post('/admin/performance/optimize', [\App\Http\Controllers\PerformanceController::class, 'optimizeDatabase']);
         
         // Profile Management Routes
         Route::get('/profile', [\App\Http\Controllers\ProfileController::class, 'show']);
@@ -278,4 +300,8 @@ Route::middleware([CorsMiddleware::class])->group(function () {
 
 // Receipt Generation Routes (outside auth middleware for direct URL access)
 Route::get('/receipts/rental/{id}', [\App\Http\Controllers\ReceiptController::class, 'generateRentalReceipt']);
-Route::get('/receipts/purchase/{id}', [\App\Http\Controllers\ReceiptController::class, 'generatePurchaseReceipt']); 
+Route::get('/receipts/purchase/{id}', [\App\Http\Controllers\ReceiptController::class, 'generatePurchaseReceipt']);
+
+// Additional routes to match frontend expectations
+Route::get('/rentals/{id}/receipt', [\App\Http\Controllers\ReceiptController::class, 'generateRentalReceipt']);
+Route::get('/purchases/{id}/receipt', [\App\Http\Controllers\ReceiptController::class, 'generatePurchaseReceipt']); 

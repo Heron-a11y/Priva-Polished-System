@@ -15,6 +15,7 @@ import { arSessionManager, ARMeasurements } from '../../src/ARSessionManager';
 import { Colors } from '../../constants/Colors';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/api';
+import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
 
 const { width, height } = Dimensions.get('window');
 
@@ -1652,7 +1653,7 @@ export default function ARMeasurementScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container}>
       {renderCurrentScreen()}
       
       {/* Review Modal */}
@@ -1681,7 +1682,7 @@ export default function ARMeasurementScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingWrapper>
   );
 }
 

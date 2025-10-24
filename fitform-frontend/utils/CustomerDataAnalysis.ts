@@ -143,21 +143,31 @@ export class CustomerDataAnalyzer {
     
     // Helper function to extract amount from order
     const extractAmount = (order: any): number => {
-      // Try multiple possible amount fields
-      const possibleAmounts = [
-        order.amount,
-        order.quotation_amount,
-        order.total_amount,
-        order.price,
-        order.cost,
-        order.value
-      ];
-      
-      for (const amount of possibleAmounts) {
-        if (amount !== null && amount !== undefined && amount !== '') {
-          const numericAmount = typeof amount === 'string' ? Number(amount) : amount;
-          if (!isNaN(numericAmount) && numericAmount > 0) {
-            return numericAmount;
+      // Use the same logic as RentalPurchaseHistory for consistency
+      if (order.order_type === 'rental') {
+        // For rentals: use quotation_amount
+        return order.quotation_amount ? Number(order.quotation_amount) : 0;
+      } else if (order.order_type === 'purchase') {
+        // For purchases: use quotation_amount OR quotation_price
+        return (order.quotation_amount || order.quotation_price) ? 
+          Number(order.quotation_amount || order.quotation_price) : 0;
+      } else {
+        // Fallback to the original logic for other types
+        const possibleAmounts = [
+          order.amount,
+          order.quotation_amount,
+          order.total_amount,
+          order.price,
+          order.cost,
+          order.value
+        ];
+        
+        for (const amount of possibleAmounts) {
+          if (amount !== null && amount !== undefined && amount !== '') {
+            const numericAmount = typeof amount === 'string' ? Number(amount) : amount;
+            if (!isNaN(numericAmount) && numericAmount > 0) {
+              return numericAmount;
+            }
           }
         }
       }
@@ -169,8 +179,10 @@ export class CustomerDataAnalyzer {
       const amount = extractAmount(order);
       console.log('🔍 Debug: Order amount calculation:', {
         orderId: order.id,
+        orderType: order.order_type,
         originalAmount: order.amount,
         quotationAmount: order.quotation_amount,
+        quotationPrice: order.quotation_price,
         totalAmount: order.total_amount,
         extractedAmount: amount,
         runningTotal: sum + amount
@@ -179,6 +191,12 @@ export class CustomerDataAnalyzer {
     }, 0);
     
     console.log('🔍 Debug: Total spent calculation result:', totalSpent);
+    console.log('🔍 Debug: Total orders processed:', this.orders.length);
+    console.log('🔍 Debug: Orders breakdown:', {
+      rentals: this.orders.filter(o => o.order_type === 'rental').length,
+      purchases: this.orders.filter(o => o.order_type === 'purchase').length,
+      other: this.orders.filter(o => !['rental', 'purchase'].includes(o.order_type)).length
+    });
     
     const averageOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -11,12 +11,14 @@ import {
   Dimensions,
   RefreshControl,
   Modal,
-  Image
+  Image,
+  Animated
 } from 'react-native';
 import apiService from '../../../services/api';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/Colors';
 import { getLocalImageUrl } from '../../../utils/imageUrlHelper';
+import KeyboardAvoidingWrapper from '../../../components/KeyboardAvoidingWrapper';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isTablet = screenWidth > 768;
@@ -82,10 +84,25 @@ const ManageAppointmentsScreen = () => {
     business_end_time: '19:00'
   });
   const [settingsLoading, setSettingsLoading] = useState(false);
+  
+  // Animation for toggle switch
+  const toggleAnimation = useRef(new Animated.Value(0)).current;
+  
+  // Animation for refresh icon
+  const refreshAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Update toggle animation when setting changes
+  useEffect(() => {
+    Animated.timing(toggleAnimation, {
+      toValue: adminSettings.auto_approve_appointments ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [adminSettings.auto_approve_appointments]);
 
   const fetchData = async (isRefresh = false) => {
     try {
@@ -384,6 +401,15 @@ const ManageAppointmentsScreen = () => {
   // Force refresh all images and data
   const refreshAllImages = () => {
     console.log('🔄 Refreshing all images and data...');
+    
+    // Animate the refresh icon
+    refreshAnimation.setValue(0);
+    Animated.timing(refreshAnimation, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: true,
+    }).start();
+    
     setImageLoadErrors({});
     setImageRefreshKey(prev => prev + 1);
     // Also refresh the data for complete refresh
@@ -684,8 +710,9 @@ const ManageAppointmentsScreen = () => {
   }
 
   return (
-    <ScrollView 
-      style={styles.container}
+    <KeyboardAvoidingWrapper style={styles.container}>
+      <ScrollView 
+        style={styles.scrollView}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
@@ -694,28 +721,64 @@ const ManageAppointmentsScreen = () => {
       <View style={styles.header}>
         <View style={styles.titleContainer}>
           <Ionicons name="calendar" size={28} color="#014D40" />
-          <Text style={styles.title}>Manage Appointments</Text>
+          <Text style={styles.title} numberOfLines={1}>Manage Appointments</Text>
           <TouchableOpacity 
-            style={styles.refreshImagesButton}
+            style={styles.refreshIconButton}
             onPress={refreshAllImages}
           >
-            <Ionicons name="refresh" size={20} color="#014D40" />
-            <Text style={styles.refreshImagesText}>Refresh</Text>
+            <Animated.View
+              style={{
+                transform: [{
+                  rotate: refreshAnimation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0deg', '360deg'],
+                  })
+                }]
+              }}
+            >
+              <Ionicons name="refresh" size={24} color="#014D40" />
+            </Animated.View>
           </TouchableOpacity>
         </View>
       </View>
       
-      {/* Auto-Approval Toggle */}
+      {/* Auto-Approval Settings Card */}
       <View style={styles.autoApprovalContainer}>
         <View style={styles.autoApprovalHeader}>
-          <Ionicons name="settings" size={20} color="#014D40" />
-          <Text style={styles.autoApprovalTitle}>Auto-Approval Settings</Text>
+          <View style={styles.autoApprovalTitleContainer}>
+            <Ionicons name="settings" size={20} color="#014D40" />
+            <Text style={styles.autoApprovalTitle}>Auto-Approval Settings</Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.autoApprovalToggleSwitch,
+              adminSettings.auto_approve_appointments && styles.autoApprovalToggleSwitchActive
+            ]}
+            onPress={handleToggleAutoApproval}
+            disabled={settingsLoading}
+            activeOpacity={0.7}
+          >
+            <Animated.View 
+              style={[
+                styles.autoApprovalToggleThumb,
+                {
+                  transform: [{
+                    translateX: toggleAnimation.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, 20],
+                    })
+                  }]
+                }
+              ]} 
+            />
+          </TouchableOpacity>
         </View>
+        
         <View style={styles.autoApprovalContent}>
-          <View style={styles.autoApprovalInfo}>
-            <Text style={styles.autoApprovalDescription}>
-              Automatically approve appointments that meet all conditions (including existing pending ones):
-            </Text>
+          <Text style={styles.autoApprovalDescription}>
+            Automatically approve appointments that meet all conditions (including existing pending ones):
+          </Text>
+          <View style={styles.autoApprovalConditionsList}>
             <Text style={styles.autoApprovalConditions}>
               • Within business hours ({adminSettings.business_start_time} - {adminSettings.business_end_time})
             </Text>
@@ -729,29 +792,6 @@ const ManageAppointmentsScreen = () => {
               • Later appointments automatically cancelled if time slot taken
             </Text>
           </View>
-          <TouchableOpacity
-            style={[
-              styles.autoApprovalToggle,
-              adminSettings.auto_approve_appointments ? styles.autoApprovalToggleActive : styles.autoApprovalToggleInactive
-            ]}
-            onPress={handleToggleAutoApproval}
-            disabled={settingsLoading}
-          >
-            {settingsLoading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Ionicons 
-                  name={adminSettings.auto_approve_appointments ? "checkmark" : "close"} 
-                  size={16} 
-                  color="#fff" 
-                />
-                <Text style={styles.autoApprovalToggleText}>
-                  {adminSettings.auto_approve_appointments ? 'Enabled' : 'Disabled'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
         </View>
       </View>
       
@@ -1019,7 +1059,8 @@ const ManageAppointmentsScreen = () => {
           </View>
         )}
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingWrapper>
   );
 };
 
@@ -1056,11 +1097,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   title: {
-    fontSize: 20,
+    fontSize: 21,
     fontWeight: 'bold',
     color: '#014D40',
     flex: 1,
-    flexWrap: 'wrap',
   },
   statsContainer: {
     paddingHorizontal: 20,
@@ -1584,87 +1624,96 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  // Refresh images button styles
-  refreshImagesButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 6,
-    gap: 4,
-    flexShrink: 0,
+  // Refresh icon button styles
+  refreshIconButton: {
+    backgroundColor: '#f8f9fa',
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  refreshImagesText: {
-    fontSize: 12,
-    color: '#014D40',
-    fontWeight: '500',
-  },
-  // Auto-Approval Toggle Styles
+  // Auto-Approval Settings Card Styles
   autoApprovalContainer: {
     backgroundColor: '#fff',
     marginHorizontal: 16,
     marginVertical: 8,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   autoApprovalHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
+  },
+  autoApprovalTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   autoApprovalTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#014D40',
     marginLeft: 8,
   },
   autoApprovalContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  autoApprovalInfo: {
-    flex: 1,
-    marginRight: 16,
+    marginTop: 4,
   },
   autoApprovalDescription: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+    color: '#6B7280',
+    marginBottom: 12,
+    lineHeight: 20,
     fontWeight: '500',
   },
+  autoApprovalConditionsList: {
+    marginTop: 4,
+  },
   autoApprovalConditions: {
-    fontSize: 12,
-    color: '#888',
-    marginBottom: 2,
-    lineHeight: 16,
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 6,
+    lineHeight: 18,
+    fontWeight: '500',
   },
-  autoApprovalToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    minWidth: 100,
+  // Toggle Switch Styles
+  autoApprovalToggleSwitch: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E5E7EB',
+    padding: 2,
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
   },
-  autoApprovalToggleActive: {
-    backgroundColor: '#4CAF50',
+  autoApprovalToggleSwitchActive: {
+    backgroundColor: '#014D40',
+    borderColor: '#014D40',
   },
-  autoApprovalToggleInactive: {
-    backgroundColor: '#F44336',
-  },
-  autoApprovalToggleText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
+  autoApprovalToggleThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   actionButtonsContainer: {
     flexDirection: 'row',

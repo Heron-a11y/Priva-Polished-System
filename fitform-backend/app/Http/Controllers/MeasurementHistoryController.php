@@ -268,20 +268,29 @@ class MeasurementHistoryController extends Controller
      */
     public function adminStats(Request $request)
     {
-        $stats = [
-            'total_measurements' => MeasurementHistory::count(),
-            'ar_measurements' => MeasurementHistory::where('measurement_type', 'ar')->count(),
-            'manual_measurements' => MeasurementHistory::where('measurement_type', 'manual')->count(),
-            'latest_measurement' => MeasurementHistory::with('user:id,name,email')->latest()->first(),
-            'measurements_this_month' => MeasurementHistory::whereMonth('created_at', now()->month)
-                ->whereYear('created_at', now()->year)
-                ->count(),
-            'total_users' => MeasurementHistory::distinct('user_id')->count('user_id'),
-        ];
+        try {
+            $stats = [
+                'total_measurements' => MeasurementHistory::count(),
+                'ar_measurements' => MeasurementHistory::where('measurement_type', 'ar')->count(),
+                'manual_measurements' => MeasurementHistory::where('measurement_type', 'manual')->count(),
+                'latest_measurement' => MeasurementHistory::with('user:id,name,email')->latest()->first(),
+                'measurements_this_month' => MeasurementHistory::whereMonth('created_at', now()->month)
+                    ->whereYear('created_at', now()->year)
+                    ->count(),
+                'total_users' => MeasurementHistory::distinct('user_id')->count('user_id'),
+            ];
 
-        return response()->json([
-            'data' => $stats
-        ]);
+            return response()->json([
+                'success' => true,
+                'data' => $stats
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch measurement statistics',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

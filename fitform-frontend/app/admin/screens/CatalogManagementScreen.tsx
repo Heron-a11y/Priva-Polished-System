@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,10 @@ import { Colors } from '../../../constants/Colors';
 import { CLOTHING_TYPES, MEASUREMENT_FIELDS } from '../../../constants/ClothingTypes';
 import apiService from '../../../services/api';
 import { getLocalImageUrl } from '../../../utils/imageUrlHelper';
+import { useFormValidation } from '../../../hooks/useFormValidation';
+import FormField from '../../../components/FormField';
+import { errorHandlingService } from '../../../services/ErrorHandlingService';
+import KeyboardAvoidingWrapper from '../../../components/KeyboardAvoidingWrapper';
 
 const { width, height } = Dimensions.get('window');
 const isMobile = width < 768;
@@ -91,6 +95,42 @@ export default function CatalogManagementScreen() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [selectedImage, setSelectedImage] = useState<any>(null);
+
+  // Form validation setup
+  const scrollViewRef = useRef<ScrollView>(null);
+  const {
+    errors,
+    validateForm,
+    setError,
+    clearError,
+    clearAllErrors,
+    scrollToError,
+    registerErrorElement,
+    hasErrors
+  } = useFormValidation({
+    scrollViewRef,
+    offset: 100,
+    animated: true,
+    delay: 300
+  });
+
+  // Validation rules
+  const validationRules = {
+    name: { required: true, minLength: 2, maxLength: 255 },
+    clothing_type: { required: true, minLength: 2, maxLength: 100 },
+    category: { required: true },
+    measurements_required: { 
+      required: true, 
+      custom: (value: string[]) => value.length === 0 ? 'Please select at least one required measurement' : null 
+    },
+    sort_order: { 
+      required: true, 
+      custom: (value: string) => {
+        const num = parseInt(value);
+        return isNaN(num) || num < 0 ? 'Sort order must be a valid number' : null;
+      }
+    }
+  };
 
   useEffect(() => {
     // Test API connection first
@@ -385,30 +425,42 @@ export default function CatalogManagementScreen() {
     try {
       setSubmitting(true);
       
+      // Clear previous errors
+      clearAllErrors();
+      
       // Debug: Log form data before submission
       console.log('📝 Form data before submission:', formData);
       console.log('📝 Selected image:', selectedImage);
       console.log('📝 Form data keys:', Object.keys(formData));
       console.log('📝 Form data values:', Object.values(formData));
       
-      // Validate required fields
-      if (!formData.name.trim()) {
-        Alert.alert('Validation Error', 'Please enter a name for the catalog item');
-        setSubmitting(false);
-        return;
-      }
-      if (!formData.clothing_type.trim()) {
-        Alert.alert('Validation Error', 'Please enter a clothing type');
-        setSubmitting(false);
-        return;
-      }
-      if (!formData.category) {
-        Alert.alert('Validation Error', 'Please select a category');
-        setSubmitting(false);
-        return;
-      }
-      if (!formData.measurements_required || formData.measurements_required.length === 0) {
-        Alert.alert('Validation Error', 'Please select at least one required measurement');
+      // Validate form using frontend validation
+      const isValid = validateForm(formData, validationRules);
+      
+      if (!isValid) {
+        console.log('❌ Form validation failed:', errors);
+        
+        // Immediate fallback scroll to ensure user sees the errors
+        const firstErrorField = Object.keys(errors)[0];
+        if (firstErrorField) {
+          console.log('🔄 Fallback scroll to:', firstErrorField);
+          
+          // Use the same scroll positions as the hook
+          const scrollPositions: { [key: string]: number } = {
+            'name': 0,
+            'clothing_type': 120,
+            'description': 200,
+            'category': 280,
+            'measurements_required': 400,
+            'sort_order': 600,
+            'notes': 700
+          };
+          
+          const scrollY = scrollPositions[firstErrorField] || 0;
+          console.log('📜 Fallback scrolling to position:', scrollY);
+          scrollViewRef?.current?.scrollTo({ y: scrollY, animated: true });
+        }
+        
         setSubmitting(false);
         return;
       }
@@ -558,22 +610,27 @@ export default function CatalogManagementScreen() {
       }
     } catch (error) {
       console.error('Error submitting catalog item:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
+      
+      // Use error handling service for better error management
+      errorHandlingService.handleApiError(error, {
+        component: 'CatalogManagementScreen',
+        action: 'handleSubmit',
+        additionalData: { formData, editingItem: !!editingItem }
       });
       
-      let errorMessage = 'Failed to save catalog item';
-      if (error.message?.includes('Network request failed')) {
-        errorMessage = 'Network error - please check your connection and try again';
-      } else if (error.message?.includes('Validation failed')) {
-        errorMessage = error.message;
-      } else if (error.message?.includes('timeout')) {
-        errorMessage = 'Request timed out - please try again';
+      // Set specific field errors if validation failed on backend
+      if (error.response?.status === 422 && error.response?.data?.errors) {
+        const backendErrors = error.response.data.errors;
+        Object.entries(backendErrors).forEach(([field, message]) => {
+          setError(field, Array.isArray(message) ? message[0] : message);
+        });
+        
+        // Scroll to first error
+        const firstErrorField = Object.keys(backendErrors)[0];
+        if (firstErrorField) {
+          scrollToError(firstErrorField);
+        }
       }
-      
-      Alert.alert('Error', errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -749,7 +806,7 @@ export default function CatalogManagementScreen() {
 
   const renderForm = () => (
     <Modal visible={showForm} animationType="slide" presentationStyle="pageSheet">
-      <View style={styles.formContainer}>
+      <KeyboardAvoidingWrapper style={styles.formContainer}>
         {/* Enhanced Header */}
         <View style={styles.formHeader}>
           <View style={styles.formHeaderContent}>
@@ -775,7 +832,11 @@ export default function CatalogManagementScreen() {
           </View>
         </View>
 
-        <ScrollView style={styles.formContent} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          ref={scrollViewRef}
+          style={styles.formContent} 
+          showsVerticalScrollIndicator={false}
+        >
           {/* Basic Information Section */}
           <View style={styles.formSection}>
             <View style={styles.sectionHeader}>
@@ -783,43 +844,50 @@ export default function CatalogManagementScreen() {
               <Text style={styles.sectionTitle}>Basic Information</Text>
             </View>
             
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Item Name *</Text>
-              <TextInput
-                style={styles.formInput}
-                value={formData.name}
-                onChangeText={(text) => {
-                  console.log('📝 Name changed to:', text);
-                  setFormData({ ...formData, name: text });
-                }}
-                placeholder="Enter item name"
-              />
-            </View>
+            <FormField
+              label="Item Name"
+              value={formData.name}
+              onChangeText={(text) => {
+                console.log('📝 Name changed to:', text);
+                setFormData({ ...formData, name: text });
+                clearError('name');
+              }}
+              placeholder="Enter item name"
+              error={errors.name}
+              required
+              fieldName="name"
+              onRegisterErrorElement={(ref) => registerErrorElement('name', ref)}
+            />
 
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Clothing Type *</Text>
-              <TextInput
-                style={styles.formInput}
-                value={formData.clothing_type}
-                onChangeText={(text) => {
-                  console.log('📝 Clothing type changed to:', text);
-                  setFormData({ ...formData, clothing_type: text });
-                }}
-                placeholder="Enter clothing type"
-              />
-            </View>
+            <FormField
+              label="Clothing Type"
+              value={formData.clothing_type}
+              onChangeText={(text) => {
+                console.log('📝 Clothing type changed to:', text);
+                setFormData({ ...formData, clothing_type: text });
+                clearError('clothing_type');
+              }}
+              placeholder="Enter clothing type"
+              error={errors.clothing_type}
+              required
+              fieldName="clothing_type"
+              onRegisterErrorElement={(ref) => registerErrorElement('clothing_type', ref)}
+            />
 
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Description</Text>
-              <TextInput
-                style={[styles.formInput, styles.textArea]}
-                value={formData.description}
-                onChangeText={(text) => setFormData({ ...formData, description: text })}
-                placeholder="Enter item description"
-                multiline
-                numberOfLines={3}
-              />
-            </View>
+            <FormField
+              label="Description"
+              value={formData.description}
+              onChangeText={(text) => {
+                setFormData({ ...formData, description: text });
+                clearError('description');
+              }}
+              placeholder="Enter item description"
+              error={errors.description}
+              multiline
+              numberOfLines={3}
+              fieldName="description"
+              onRegisterErrorElement={(ref) => registerErrorElement('description', ref)}
+            />
           </View>
 
           {/* Category Selection Section */}
@@ -943,7 +1011,12 @@ export default function CatalogManagementScreen() {
           </View>
 
           {/* Measurements Section */}
-          <View style={styles.formSection}>
+          <View style={styles.formSection} ref={(ref) => {
+            if (ref) {
+              const measurementsRef = { current: ref };
+              registerErrorElement('measurements_required', measurementsRef);
+            }
+          }}>
             <View style={styles.sectionHeader}>
               <Ionicons name="resize-outline" size={20} color="#014D40" />
               <Text style={styles.sectionTitle}>Required Measurements</Text>
@@ -963,6 +1036,7 @@ export default function CatalogManagementScreen() {
                       : [...formData.measurements_required, measurement];
                     console.log('📝 Measurements changed to:', updated);
                     setFormData({ ...formData, measurements_required: updated });
+                    clearError('measurements_required');
                   }}
                 >
                   <Ionicons 
@@ -979,6 +1053,12 @@ export default function CatalogManagementScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+            
+            {errors.measurements_required && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{errors.measurements_required}</Text>
+              </View>
+            )}
           </View>
 
           {/* Settings Section */}
@@ -1026,22 +1106,33 @@ export default function CatalogManagementScreen() {
 
             <View style={styles.formRow}>
               <View style={styles.formGroupHalf}>
-                <Text style={styles.formLabel}>Sort Order</Text>
-                <TextInput
-                  style={styles.formInput}
+                <FormField
+                  label="Sort Order"
                   value={formData.sort_order}
-                  onChangeText={(text) => setFormData({ ...formData, sort_order: text })}
+                  onChangeText={(text) => {
+                    setFormData({ ...formData, sort_order: text });
+                    clearError('sort_order');
+                  }}
                   placeholder="0"
                   keyboardType="numeric"
+                  error={errors.sort_order}
+                  required
+                  fieldName="sort_order"
+                  onRegisterErrorElement={(ref) => registerErrorElement('sort_order', ref)}
                 />
               </View>
               <View style={styles.formGroupHalf}>
-                <Text style={styles.formLabel}>Notes</Text>
-                <TextInput
-                  style={styles.formInput}
+                <FormField
+                  label="Notes"
                   value={formData.notes}
-                  onChangeText={(text) => setFormData({ ...formData, notes: text })}
+                  onChangeText={(text) => {
+                    setFormData({ ...formData, notes: text });
+                    clearError('notes');
+                  }}
                   placeholder="Additional notes"
+                  error={errors.notes}
+                  fieldName="notes"
+                  onRegisterErrorElement={(ref) => registerErrorElement('notes', ref)}
                 />
               </View>
             </View>
@@ -1076,8 +1167,9 @@ export default function CatalogManagementScreen() {
               </>
             )}
           </TouchableOpacity>
+          
         </View>
-      </View>
+      </KeyboardAvoidingWrapper>
     </Modal>
   );
 
@@ -2408,5 +2500,19 @@ const styles = StyleSheet.create({
     color: '#014D40',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  errorContainer: {
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#DC2626',
+    fontWeight: '500',
   },
 });

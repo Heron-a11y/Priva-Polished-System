@@ -6,19 +6,33 @@ use App\Models\Purchase;
 use Illuminate\Http\Request;
 use App\Models\Notification;
 use App\Models\RentalPurchaseHistory;
+use App\Services\ActivityLogService;
 
-class PurchaseController extends Controller
+class PurchaseController extends PaginatedController
 {
     /**
      * Update history entry when purchase status changes
      */
     private function updatePurchaseHistory($purchase)
     {
-        $historyEntry = RentalPurchaseHistory::where('user_id', $purchase->user_id)
+        // First try to find by order_id (most reliable)
+        $historyEntry = RentalPurchaseHistory::where('order_id', $purchase->id)
             ->where('order_type', 'purchase')
-            ->where('item_name', $purchase->item_name)
-            ->where('order_date', $purchase->purchase_date)
             ->first();
+            
+        // If not found by order_id, try the old method for backward compatibility
+        if (!$historyEntry) {
+            $historyEntry = RentalPurchaseHistory::where('user_id', $purchase->user_id)
+                ->where('order_type', 'purchase')
+                ->where('item_name', $purchase->item_name)
+                ->where('order_date', $purchase->purchase_date)
+                ->first();
+                
+            // If found by old method, update the order_id for future reference
+            if ($historyEntry) {
+                $historyEntry->update(['order_id' => $purchase->id]);
+            }
+        }
             
         if ($historyEntry) {
             $historyEntry->update([
@@ -30,28 +44,52 @@ class PurchaseController extends Controller
                 'quotation_sent_at' => $purchase->quotation_sent_at,
                 'quotation_responded_at' => $purchase->quotation_responded_at,
             ]);
+            
+            \Log::info('Purchase history updated', [
+                'purchase_id' => $purchase->id,
+                'history_id' => $historyEntry->id,
+                'status' => $purchase->status
+            ]);
+        } else {
+            \Log::warning('Purchase history entry not found', [
+                'purchase_id' => $purchase->id,
+                'user_id' => $purchase->user_id,
+                'item_name' => $purchase->item_name,
+                'purchase_date' => $purchase->purchase_date
+            ]);
         }
     }
 
     public function index(Request $request)
     {
         $user = $request->user();
+        
+        // Build base query
+        $query = Purchase::with('user:id,name')->whereNull('deleted_at');
+        
+        // Apply user-specific filtering
         if ($user && isset($user->role) && $user->role === 'admin') {
-            $purchases = Purchase::with('user:id,name')->whereNull('deleted_at')->get();
-            $purchases->transform(function ($purchase) {
+            // Admin can see all purchases
+        } else {
+            // Regular users can only see their own purchases
+            $query->where('user_id', $user->id);
+        }
+        
+        // Configure pagination options
+        $options = [
+            'search_fields' => ['item_name', 'customer_name', 'customer_email', 'clothing_type'],
+            'filter_fields' => ['status', 'clothing_type', 'user_id'],
+            'sort_fields' => ['created_at', 'purchase_date', 'status', 'item_name'],
+            'default_per_page' => 15,
+            'max_per_page' => 50,
+            'transform' => function ($purchase) {
                 $purchase->customer_name = $purchase->user ? $purchase->user->name : null;
                 unset($purchase->user);
                 return $purchase;
-            });
-            return response()->json(['data' => $purchases]);
-        }
-        $purchases = Purchase::with('user:id,name')->where('user_id', $user->id)->whereNull('deleted_at')->get();
-        $purchases->transform(function ($purchase) {
-            $purchase->customer_name = $purchase->user ? $purchase->user->name : null;
-            unset($purchase->user);
-            return $purchase;
-        });
-        return response()->json(['data' => $purchases]);
+            }
+        ];
+        
+        return $this->paginate($query, $request, $options);
     }
 
     public function approve($id)
@@ -382,16 +420,21 @@ class PurchaseController extends Controller
         return response()->json(['success' => true, 'status' => 'picked_up']);
     }
 
-    public function store(Request $request)
+    public function store(\App\Http\Requests\PurchaseRequest $request)
     {
-        $data = $request->validate([
-            'item_name' => 'required|string',
-            'purchase_date' => 'required|date',
-            'clothing_type' => 'required|string',
-            'measurements' => 'required|array',
-            'notes' => 'nullable|string',
-            'customer_email' => 'required|email',
-        ]);
+        // Additional business rule validation
+        $validationService = new \App\Services\ValidationService();
+        $businessErrors = $validationService->validateBusinessRules($request->validated(), 'purchase');
+        
+        if (!empty($businessErrors)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Business rule validation failed',
+                'errors' => $businessErrors
+            ], 422);
+        }
+        
+        $data = $request->validated();
         $data['user_id'] = $request->user()->id;
         $data['customer_name'] = $request->user()->name;
         $data['status'] = 'pending';
@@ -400,6 +443,28 @@ class PurchaseController extends Controller
         // Get customer information for notifications
         $customer = \App\Models\User::find($purchase->user_id);
         $customerName = $customer ? $customer->name : 'Unknown Customer';
+        
+        // Log activity for purchase creation
+        try {
+            ActivityLogService::logOrder(
+                'created',
+                "New purchase order created by {$customerName} for {$purchase->item_name}",
+                [
+                    'purchase_id' => $purchase->id,
+                    'customer_name' => $customerName,
+                    'customer_email' => $purchase->customer_email,
+                    'item_name' => $purchase->item_name,
+                    'clothing_type' => $purchase->clothing_type,
+                    'purchase_date' => $purchase->purchase_date
+                ],
+                $purchase->user_id,
+                'customer',
+                $request
+            );
+            \Log::info('Activity logged successfully for purchase: ' . $purchase->id);
+        } catch (\Exception $e) {
+            \Log::error('Failed to log activity for purchase: ' . $purchase->id . ' - ' . $e->getMessage());
+        }
         
         // Notify all admins about new purchase order
         $admins = \App\Models\User::where('role', 'admin')->get();
@@ -417,6 +482,7 @@ class PurchaseController extends Controller
         // Automatically create history entry
         \App\Models\RentalPurchaseHistory::create([
             'user_id' => $purchase->user_id,
+            'order_id' => $purchase->id, // Link to the purchase record
             'order_type' => 'purchase',
             'item_name' => $purchase->item_name,
             'order_subtype' => $purchase->purchase_type ?? 'custom',
@@ -454,6 +520,75 @@ class PurchaseController extends Controller
             ->get();
 
         return response()->json(['data' => $purchases]);
+    }
+
+    /**
+     * Generate receipt for purchase
+     */
+    public function generateReceipt(Request $request, $id)
+    {
+        try {
+            $purchase = Purchase::findOrFail($id);
+            $user = $request->user();
+            
+            // Check if user can access this purchase
+            if ($user->role !== 'admin' && $purchase->user_id !== $user->id) {
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
+            
+            // Check if purchase is in correct status for receipt generation
+            if ($purchase->status !== 'picked_up') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Receipt can only be generated for picked up purchases'
+                ], 400);
+            }
+            
+            // Generate receipt data
+            $receiptData = [
+                'purchase_id' => $purchase->id,
+                'customer_name' => $purchase->customer_name,
+                'customer_email' => $purchase->customer_email,
+                'item_name' => $purchase->item_name,
+                'clothing_type' => $purchase->clothing_type,
+                'purchase_date' => $purchase->purchase_date,
+                'status' => $purchase->status,
+                'quotation_amount' => $purchase->quotation_amount,
+                'quotation_price' => $purchase->quotation_price,
+                'quotation_notes' => $purchase->quotation_notes,
+                'generated_at' => now(),
+                'receipt_number' => 'PURCH-' . str_pad($purchase->id, 6, '0', STR_PAD_LEFT)
+            ];
+            
+            // In a real implementation, you would generate a PDF receipt here
+            // For now, we'll return the receipt data with a mock URL
+            $receiptUrl = url("/api/receipts/purchase/{$purchase->id}/" . time());
+            
+            \Log::info('Receipt generated for purchase', [
+                'purchase_id' => $purchase->id,
+                'customer' => $purchase->customer_name,
+                'receipt_url' => $receiptUrl
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Receipt generated successfully',
+                'receipt_data' => $receiptData,
+                'receipt_url' => $receiptUrl
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error generating purchase receipt', [
+                'purchase_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate receipt',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     public function destroy(Request $request, $id)

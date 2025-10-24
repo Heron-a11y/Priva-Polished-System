@@ -15,7 +15,7 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-// import { KeyboardAvoidingWrapper } from '../../../components/KeyboardAvoidingWrapper';
+import KeyboardAvoidingWrapper from '../../../components/KeyboardAvoidingWrapper';
 // import DateTimePicker from '@react-native-community/datetimepicker';
 import apiService from '../../../services/api.js';
 
@@ -120,11 +120,11 @@ const ManageCustomersScreen = () => {
       const response = await apiService.get(`/admin/customers?${params}`);
       
       console.log('API Response:', response);
-      console.log('Customers from API:', response.customers);
+      console.log('Customers from API:', response.data);
       
       if (response.success) {
         // Ensure all customer objects have the required properties with safe defaults
-        const safeCustomers = (response.customers || []).map((customer: any, index: number) => {
+        const safeCustomers = (response.data || []).map((customer: any, index: number) => {
           console.log(`Processing customer ${index}:`, customer);
           
           const safeCustomer = {
@@ -586,7 +586,7 @@ const ManageCustomersScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container}>
       {/* Notification */}
       {notification && (
         <View style={[styles.notification, notification.type === 'success' ? styles.successNotification : styles.errorNotification]}>
@@ -1582,7 +1582,7 @@ const ManageCustomersScreen = () => {
           }}
         />
       )} */}
-    </View>
+    </KeyboardAvoidingWrapper>
   );
 };
 

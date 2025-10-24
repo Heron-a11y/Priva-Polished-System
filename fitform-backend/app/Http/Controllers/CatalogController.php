@@ -608,4 +608,46 @@ class CatalogController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get catalog statistics for admin dashboard
+     */
+    public function getStats()
+    {
+        try {
+            // Get catalog statistics
+            $totalItems = CatalogItem::count();
+            $activeItems = CatalogItem::where('is_available', true)->count();
+            $inactiveItems = CatalogItem::where('is_available', false)->count();
+            $featuredItems = CatalogItem::where('is_featured', true)->count();
+            
+            // Get items by clothing type
+            $clothingTypeStats = CatalogItem::selectRaw('clothing_type, COUNT(*) as count')
+                ->groupBy('clothing_type')
+                ->get()
+                ->pluck('count', 'clothing_type');
+            
+            // Get recent items (last 30 days)
+            $recentItems = CatalogItem::where('created_at', '>=', now()->subDays(30))->count();
+            
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'total_items' => $totalItems,
+                    'active_items' => $activeItems,
+                    'inactive_items' => $inactiveItems,
+                    'featured_items' => $featuredItems,
+                    'recent_items' => $recentItems,
+                    'clothing_type_stats' => $clothingTypeStats,
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch catalog statistics',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

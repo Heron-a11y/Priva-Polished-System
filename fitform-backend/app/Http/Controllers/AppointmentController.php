@@ -7,6 +7,7 @@ use App\Models\Appointment;
 use App\Models\User;
 use App\Models\Notification;
 use App\Models\AdminSettings;
+use App\Services\ActivityLogService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -312,6 +313,22 @@ class AppointmentController extends Controller
             $adminMessage = "New appointment booked by {$customerName} for {$validated['service_type']} on {$appointmentDate} at {$appointmentTime}.";
             $this->notifyAllAdmins($adminMessage, $appointment->id);
 
+            // Log activity
+            ActivityLogService::logAppointment(
+                'created',
+                "New appointment booked by {$customerName} for {$validated['service_type']}",
+                [
+                    'appointment_id' => $appointment->id,
+                    'customer_name' => $customerName,
+                    'service_type' => $validated['service_type'],
+                    'appointment_date' => $validated['appointment_date'],
+                    'appointment_time' => $validated['appointment_time']
+                ],
+                $userId,
+                'customer',
+                $request
+            );
+
             return response()->json([
                 'success' => true,
                 'message' => 'Appointment booked successfully',
@@ -557,6 +574,7 @@ class AppointmentController extends Controller
             ]);
 
             $appointment = Appointment::findOrFail($id);
+            $oldStatus = $appointment->status;
             $appointment->update(['status' => $validated['status']]);
 
             // Get customer information for notifications
@@ -565,6 +583,23 @@ class AppointmentController extends Controller
             $appointmentDate = date('M j, Y', strtotime($appointment->appointment_date));
             $appointmentTime = date('g:i A', strtotime($appointment->appointment_date));
             $statusText = ucfirst($validated['status']);
+
+            // Log activity
+            ActivityLogService::logAppointment(
+                'status_updated',
+                "Appointment status changed from {$oldStatus} to {$validated['status']} for {$customerName}",
+                [
+                    'appointment_id' => $appointment->id,
+                    'customer_name' => $customerName,
+                    'service_type' => $appointment->service_type,
+                    'appointment_date' => $appointment->appointment_date,
+                    'old_status' => $oldStatus,
+                    'new_status' => $validated['status']
+                ],
+                null, // No specific user ID for admin actions
+                'admin',
+                $request
+            );
 
             // Notify customer about status change
             $customerMessage = "Your appointment for {$appointment->service_type} on {$appointmentDate} at {$appointmentTime} has been {$statusText}.";

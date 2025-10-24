@@ -12,7 +12,8 @@ import {
   Alert,
   RefreshControl,
   Dimensions,
-  Image
+  Image,
+  Linking
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
@@ -60,6 +61,7 @@ interface RentalOrder {
   };
   total_penalties: number;
   penalty_status: string;
+  image_url?: string;
 }
 
 interface PurchaseOrder {
@@ -86,6 +88,7 @@ interface PurchaseOrder {
   notes?: string;
   created_at: string;
   updated_at: string;
+  image_url?: string;
 }
 
 interface HistoryItem {
@@ -99,6 +102,7 @@ interface HistoryItem {
   notes?: string;
   penalty_status?: string;
   total_penalties?: number;
+  image_url?: string;
 }
 
 interface DropdownProps {
@@ -217,13 +221,10 @@ export default function RentalPurchaseHistory() {
 
   const statusOptions = [
     { value: 'all', label: 'All Status' },
-    { value: 'pending', label: 'Pending' },
-    { value: 'confirmed', label: 'Confirmed' },
-    { value: 'in_progress', label: 'In Progress' },
-    { value: 'ready_for_pickup', label: 'Ready for Pickup' },
-    { value: 'completed', label: 'Completed' },
+    { value: 'cancelled', label: 'Cancelled' },
     { value: 'declined', label: 'Declined' },
-    { value: 'cancelled', label: 'Cancelled' }
+    { value: 'returned', label: 'Returned' },
+    { value: 'picked_up', label: 'Picked Up' }
   ];
 
   const typeOptions = [
@@ -252,22 +253,57 @@ export default function RentalPurchaseHistory() {
     }
     
     try {
+      console.log('🔄 Fetching rental purchase history...');
+      
+      // Check if user is authenticated first
+      if (!user) {
+        console.log('⚠️ User not authenticated, skipping fetch');
+        setOriginalRentals([]);
+        setOriginalPurchases([]);
+        setHistory([]);
+        return;
+      }
+      
       // Fetch unified rental and purchase history
       const historyRes = await apiService.getRentalPurchaseHistory();
 
-      // Backend returns {data: [...]}, so we need to extract the data property
-      const allHistory = Array.isArray(historyRes?.data) ? historyRes.data : [];
+      console.log('📥 History response:', historyRes);
+
+      // Handle different response structures
+      let allHistory = [];
+      if (historyRes && historyRes.success !== false) {
+        allHistory = Array.isArray(historyRes.data) ? historyRes.data : [];
+        console.log('✅ History loaded successfully, items:', allHistory.length);
+      } else {
+        console.log('⚠️ No history data or API error:', historyRes?.message);
+        allHistory = [];
+      }
 
       // Separate rentals and purchases for filtering
       const rentals = allHistory.filter(item => item.order_type === 'rental');
       const purchases = allHistory.filter(item => item.order_type === 'purchase');
 
+      console.log('📊 Separated data - Rentals:', rentals.length, 'Purchases:', purchases.length);
+
       setOriginalRentals(rentals);
       setOriginalPurchases(purchases);
     } catch (error) {
-      console.error('Error fetching history:', error);
-      Alert.alert('Error', 'Failed to fetch history data');
+      console.error('❌ Error fetching history:', error);
+      
+      // Handle specific error types
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Authentication required') || errorMessage.includes('401') || errorMessage.includes('Unauthenticated')) {
+        console.log('🔐 Authentication required - user needs to log in');
+        Alert.alert('Authentication Required', 'Please log in to view your history.');
+      } else if (errorMessage.includes('Network error')) {
+        Alert.alert('Connection Error', 'Please check your internet connection and try again.');
+      } else {
+        Alert.alert('Error', 'Failed to fetch history data. Please try again.');
+      }
+      
       setHistory([]); // Clear history on error
+      setOriginalRentals([]);
+      setOriginalPurchases([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -279,33 +315,45 @@ export default function RentalPurchaseHistory() {
   };
 
   const filterHistory = () => {
-    let filteredRentals = originalRentals.map(rental => {
-      return {
-        id: rental.id,
-        type: 'rental' as const,
-        item_name: rental.item_name,
-        status: rental.status,
-        date: rental.created_at || rental.rental_date,
-        amount: rental.quotation_amount ? Number(rental.quotation_amount) : 0,
-        clothing_type: rental.clothing_type,
-        notes: rental.notes,
-        penalty_status: rental.penalty_status,
-        total_penalties: rental.total_penalties
-      };
-    });
+    // Define allowed statuses for each type
+    const allowedRentalStatuses = ['cancelled', 'declined', 'returned'];
+    const allowedPurchaseStatuses = ['cancelled', 'declined', 'picked_up'];
 
-    let filteredPurchases = originalPurchases.map(purchase => {
-      return {
-        id: purchase.id,
-        type: 'purchase' as const,
-        item_name: purchase.item_name || 'Custom Garment',
-        status: purchase.status,
-        date: purchase.created_at || purchase.purchase_date || new Date().toISOString(),
-        amount: (purchase.quotation_amount || purchase.quotation_price) ? Number(purchase.quotation_amount || purchase.quotation_price) : 0,
-        clothing_type: purchase.clothing_type || 'Custom',
-        notes: purchase.notes
-      };
-    });
+    // Filter rentals to only show allowed statuses
+    let filteredRentals = originalRentals
+      .filter(rental => allowedRentalStatuses.includes(rental.status))
+      .map(rental => {
+        return {
+          id: rental.id,
+          type: 'rental' as const,
+          item_name: rental.item_name,
+          status: rental.status,
+          date: rental.created_at || rental.rental_date,
+          amount: rental.quotation_amount ? Number(rental.quotation_amount) : 0,
+          clothing_type: rental.clothing_type,
+          notes: rental.notes,
+          penalty_status: rental.penalty_status,
+          total_penalties: rental.total_penalties,
+          image_url: rental.image_url
+        };
+      });
+
+    // Filter purchases to only show allowed statuses
+    let filteredPurchases = originalPurchases
+      .filter(purchase => allowedPurchaseStatuses.includes(purchase.status))
+      .map(purchase => {
+        return {
+          id: purchase.id,
+          type: 'purchase' as const,
+          item_name: purchase.item_name || 'Custom Garment',
+          status: purchase.status,
+          date: purchase.created_at || purchase.purchase_date || new Date().toISOString(),
+          amount: (purchase.quotation_amount || purchase.quotation_price) ? Number(purchase.quotation_amount || purchase.quotation_price) : 0,
+          clothing_type: purchase.clothing_type || 'Custom',
+          notes: purchase.notes,
+          image_url: purchase.image_url
+        };
+      });
 
     // Apply type filter
     if (typeFilter !== 'all') {
@@ -347,14 +395,10 @@ export default function RentalPurchaseHistory() {
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'pending': return '#f59e0b';
-      case 'quotation_sent': return '#3b82f6';
-      case 'counter_offer_pending': return '#ff9800';
-      case 'in_progress': return '#014D40';
-      case 'ready_for_pickup': return '#10b981';
-      case 'picked_up': return '#059669';
-      case 'returned': return '#0d9488';
+      case 'cancelled': return '#6b7280';
       case 'declined': return '#dc2626';
+      case 'returned': return '#0d9488';
+      case 'picked_up': return '#059669';
       default: return '#6b7280';
     }
   };
@@ -433,8 +477,9 @@ export default function RentalPurchaseHistory() {
               Alert.alert('Success', 'Order deleted successfully');
             } catch (error) {
               console.error('Error deleting order:', error);
-              console.error('Error details:', error.message);
-              Alert.alert('Error', `Failed to delete order: ${error.message}`);
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              console.error('Error details:', errorMessage);
+              Alert.alert('Error', `Failed to delete order: ${errorMessage}`);
             }
           },
         },
@@ -498,6 +543,27 @@ export default function RentalPurchaseHistory() {
     );
   };
 
+  const handleGenerateReceipt = async (item: HistoryItem) => {
+    try {
+      console.log('Generating receipt for:', item);
+      
+      // Generate the receipt URL directly (same pattern as other components)
+      const baseUrl = apiService.getCurrentURL() || 'http://192.168.1.56:8000/api';
+      const receiptUrl = item.type === 'rental' 
+        ? `${baseUrl}/rentals/${item.id}/receipt`
+        : `${baseUrl}/purchases/${item.id}/receipt`;
+      
+      console.log('📄 Receipt URL:', receiptUrl);
+      
+      // Open receipt in browser for download (same as other components)
+      await Linking.openURL(receiptUrl);
+      
+    } catch (error) {
+      console.error('Receipt generation error:', error);
+      Alert.alert('Error', 'Failed to generate receipt. Please make sure the order is completed and try again.');
+    }
+  };
+
   const renderHistoryItem = ({ item }: { item: HistoryItem }) => (
     <TouchableOpacity
       style={styles.historyItem}
@@ -556,6 +622,20 @@ export default function RentalPurchaseHistory() {
           <View style={styles.amountRow}>
             <Text style={styles.amount}>{formatCurrency(item.amount)}</Text>
             <View style={styles.transactionActions}>
+              {/* Generate Receipt Button - Only for specific statuses */}
+              {((item.type === 'rental' && item.status === 'returned') || 
+                (item.type === 'purchase' && item.status === 'picked_up')) && (
+                <TouchableOpacity
+                  style={styles.receiptButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleGenerateReceipt(item);
+                  }}
+                >
+                  <Ionicons name="receipt" size={18} color="#014D40" />
+                </TouchableOpacity>
+              )}
+              
               {/* Delete Button */}
               <TouchableOpacity
                 style={styles.deleteButton}
@@ -611,9 +691,28 @@ export default function RentalPurchaseHistory() {
             <View style={styles.orderDetailCard}>
               {/* Item Image */}
               <View style={styles.itemImageContainer}>
-                <View style={[styles.itemImagePlaceholder, { backgroundColor: '#6B7280' }]}>
-                  <Ionicons name="shirt-outline" size={48} color="#fff" />
-                </View>
+                {(() => {
+                  // Check if we have an image URL from the backend
+                  if (selectedItem?.image_url) {
+                    return (
+                      <Image
+                        source={{ uri: selectedItem.image_url }}
+                        style={styles.itemImage}
+                        resizeMode="cover"
+                        onError={() => {
+                          console.log('Failed to load image for:', selectedItem.image_url);
+                        }}
+                      />
+                    );
+                  } else {
+                    // Fallback to placeholder if no image available
+                    return (
+                      <View style={[styles.itemImagePlaceholder, { backgroundColor: '#6B7280' }]}>
+                        <Ionicons name="shirt-outline" size={48} color="#fff" />
+                      </View>
+                    );
+                  }
+                })()}
               </View>
               
               <View style={styles.orderDetailHeader}>
@@ -678,10 +777,10 @@ export default function RentalPurchaseHistory() {
                     <Text style={styles.measurementsTitle}>Measurements</Text>
                   </View>
                   {Object.entries(originalItem.measurements)
-                    .filter(([key, value]) => value !== null && value !== undefined && value !== '' && key !== 'thigh')
+                    .filter(([key, value]) => value !== null && value !== undefined && String(value) !== '' && key !== 'thigh')
                     .length > 0 ? (
                       Object.entries(originalItem.measurements)
-                        .filter(([key, value]) => value !== null && value !== undefined && value !== '' && key !== 'thigh')
+                        .filter(([key, value]) => value !== null && value !== undefined && String(value) !== '' && key !== 'thigh')
                         .map(([key, value]) => (
                           <View key={key} style={styles.orderDetailItem}>
                             <Text style={styles.orderDetailLabel}>
@@ -699,6 +798,24 @@ export default function RentalPurchaseHistory() {
                       </View>
                     )}
                 </>
+              )}
+
+              {/* Generate Receipt Button - Moved to bottom of modal */}
+              {((selectedItem.type === 'rental' && selectedItem.status === 'returned') || 
+                (selectedItem.type === 'purchase' && selectedItem.status === 'picked_up')) && (
+                <View style={styles.receiptButtonContainer}>
+                  <TouchableOpacity
+                    style={styles.generateReceiptButton}
+                    onPress={() => {
+                      setShowDetails(false);
+                      handleGenerateReceipt(selectedItem);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="receipt-outline" size={20} color="#fff" />
+                    <Text style={styles.generateReceiptButtonText}>Generate Receipt</Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           </ScrollView>
@@ -1205,6 +1322,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: -2,
   },
+  receiptButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -2,
+    marginRight: 8,
+  },
   statusBadge: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -1375,27 +1503,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     flexWrap: 'wrap',
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-    marginBottom: 16,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border.light,
-  },
   detailLabel: {
     fontSize: 14,
     color: Colors.text.secondary,
@@ -1539,5 +1646,32 @@ const styles = StyleSheet.create({
   itemImageIcon: {
     fontSize: 48,
     opacity: 0.8,
+  },
+  receiptButtonContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border.light,
+    backgroundColor: Colors.background.light,
+  },
+  generateReceiptButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  generateReceiptButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 8,
   },
 });

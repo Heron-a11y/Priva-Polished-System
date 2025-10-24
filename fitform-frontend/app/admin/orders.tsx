@@ -370,14 +370,6 @@ const OrdersScreen = () => {
 
     // Initial fetch
     fetchOrders(true);
-
-    // Set up real-time polling every 5 seconds
-    const interval = setInterval(() => {
-      fetchOrders(false); // Don't show loading spinner for background updates
-    }, 5000);
-
-    // Cleanup interval on component unmount
-    return () => clearInterval(interval);
   }, []);
 
   const handleViewDetails = (order: Order) => {
@@ -1361,8 +1353,8 @@ const OrdersScreen = () => {
                         }
                       }}
                     >
-                      <Ionicons name="receipt-outline" size={20} color="#FFD700" />
-                      <Text style={{ color: '#FFD700', fontWeight: 'bold', fontSize: 16 }}>Download Receipt</Text>
+                      <Ionicons name="receipt-outline" size={20} color="#fff" />
+                      <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Generate Receipt</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -1469,23 +1461,6 @@ const OrdersScreen = () => {
                       </Text>
                     </View>
 
-                    {/* Receipt Button */}
-                    <TouchableOpacity
-                      style={{ backgroundColor: '#2196f3', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16 }}
-                      onPress={async () => {
-                        try {
-                          const { Linking } = require('react-native');
-                          const receiptUrl = `${apiService.baseURL}/rentals/${selectedOrder.id}/receipt`;
-                          // Open receipt in browser for download
-                          await Linking.openURL(receiptUrl);
-                        } catch (error) {
-                          Alert.alert('Error', 'Failed to generate receipt.');
-                        }
-                      }}
-                    >
-                      <Ionicons name="receipt-outline" size={20} color="#fff" />
-                      <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Download Receipt</Text>
-                    </TouchableOpacity>
 
                     {/* Mark as Returned button */}
                     <TouchableOpacity
@@ -1583,8 +1558,8 @@ const OrdersScreen = () => {
                         }
                       }}
                     >
-                      <Ionicons name="receipt-outline" size={20} color="#FFD700" />
-                      <Text style={{ color: '#FFD700', fontWeight: 'bold', fontSize: 16 }}>Download Receipt</Text>
+                      <Ionicons name="receipt-outline" size={20} color="#fff" />
+                      <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Generate Receipt</Text>
                     </TouchableOpacity>
                   </View>
                 )}

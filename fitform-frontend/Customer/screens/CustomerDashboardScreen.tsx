@@ -54,7 +54,7 @@ interface PopularItem {
   description: string;
   clothing_type: string;
   category: string;
-  image_path: string;
+  image_path: string | null;
   is_featured: boolean;
   is_available: boolean;
   measurements_required: string[];
@@ -87,6 +87,7 @@ export default function CustomerDashboardScreen() {
   const [newItemsCount, setNewItemsCount] = useState(0);
   const [lastPopularCount, setLastPopularCount] = useState(0);
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
+  const [lastPopularItemIds, setLastPopularItemIds] = useState<number[]>([]);
   const [recentItems, setRecentItems] = useState<any[]>([]);
   const [lastRecentCount, setLastRecentCount] = useState(0);
   const [showNewCatalogNotification, setShowNewCatalogNotification] = useState(false);
@@ -102,18 +103,6 @@ export default function CustomerDashboardScreen() {
     
     // Load recent items immediately
     loadRecentItems();
-    
-    // Set up auto-refresh for popular items every 3 seconds (ultra-frequent for real-time sync)
-    const popularItemsInterval = setInterval(() => {
-      console.log('🔄 Auto-refreshing popular items...');
-      loadPopularItems();
-    }, 3000);
-    
-    // Set up auto-refresh for recent items every 5 seconds
-    const recentItemsInterval = setInterval(() => {
-      console.log('🔄 Auto-refreshing recent items...');
-      loadRecentItems();
-    }, 5000);
     
     // Start floating animation
     const startFloatingAnimation = () => {
@@ -154,10 +143,9 @@ export default function CustomerDashboardScreen() {
     startFloatingAnimation();
     startPulseAnimation();
     
-    // Cleanup intervals on unmount
+    // Cleanup on unmount
     return () => {
-      clearInterval(popularItemsInterval);
-      clearInterval(recentItemsInterval);
+      // Cleanup animations if needed
     };
   }, []);
 
@@ -242,6 +230,13 @@ export default function CustomerDashboardScreen() {
     try {
       setLoading(true);
       console.log('🔄 Loading dashboard data...');
+      
+      // Check if user is authenticated
+      if (!user) {
+        console.log('⚠️ User not authenticated, skipping data loading');
+        setLoading(false);
+        return;
+      }
       
       // Load appointments once and use the data for both stats and recent appointments
       console.log('🔍 Debug: About to fetch appointments...');
@@ -349,6 +344,12 @@ export default function CustomerDashboardScreen() {
     try {
       console.log('🔄 Loading popular items...');
       
+      // Check if user is authenticated
+      if (!user) {
+        console.log('⚠️ User not authenticated, skipping popular items loading');
+        return;
+      }
+      
       // Store current count for comparison
       const currentCount = popularItems.length;
       console.log('📊 Current popular items count:', currentCount);
@@ -363,28 +364,40 @@ export default function CustomerDashboardScreen() {
         if (featuredItems.length > 0) {
           console.log('📋 Featured items data:', featuredItems);
           
-          // Check for new items and trigger notification
-          if (featuredItems.length > currentCount) {
-            const newCount = featuredItems.length - currentCount;
-            console.log('🎉 New popular items detected in context!', newCount, 'new items');
-            console.log('📊 Previous count:', currentCount, 'New count:', featuredItems.length);
+          // Check for new items and trigger notification using item IDs
+          const currentItemIds = featuredItems.map((item: any) => item.id);
+          const previousItemIds = lastPopularItemIds;
+          const newItemIds = currentItemIds.filter((id: number) => !previousItemIds.includes(id));
+          
+          console.log('🔍 Comparing items - Current IDs:', currentItemIds, 'Previous IDs:', previousItemIds, 'New IDs:', newItemIds);
+          console.log('🔍 Count comparison - Current:', currentCount, 'Featured:', featuredItems.length, 'Initial Load:', isInitialLoad);
+          
+          if (newItemIds.length > 0) {
+            console.log('🎉 New popular items detected in context!', newItemIds.length, 'new items with IDs:', newItemIds);
             
-            // Only show notification if we had items before (to avoid showing on first load)
-            if (currentCount > 0 && !isInitialLoad) {
-              setNewItemsCount(newCount);
+            // Show notification if we had items before OR if this is a significant increase
+            if ((currentCount > 0 && !isInitialLoad) || (currentCount === 0 && featuredItems.length > 0)) {
+              console.log('🚨 Triggering notification banner!');
+              setNewItemsCount(newItemIds.length);
               setShowNewItemsNotification(true);
               
               // Auto-hide notification after 8 seconds
               setTimeout(() => {
+                console.log('🕐 Auto-hiding notification banner');
                 setShowNewItemsNotification(false);
                 setNewItemsCount(0);
               }, 8000);
+            } else {
+              console.log('⚠️ Notification not triggered - conditions not met');
             }
+          } else {
+            console.log('📊 No new items detected - no new item IDs found');
           }
           
           setPopularItems(featuredItems);
           setLastUpdateTime(new Date());
           setLastPopularCount(featuredItems.length);
+          setLastPopularItemIds(currentItemIds);
           return;
         }
       } catch (contextError) {
@@ -402,28 +415,40 @@ export default function CustomerDashboardScreen() {
         console.log('✅ Popular items from direct API:', newItems.length);
         console.log('📋 Popular items data:', newItems);
         
-        // Check for new items and trigger notification
-        if (newItems.length > currentCount) {
-          const newCount = newItems.length - currentCount;
-          console.log('🎉 New popular items detected in API!', newCount, 'new items');
-          console.log('📊 Previous count:', currentCount, 'New count:', newItems.length);
+        // Check for new items and trigger notification using item IDs
+        const currentItemIds = newItems.map((item: any) => item.id);
+        const previousItemIds = lastPopularItemIds;
+        const newItemIds = currentItemIds.filter((id: number) => !previousItemIds.includes(id));
+        
+        console.log('🔍 Comparing items - Current IDs:', currentItemIds, 'Previous IDs:', previousItemIds, 'New IDs:', newItemIds);
+        console.log('🔍 Count comparison - Current:', currentCount, 'API:', newItems.length, 'Initial Load:', isInitialLoad);
+        
+        if (newItemIds.length > 0) {
+          console.log('🎉 New popular items detected in API!', newItemIds.length, 'new items with IDs:', newItemIds);
           
-          // Only show notification if we had items before (to avoid showing on first load)
-          if (currentCount > 0 && !isInitialLoad) {
-            setNewItemsCount(newCount);
+          // Show notification if we had items before OR if this is a significant increase
+          if ((currentCount > 0 && !isInitialLoad) || (currentCount === 0 && newItems.length > 0)) {
+            console.log('🚨 Triggering notification banner!');
+            setNewItemsCount(newItemIds.length);
             setShowNewItemsNotification(true);
             
             // Auto-hide notification after 8 seconds
             setTimeout(() => {
+              console.log('🕐 Auto-hiding notification banner');
               setShowNewItemsNotification(false);
               setNewItemsCount(0);
             }, 8000);
+          } else {
+            console.log('⚠️ Notification not triggered - conditions not met');
           }
+        } else {
+          console.log('📊 No new items detected - no new item IDs found');
         }
         
         setPopularItems(newItems);
         setLastUpdateTime(new Date());
         setLastPopularCount(newItems.length);
+        setLastPopularItemIds(currentItemIds);
       } else {
         console.error('❌ Direct API failed:', response);
         setPopularItems([]);
@@ -452,7 +477,7 @@ export default function CustomerDashboardScreen() {
         
         // Get the latest timestamp from the new items
         const latestTimestamp = newRecentItems.length > 0 
-          ? Math.max(...newRecentItems.map(item => item.created_timestamp || 0))
+          ? Math.max(...newRecentItems.map((item: any) => item.created_timestamp || 0))
           : 0;
         
         console.log('📊 Latest timestamp:', latestTimestamp, 'Last timestamp:', lastRecentTimestamp);
@@ -460,14 +485,14 @@ export default function CustomerDashboardScreen() {
         // Check for very recent items (created in last 5 minutes) - always show notification
         const now = Date.now();
         const fiveMinutesAgo = now - (5 * 60 * 1000);
-        const veryRecentItems = newRecentItems.filter(item => {
+        const veryRecentItems = newRecentItems.filter((item: any) => {
           const itemTime = new Date(item.created_at).getTime();
           return itemTime > fiveMinutesAgo;
         });
         
         if (veryRecentItems.length > 0) {
           console.log('🎉 Very recent items detected!', veryRecentItems.length, 'items created in last 5 minutes');
-          console.log('📋 Very recent items:', veryRecentItems.map(item => item.name));
+          console.log('📋 Very recent items:', veryRecentItems.map((item: any) => item.name));
           
           setNewCatalogCount(veryRecentItems.length);
           setShowNewCatalogNotification(true);
@@ -870,7 +895,7 @@ export default function CustomerDashboardScreen() {
           </View>
         ) : popularItems.length > 0 ? (
           <FlatList
-            data={popularItems.slice(0, 4)}
+            data={popularItems}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.popularItemsContainer}
@@ -1439,13 +1464,6 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     paddingHorizontal: 16,
   },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    marginTop: 12,
-    textAlign: 'center',
-  },
   emptyStateSubtext: {
     fontSize: 14,
     color: Colors.text.secondary,
@@ -1456,12 +1474,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 32,
     paddingHorizontal: 16,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: Colors.text.secondary,
-    marginTop: 12,
-    textAlign: 'center',
   },
   notificationBanner: {
     backgroundColor: '#4CAF50',

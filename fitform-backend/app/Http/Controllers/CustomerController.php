@@ -14,7 +14,7 @@ use App\Models\Purchase;
 use Carbon\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
 
-class CustomerController extends Controller
+class CustomerController extends PaginatedController
 {
     /**
      * Test endpoint
@@ -46,67 +46,43 @@ class CustomerController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = User::whereIn('role', ['customer', 'admin'])->where('email', '!=', 'admin@fitform.com');
+            $query = User::whereIn('role', ['customer', 'admin'])->where('email', '!=', 'admin@fitform.com')
+                ->withCount([
+                    'appointments',
+                    'rentals', 
+                    'purchases'
+                ]);
 
-            // Apply search filter
-            if ($request->has('search') && !empty($request->search)) {
-                $search = $request->search;
-                $query->where(function($q) use ($search) {
-                    $q->where('name', 'like', "%{$search}%")
-                      ->orWhere('email', 'like', "%{$search}%")
-                      ->orWhere('phone', 'like', "%{$search}%");
-                });
-            }
-
-            // Apply status filter
-            if ($request->has('status') && !empty($request->status)) {
-                $query->where('account_status', $request->status);
-            }
-
-            // Get customers with basic additional data
-            $customers = $query->orderBy('created_at', 'desc')->get();
-            
-            // Add actual counts to each customer
-            $customers = $customers->map(function ($customer) {
-                $customerArray = $customer->toArray();
-                
-                try {
-                    // Get actual counts for this customer
-                    // Orders table doesn't have user_id column, so set to 0
-                    $orderCount = 0;
-                    $appointmentCount = \App\Models\Appointment::where('user_id', $customer->id)->count();
-                    $rentalCount = \App\Models\Rental::where('user_id', $customer->id)->count();
-                    $purchaseCount = \App\Models\Purchase::where('user_id', $customer->id)->count();
+            // Configure pagination options
+            $options = [
+                'search_fields' => ['name', 'email', 'phone'],
+                'filter_fields' => ['account_status', 'role'],
+                'sort_fields' => ['created_at', 'name', 'email', 'account_status'],
+                'default_per_page' => 20,
+                'max_per_page' => 100,
+                'transform' => function ($customer) {
+                    $customerArray = $customer->toArray();
                     
-                    // Debug logging
-                    \Log::info("Customer {$customer->id} counts: Orders={$orderCount}, Appointments={$appointmentCount}, Rentals={$rentalCount}, Purchases={$purchaseCount}");
-                    
-                    $customerArray['order_count'] = $orderCount;
-                    $customerArray['appointment_count'] = $appointmentCount;
-                    $customerArray['rental_count'] = $rentalCount;
-                    $customerArray['purchase_count'] = $purchaseCount;
-                    $customerArray['total_transactions'] = $orderCount + $rentalCount + $purchaseCount;
+                    // Use pre-loaded counts to avoid N+1 queries
+                    $customerArray['order_count'] = $customer->order_count ?? 0;
+                    $customerArray['appointment_count'] = $customer->appointment_count ?? 0;
+                    $customerArray['rental_count'] = $customer->rental_count ?? 0;
+                    $customerArray['purchase_count'] = $customer->purchase_count ?? 0;
+                    $customerArray['total_transactions'] = ($customer->rental_count ?? 0) + ($customer->purchase_count ?? 0);
                     $customerArray['last_activity'] = $customer->updated_at;
                     
                     // Fix profile image URL
                     if ($customerArray['profile_image']) {
                         $customerArray['profile_image'] = url('storage/' . $customerArray['profile_image']);
                     }
-                } catch (\Exception $e) {
-                    // If there's an error, set to 0
-                    \Log::error("Error getting counts for customer {$customer->id}: " . $e->getMessage());
-                    $customerArray['order_count'] = 0;
-                    $customerArray['appointment_count'] = 0;
-                    $customerArray['rental_count'] = 0;
-                    $customerArray['purchase_count'] = 0;
-                    $customerArray['total_transactions'] = 0;
-                    $customerArray['last_activity'] = $customer->updated_at;
+                    
+                    return $customerArray;
                 }
-                
-                return $customerArray;
-            });
+            ];
 
-            // Calculate stats (excluding super admin)
+            $result = $this->paginate($query, $request, $options);
+            
+            // Add stats to the response
             $stats = [
                 'total_customers' => User::whereIn('role', ['customer', 'admin'])->where('email', '!=', 'admin@fitform.com')->count(),
                 'active_customers' => User::whereIn('role', ['customer', 'admin'])->where('email', '!=', 'admin@fitform.com')->where('account_status', 'active')->count(),
@@ -114,16 +90,55 @@ class CustomerController extends Controller
                 'banned_customers' => User::whereIn('role', ['customer', 'admin'])->where('email', '!=', 'admin@fitform.com')->where('account_status', 'banned')->count(),
             ];
 
-            return response()->json([
-                'success' => true,
-                'customers' => $customers,
-                'stats' => $stats
-            ]);
+            // Add stats to the response data
+            $responseData = $result->getData(true);
+            $responseData['stats'] = $stats;
+            
+            return response()->json($responseData);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to fetch customers',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get customer statistics for admin dashboard
+     */
+    public function getStats()
+    {
+        try {
+            // Calculate customer statistics
+            $totalCustomers = User::whereIn('role', ['customer', 'admin'])->where('email', '!=', 'admin@fitform.com')->count();
+            $activeCustomers = User::whereIn('role', ['customer', 'admin'])->where('email', '!=', 'admin@fitform.com')->where('account_status', 'active')->count();
+            $suspendedCustomers = User::whereIn('role', ['customer', 'admin'])->where('email', '!=', 'admin@fitform.com')->where('account_status', 'suspended')->count();
+            $bannedCustomers = User::whereIn('role', ['customer', 'admin'])->where('email', '!=', 'admin@fitform.com')->where('account_status', 'banned')->count();
+            
+            // Get order statistics
+            $totalOrders = Rental::count() + Purchase::count();
+            $pendingOrders = Rental::where('status', 'pending')->count() + Purchase::where('status', 'pending')->count();
+            $completedOrders = Rental::where('status', 'completed')->count() + Purchase::where('status', 'completed')->count();
+            
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'total_customers' => $totalCustomers,
+                    'active_customers' => $activeCustomers,
+                    'suspended_customers' => $suspendedCustomers,
+                    'banned_customers' => $bannedCustomers,
+                    'total_orders' => $totalOrders,
+                    'pending_orders' => $pendingOrders,
+                    'completed_orders' => $completedOrders,
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch customer statistics',
                 'error' => $e->getMessage()
             ], 500);
         }

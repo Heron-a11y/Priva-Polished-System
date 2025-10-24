@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Order;
 use App\Models\User;
+use App\Models\Rental;
+use App\Models\Purchase;
 
 class OrderController extends Controller
 {
@@ -95,6 +97,59 @@ class OrderController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to generate report',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get order statistics for admin dashboard
+     */
+    public function getStats()
+    {
+        try {
+            // Get rental statistics
+            $totalRentals = Rental::count();
+            $pendingRentals = Rental::where('status', 'pending')->count();
+            $completedRentals = Rental::where('status', 'completed')->count();
+            $cancelledRentals = Rental::where('status', 'cancelled')->count();
+            
+            // Get purchase statistics
+            $totalPurchases = Purchase::count();
+            $pendingPurchases = Purchase::where('status', 'pending')->count();
+            $completedPurchases = Purchase::where('status', 'completed')->count();
+            $cancelledPurchases = Purchase::where('status', 'cancelled')->count();
+            
+            // Calculate totals
+            $totalOrders = $totalRentals + $totalPurchases;
+            $pendingOrders = $pendingRentals + $pendingPurchases;
+            $completedOrders = $completedRentals + $completedPurchases;
+            $cancelledOrders = $cancelledRentals + $cancelledPurchases;
+            
+            // Calculate revenue
+            $rentalRevenue = Rental::where('status', 'completed')->sum('quotation_amount');
+            $purchaseRevenue = Purchase::where('status', 'completed')->sum('quotation_price');
+            $totalRevenue = $rentalRevenue + $purchaseRevenue;
+            
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'total_orders' => $totalOrders,
+                    'pending_orders' => $pendingOrders,
+                    'completed_orders' => $completedOrders,
+                    'cancelled_orders' => $cancelledOrders,
+                    'total_rentals' => $totalRentals,
+                    'total_purchases' => $totalPurchases,
+                    'total_revenue' => $totalRevenue,
+                    'rental_revenue' => $rentalRevenue,
+                    'purchase_revenue' => $purchaseRevenue,
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch order statistics',
                 'error' => $e->getMessage()
             ], 500);
         }
