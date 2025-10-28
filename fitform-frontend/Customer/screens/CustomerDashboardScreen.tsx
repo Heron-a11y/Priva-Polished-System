@@ -239,7 +239,7 @@ export default function CustomerDashboardScreen() {
       }
       
       // Load appointments once and use the data for both stats and recent appointments
-      console.log('🔍 Debug: About to fetch appointments...');
+      console.log('🔍 Debug: About to fetch appointments for user:', user.id);
       const appointmentsResponse = await apiService.getAppointments();
       console.log('🔍 Debug: Raw appointments response:', appointmentsResponse);
       const appointments = Array.isArray(appointmentsResponse?.data) ? appointmentsResponse.data : [];
@@ -271,7 +271,14 @@ export default function CustomerDashboardScreen() {
         loadPopularItems()
       ]);
     } catch (error) {
-      console.error('Error loading dashboard data:', error);
+      console.error('❌ Error loading dashboard data:', error);
+      
+      // Handle specific error cases
+      if (error instanceof Error && (error.message?.includes('401') || error.message?.includes('Unauthorized'))) {
+        console.log('🔐 Authentication required - user may need to login again');
+      } else if (error instanceof Error && error.message?.includes('Network error')) {
+        console.log('🌐 Network error - check backend server connection');
+      }
     } finally {
       setLoading(false);
     }

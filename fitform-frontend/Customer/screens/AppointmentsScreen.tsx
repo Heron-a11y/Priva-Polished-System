@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
+import { useScrollOnError } from '../../hooks/useScrollOnError';
 import CollapsibleSortButton from '../../components/CollapsibleSortButton';
 import { getLocalImageUrl } from '../../utils/imageUrlHelper';
 
@@ -49,8 +50,24 @@ interface Appointment {
 
 const AppointmentsScreen = () => {
   const { user } = useAuth();
+  const scheduleScrollRef = useRef<ScrollView>(null);
+  const serviceTypeSectionRef = useRef<View>(null);
+  const timeSectionRef = useRef<View>(null);
+  const scrollContentRef = useRef<View>(null);
+  const [serviceTypeSectionY, setServiceTypeSectionY] = useState(0);
+  const [timeSectionY, setTimeSectionY] = useState(0);
+  const [fieldErrors, setFieldErrors] = useState<{ serviceType?: string }>({});
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Adopt admin scroll-on-error utility
+  const { scrollToElement: scrollToErrorElement } = useScrollOnError({
+    scrollViewRef: scheduleScrollRef,
+    offset: 100,
+    animated: true,
+    delay: 150
+  });
+
   
   // Sort options state
   const [sortOption, setSortOption] = useState('status');
@@ -170,6 +187,8 @@ const AppointmentsScreen = () => {
   const [timeError, setTimeError] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDateForPicker, setSelectedDateForPicker] = useState(new Date());
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedDeleteOption, setSelectedDeleteOption] = useState<'all' | 'cancelled' | null>(null);
   const router = useRouter();
   const { register } = useAuth();
 
@@ -184,10 +203,12 @@ const AppointmentsScreen = () => {
       // Check if it's in ISO format with T separator
       if (appointmentDate.includes('T')) {
         timePart = appointmentDate.split('T')[1];
+        console.log('Extracted from T format:', timePart);
       }
       // Check if it's in format like "2025-10-31 10:00:00"
       else if (appointmentDate.includes(' ')) {
         timePart = appointmentDate.split(' ')[1];
+        console.log('Extracted from space format:', timePart);
       }
       // Check if it's a Date object or can be parsed as one
       else {
@@ -197,22 +218,30 @@ const AppointmentsScreen = () => {
           const hours = date.getHours().toString().padStart(2, '0');
           const minutes = date.getMinutes().toString().padStart(2, '0');
           timePart = `${hours}:${minutes}:00`;
+          console.log('Extracted from Date object:', timePart);
         }
       }
       
-      console.log('Extracted time part:', timePart);
+      console.log('Final time part:', timePart);
       
-      if (timePart) {
-        const [hours, minutes] = timePart.split(':');
-        const hour = parseInt(hours);
-        const ampm = hour >= 12 ? 'PM' : 'AM';
-        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-        const formattedTime = `${displayHour}:${minutes} ${ampm}`;
-        console.log('Time formatting result:', { hours, minutes, hour, ampm, displayHour, formattedTime });
-        return formattedTime;
+      if (timePart && timePart !== 'undefined') {
+        const timeComponents = timePart.split(':');
+        if (timeComponents.length >= 2) {
+          const hours = timeComponents[0];
+          const minutes = timeComponents[1];
+          const hour = parseInt(hours);
+          
+          if (!isNaN(hour) && hour >= 0 && hour <= 23) {
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+            const formattedTime = `${displayHour}:${minutes} ${ampm}`;
+            console.log('Time formatting result:', { hours, minutes, hour, ampm, displayHour, formattedTime });
+            return formattedTime;
+          }
+        }
       }
       
-      console.warn('No time part found, using fallback');
+      console.warn('No valid time part found, using fallback');
       return '12:00 AM'; // fallback
     } catch (error) {
       console.error('Error formatting appointment time:', error);
@@ -244,10 +273,13 @@ const AppointmentsScreen = () => {
   };
 
   useEffect(() => {
-    fetchAppointments();
-    fetchBookedDates();
-    fetchDailyCapacity(currentViewDate);
-  }, []);
+    // Only fetch data if user is authenticated
+    if (user) {
+      fetchAppointments();
+      fetchBookedDates();
+      fetchDailyCapacity(currentViewDate);
+    }
+  }, [user]);
 
   useEffect(() => {
     // Refetch daily capacity when currentViewDate changes
@@ -266,31 +298,50 @@ const AppointmentsScreen = () => {
 
   const fetchAppointments = async () => {
     try {
+      setLoading(true);
+      console.log('🔄 Fetching appointments for user:', user?.id);
+      
+      // Check if user is authenticated before making the request
+      if (!user) {
+        console.log('⚠️ No user authenticated, skipping appointments fetch');
+        setAppointments([]);
+        return;
+      }
+      
       const response = await apiService.getAppointments();
-      console.log('Raw appointments response:', response);
-      console.log('Current user:', user);
+      console.log('📅 Raw appointments response:', response);
       
       let appointmentsData = [];
       if (Array.isArray(response)) {
         appointmentsData = response;
-        console.log('Set appointments (array):', response);
+        console.log('📅 Set appointments (array):', response);
       } else if (response && response.data) {
         appointmentsData = response.data;
-        console.log('Set appointments (data):', response.data);
+        console.log('📅 Set appointments (data):', response.data);
       } else {
         appointmentsData = [];
-        console.log('Set appointments (empty)');
+        console.log('📅 Set appointments (empty)');
       }
       
-      // Filter out cancelled appointments
-      const filteredAppointments = appointmentsData.filter((appointment: Appointment) => 
-        appointment.status !== 'cancelled'
-      );
-      setAppointments(filteredAppointments);
+      // Include all appointments including cancelled ones
+      console.log('📅 Total appointments count:', appointmentsData.length);
+      setAppointments(appointmentsData);
       
     } catch (error) {
-      console.error('Error fetching appointments:', error);
+      console.error('❌ Error fetching appointments:', error);
+      
+      // Handle specific error cases
+      if (error instanceof Error && (error.message?.includes('401') || error.message?.includes('Unauthorized'))) {
+        console.log('🔐 Authentication required - user may need to login again');
+        // Don't clear appointments array, just log the error
+        // The user will be redirected to login if needed
+      } else if (error instanceof Error && error.message?.includes('Network error')) {
+        console.log('🌐 Network error - check backend server connection');
+      }
+      
       setAppointments([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -313,11 +364,23 @@ const AppointmentsScreen = () => {
   };
 
   const openTimePicker = () => {
+    // Clear any existing time errors when opening the picker
+    setTimeError('');
+    
     // Set initial time based on current preferred_time or default to 10:00
     const currentTime = newAppointment.preferred_time || '10:00';
     const [hours, minutes] = currentTime.split(':').map(Number);
     const date = new Date();
-    date.setHours(hours, minutes, 0, 0);
+    
+    // Ensure time is within business hours (10:00 AM to 7:00 PM)
+    let validHours = hours;
+    if (hours < 10) {
+      validHours = 10;
+    } else if (hours > 19) {
+      validHours = 19;
+    }
+    
+    date.setHours(validHours, minutes, 0, 0);
     setSelectedTime(date);
     setShowTimePicker(true);
   };
@@ -353,6 +416,7 @@ const AppointmentsScreen = () => {
 
   const validateSelectedTime = (timeString: string) => {
     setTimeError('');
+    setAppointmentErrors(prev => ({ ...prev, timeSlot: undefined }));
     
     // Check if time is on the hour or half-hour
     if (!isTimeOnHourOrHalfHour(timeString)) {
@@ -365,9 +429,23 @@ const AppointmentsScreen = () => {
       return false;
     }
     
-    if (isTimeAlreadyTaken(timeString)) {
-      setTimeError('This time slot is already taken. Please select another time.');
-      return false;
+    // Check if time slot is already taken (considering editing mode)
+    if (newAppointment.appointment_date) {
+      const selectedDate = newAppointment.appointment_date;
+      const conflictingAppointment = appointments.find(apt => {
+        const aptDateTime = apt.appointment_date;
+        const aptDate = aptDateTime.split('T')[0];
+        const aptTime = aptDateTime.split('T')[1]?.split(':')[0] + ':' + aptDateTime.split('T')[1]?.split(':')[1];
+        
+        return aptDate === selectedDate && 
+               aptTime === timeString && 
+               (!editingAppointmentId || apt.id !== editingAppointmentId);
+      });
+
+      if (conflictingAppointment) {
+        setTimeError('This time slot is already taken. Please select another time.');
+        return false;
+      }
     }
     
     return true;
@@ -404,8 +482,10 @@ const AppointmentsScreen = () => {
   const fetchBookedDates = async () => {
     try {
       const response = await apiService.getBookedDates();
+      console.log('📅 Fetched booked dates response:', response);
       if (response.success && response.booked_dates) {
         setBookedDates(response.booked_dates);
+        console.log('📅 Set booked dates:', response.booked_dates);
       }
     } catch (error) {
       console.error('Error fetching booked dates:', error);
@@ -416,11 +496,13 @@ const AppointmentsScreen = () => {
     try {
       const response = await apiService.getDailyCapacity(date);
       if (response.success) {
-        setDailyCapacity(response);
-        
+        // Support both legacy shape and new shape
+        setDailyCapacity(response.data ? response.data : response);
+
         // Get taken times for this date from backend response
-        if (date && response.taken_times) {
-          setTakenTimes(response.taken_times);
+        const times = response.taken_times || response.data?.taken_times;
+        if (date && times) {
+          setTakenTimes(Array.isArray(times) ? times : []);
         }
       }
     } catch (error) {
@@ -448,14 +530,55 @@ const AppointmentsScreen = () => {
       return;
     }
     
-    // Open modal immediately for better UX
-      setSelectedDate(selectedDateStr);
-      setNewAppointment({
-        ...newAppointment,
-        appointment_date: selectedDateStr, // Store just the date string
-        preferred_time: '10:00', // Reset to default time
+    // Clear any existing errors only after basic validation passes
+    setTimeError('');
+    setAppointmentErrors({});
+    
+    // Check for existing appointment on the same date (one appointment per day limit)
+    const existingAppointmentOnDate = appointments.find(apt => 
+      apt.appointment_date.split('T')[0] === selectedDateStrOnly && 
+      (!editingAppointmentId || apt.id !== editingAppointmentId)
+    );
+
+    if (existingAppointmentOnDate) {
+      console.log('🚫 User already has appointment on this date:', selectedDateStrOnly, 'Existing appointment:', existingAppointmentOnDate);
+      setAppointmentErrors({
+        dailyLimit: 'You already have an appointment scheduled for this date. Only one appointment per day is allowed.'
       });
-      setModalVisible(true);
+      return;
+    }
+
+    // Check if date is already booked (reached daily capacity)
+    const isDateBooked = bookedDates.includes(selectedDateStrOnly);
+    if (isDateBooked) {
+      console.log('🚫 Selected date is booked:', selectedDateStrOnly, 'Booked dates:', bookedDates);
+      setAppointmentErrors({
+        booked: 'This date is already booked and has reached its daily capacity. Please select another date.'
+      });
+      return;
+    }
+
+    // Check daily capacity limit (5 appointments per day)
+    const appointmentsOnSelectedDate = appointments.filter(apt => 
+      apt.appointment_date.split('T')[0] === selectedDateStrOnly &&
+      (!editingAppointmentId || apt.id !== editingAppointmentId)
+    );
+
+    if (appointmentsOnSelectedDate.length >= 5) {
+      setAppointmentErrors({
+        capacity: 'This date has reached its daily capacity of 5 appointments. Please select another date.'
+      });
+      return;
+    }
+    
+    // Only open modal if all validations pass
+    setSelectedDate(selectedDateStr);
+    setNewAppointment({
+      ...newAppointment,
+      appointment_date: selectedDateStr, // Store just the date string
+      preferred_time: editingAppointmentId ? newAppointment.preferred_time : '10:00', // Preserve existing time when editing
+    });
+    setModalVisible(true);
     
     // Perform validation in background without blocking UI
     Promise.all([
@@ -471,6 +594,9 @@ const AppointmentsScreen = () => {
   };
 
   const handleAddAppointment = async () => {
+    // Clear any existing time errors when opening the modal
+    setTimeError('');
+    
     // Get today's date
     const today = new Date();
     const todayStr = today.getFullYear() + '-' + 
@@ -533,32 +659,48 @@ const AppointmentsScreen = () => {
   };
 
   const handleCreateAppointment = async () => {
+    // Clear previous errors
+    setTimeError('');
+    setAppointmentErrors({});
+
     // Validate required fields
     if (!newAppointment.service_type.trim()) {
-      Alert.alert('Required Field', 'Please enter a service type.');
+      console.log('🚨 Service type validation failed, scrolling to service type section');
+      setFieldErrors({ serviceType: 'Please select a service type.' });
+      // Use same util as admin to scroll to element
+      scrollToErrorElement(serviceTypeSectionRef, 'serviceType');
       return;
+    } else if (fieldErrors.serviceType) {
+      setFieldErrors({});
     }
 
     if (!newAppointment.preferred_time) {
-      Alert.alert('Required Field', 'Please select a preferred time.');
+      console.log('🚨 Time validation failed, scrolling to time section');
+      setTimeError('Please select a preferred time.');
+      scrollToErrorElement(timeSectionRef, 'time');
+      return;
+    }
+
+    if (!newAppointment.appointment_date) {
+      console.log('🚨 Date validation failed, scrolling to top');
+      setAppointmentErrors({ general: 'Please select an appointment date.' });
+      scheduleScrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
 
     // Validate time format (hour or half-hour only)
     if (!isTimeOnHourOrHalfHour(newAppointment.preferred_time)) {
+      console.log('🚨 Time format validation failed, scrolling to time section');
       setTimeError('Appointments can only be scheduled on the hour or half-hour (e.g., 2:00 PM or 2:30 PM)');
+      scrollToErrorElement(timeSectionRef, 'time');
       return;
     }
 
     // Validate business hours and check for time errors
     if (!isTimeWithinBusinessHours(newAppointment.preferred_time)) {
+      console.log('🚨 Business hours validation failed, scrolling to time section');
       setTimeError('Time must be between 10:00 AM and 7:00 PM');
-      return;
-    }
-
-    // Check if time is already taken (this will be handled by UI validation)
-    if (isTimeAlreadyTaken(newAppointment.preferred_time)) {
-      setTimeError('This time slot is already taken. Please select another time.');
+      scrollToErrorElement(timeSectionRef, 'time');
       return;
     }
 
@@ -569,9 +711,62 @@ const AppointmentsScreen = () => {
       return;
     }
 
-    // Validate that preferred time is not taken
-    if (takenTimes.includes(newAppointment.preferred_time)) {
+    // Check for existing appointment on the same date (one appointment per day limit)
+    const selectedDate = newAppointment.appointment_date;
+    const existingAppointmentOnDate = appointments.find(apt => 
+      apt.appointment_date.split('T')[0] === selectedDate && 
+      (!editingAppointmentId || apt.id !== editingAppointmentId)
+    );
+
+    if (existingAppointmentOnDate) {
+      console.log('🚫 Create appointment - user already has appointment on this date:', selectedDate, 'Existing appointment:', existingAppointmentOnDate);
+      setAppointmentErrors({
+        dailyLimit: 'You already have an appointment scheduled for this date. Only one appointment per day is allowed.'
+      });
+      scheduleScrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+
+    // Check if date is already booked (reached daily capacity)
+    const isDateBooked = bookedDates.includes(selectedDate);
+    if (isDateBooked) {
+      console.log('🚫 Create appointment - date is booked:', selectedDate, 'Booked dates:', bookedDates);
+      setAppointmentErrors({
+        booked: 'This date is already booked and has reached its daily capacity. Please select another date.'
+      });
+      scheduleScrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+
+    // Check if time slot is already taken
+    const conflictingAppointment = appointments.find(apt => {
+      const aptDateTime = apt.appointment_date;
+      const aptDate = aptDateTime.split('T')[0];
+      const aptTime = aptDateTime.split('T')[1]?.split(':')[0] + ':' + aptDateTime.split('T')[1]?.split(':')[1];
+      
+      return aptDate === selectedDate && 
+             aptTime === newAppointment.preferred_time && 
+             (!editingAppointmentId || apt.id !== editingAppointmentId);
+    });
+
+    if (conflictingAppointment) {
+      console.log('🚨 Time slot conflict validation failed, scrolling to time section');
       setTimeError('This time slot is already taken. Please select another time.');
+      scrollToErrorElement(timeSectionRef, 'time');
+      return;
+    }
+
+    // Check daily capacity limit (5 appointments per day)
+    const appointmentsOnSelectedDate = appointments.filter(apt => 
+      apt.appointment_date.split('T')[0] === selectedDate &&
+      (!editingAppointmentId || apt.id !== editingAppointmentId)
+    );
+
+    if (appointmentsOnSelectedDate.length >= 5) {
+      setAppointmentErrors({
+        capacity: 'This date has reached its daily capacity of 5 appointments. Please select another date.'
+      });
+      scheduleScrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
 
@@ -597,12 +792,41 @@ const AppointmentsScreen = () => {
       const appointmentTime = String(appointmentDateTime.getHours()).padStart(2, '0') + ':' +
         String(appointmentDateTime.getMinutes()).padStart(2, '0');
       
+      // Final guard: block scheduling if date is booked (frontend safety net)
+      if (bookedDates.includes(appointmentDate)) {
+        console.log('🚫 Final guard - date is booked:', appointmentDate, 'Booked dates:', bookedDates);
+        setAppointmentErrors({
+          booked: 'This date is already booked and has reached its daily capacity. Please select another date.'
+        });
+        return;
+      }
+
       const appointmentData = {
         appointment_date: appointmentDate,
         appointment_time: appointmentTime,
         service_type: newAppointment.service_type,
         notes: newAppointment.notes || null,
       };
+
+      // If editing a confirmed appointment, change status to pending for reconfirmation
+      if (editingAppointmentId) {
+        const originalAppointment = appointments.find(apt => apt.id === editingAppointmentId);
+        if (originalAppointment && originalAppointment.status === 'confirmed') {
+          // Check if any critical fields have changed
+          const originalDate = originalAppointment.appointment_date.split('T')[0];
+          const originalTime = originalAppointment.appointment_date.split('T')[1]?.split(':')[0] + ':' + 
+                               originalAppointment.appointment_date.split('T')[1]?.split(':')[1];
+          
+          const hasDateChanged = appointmentDate !== originalDate;
+          const hasTimeChanged = appointmentTime !== originalTime;
+          const hasServiceChanged = newAppointment.service_type !== originalAppointment.service_type;
+          
+          if (hasDateChanged || hasTimeChanged || hasServiceChanged) {
+            appointmentData.status = 'pending';
+            console.log('🔄 Confirmed appointment modified - changing status to pending for reconfirmation');
+          }
+        }
+      }
 
       console.log('Original appointment data:', newAppointment);
       console.log('Selected date:', selectedDate);
@@ -618,12 +842,16 @@ const AppointmentsScreen = () => {
       let response;
       if (editingAppointmentId) {
         // Update existing appointment
+        console.log('🔄 Updating appointment with ID:', editingAppointmentId);
+        console.log('📤 Update data being sent:', appointmentData);
         response = await apiService.updateAppointment(editingAppointmentId, appointmentData);
-        console.log('Appointment update API response:', response);
+        console.log('📥 Appointment update API response:', response);
       } else {
         // Create new appointment
+        console.log('🆕 Creating new appointment');
+        console.log('📤 Create data being sent:', appointmentData);
         response = await apiService.createAppointment(appointmentData);
-        console.log('Appointment create API response:', response);
+        console.log('📥 Appointment create API response:', response);
       }
       
       if (response && (response.id || response.success)) {
@@ -644,7 +872,13 @@ const AppointmentsScreen = () => {
         await fetchBookedDates(); // Refresh booked dates
         await fetchDailyCapacity(currentViewDate); // Refresh daily capacity
         
-        const successMessage = editingAppointmentId ? 'Appointment updated successfully!' : 'Appointment created successfully!';
+        let successMessage = editingAppointmentId ? 'Appointment updated successfully!' : 'Appointment created successfully!';
+        
+        // Check if status was changed to pending for reconfirmation
+        if (editingAppointmentId && appointmentData.status === 'pending') {
+          successMessage = 'Appointment updated successfully! Since you modified a confirmed appointment, it has been changed to "Pending" status for reconfirmation.';
+        }
+        
         Alert.alert('Success', successMessage);
       } else {
         const errorMessage = editingAppointmentId ? 'Failed to update appointment' : 'Failed to create appointment';
@@ -652,7 +886,20 @@ const AppointmentsScreen = () => {
       }
     } catch (error: any) {
       const operation = editingAppointmentId ? 'updating' : 'creating';
-      console.error(`Error ${operation} appointment:`, error);
+      console.error(`❌ Error ${operation} appointment:`, error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.status,
+        response: error.response?.data,
+        stack: error.stack
+      });
+      
+      // Log the specific error type and message for debugging
+      if (error.response?.data) {
+        console.log('🔍 Error response data:', error.response.data);
+        console.log('🔍 Error type:', error.response.data.error);
+        console.log('🔍 Error message:', error.response.data.message);
+      }
       
       // Clear previous errors
       setAppointmentErrors({});
@@ -660,40 +907,71 @@ const AppointmentsScreen = () => {
       // Handle specific backend validation errors
       if (error.response && error.response.data) {
         const errorData = error.response.data;
+        console.log('🔍 Backend error response:', errorData);
         
-        if (errorData.error === 'daily_limit_exceeded') {
+        // Check for error type in different possible locations
+        const errorType = errorData.error || errorData.type || errorData.code;
+        const errorMessage = errorData.message || errorData.error_message;
+        
+        if (errorType === 'daily_limit_exceeded' || errorMessage?.includes('already have an appointment') || errorMessage?.includes('Only one appointment per day')) {
           setAppointmentErrors({
             dailyLimit: 'You already have an appointment scheduled for this date. Only one appointment per day is allowed.'
           });
+          scheduleScrollRef.current?.scrollTo({ y: 0, animated: true });
           return;
         }
         
-        if (errorData.error === 'time_slot_taken') {
-          setAppointmentErrors({
-            timeSlot: 'This time slot is already taken. Please choose another time.'
-          });
+        if (errorType === 'time_slot_taken' || errorMessage?.includes('time slot is already taken')) {
+          setTimeError('This time slot is already taken. Please choose another time.');
+          scrollToErrorElement(timeSectionRef, 'time');
           return;
         }
         
-        if (errorData.error === 'daily_capacity_exceeded') {
+        if (errorType === 'daily_capacity_exceeded' || errorMessage?.includes('Daily capacity reached')) {
           setAppointmentErrors({
             capacity: 'Daily capacity reached. Maximum 5 appointments per day allowed.'
           });
+          scheduleScrollRef.current?.scrollTo({ y: 0, animated: true });
           return;
+        }
+        
+        // Handle validation errors array format
+        if (errorData.errors && typeof errorData.errors === 'object') {
+          const errors = errorData.errors;
+          if (errors.appointment_date && errors.appointment_date.includes('already have an appointment')) {
+            setAppointmentErrors({
+              dailyLimit: 'You already have an appointment scheduled for this date. Only one appointment per day is allowed.'
+            });
+            scheduleScrollRef.current?.scrollTo({ y: 0, animated: true });
+            return;
+          }
         }
       }
       
       // Handle other error types
       if (error.message && error.message.includes('already booked')) {
-        Alert.alert('Date Unavailable', 'This date is already booked. Please choose another date.');
+        setAppointmentErrors({
+          booked: 'This date is already booked and has reached its daily capacity. Please select another date.'
+        });
+        scheduleScrollRef.current?.scrollTo({ y: 0, animated: true });
+      } else if (error.message && (error.message.includes('already have an appointment') || error.message.includes('Only one appointment per day'))) {
+        setAppointmentErrors({
+          dailyLimit: 'You already have an appointment scheduled for this date. Only one appointment per day is allowed.'
+        });
+        scheduleScrollRef.current?.scrollTo({ y: 0, animated: true });
       } else if (error.message && error.message.includes('past')) {
         Alert.alert('Invalid Date', 'Cannot schedule appointments in the past. Please select a current or future date.');
       } else if (error.message && error.message.includes('business hours')) {
         setTimeError('Appointments can only be scheduled between 10:00 AM and 7:00 PM. Please select a time within business hours.');
+        scrollToErrorElement(timeSectionRef, 'time');
+      } else if (error.message && (error.message.includes('time slot') || error.message.includes('already taken'))) {
+        setTimeError('This time slot is already taken. Please select another time.');
+        scrollToErrorElement(timeSectionRef, 'time');
       } else {
         setAppointmentErrors({
           general: `Failed to ${operation} appointment. Please try again.`
         });
+        scheduleScrollRef.current?.scrollTo({ y: 0, animated: true });
       }
     }
   };
@@ -706,6 +984,112 @@ const AppointmentsScreen = () => {
       Alert.alert('Success', 'Appointment cancelled.');
     } catch (error) {
       Alert.alert('Error', 'Failed to cancel appointment');
+    }
+  };
+
+  const handleDeleteAllAppointments = async () => {
+    try {
+      setLoading(true);
+      console.log('🗑️ Deleting all appointments...');
+      
+      // Get all appointment IDs
+      const appointmentIds = appointments.map(appointment => appointment.id);
+      
+      // Delete all appointments
+      for (const id of appointmentIds) {
+        await apiService.deleteAppointment(id);
+      }
+      
+      console.log('✅ All appointments deleted successfully');
+      Alert.alert('Success', 'All appointments have been deleted.');
+      fetchAppointments(); // Refresh the appointments list
+      setShowDeleteModal(false);
+      setSelectedDeleteOption(null);
+    } catch (error: any) {
+      console.error('❌ Error deleting all appointments:', error);
+      Alert.alert('Error', 'Failed to delete appointments. Please try again.');
+      setShowDeleteModal(false);
+      setSelectedDeleteOption(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteCancelledAppointments = async () => {
+    try {
+      setLoading(true);
+      console.log('🗑️ Deleting cancelled appointments...');
+      
+      // Get only cancelled appointment IDs
+      const cancelledAppointmentIds = appointments
+        .filter(appointment => appointment.status === 'cancelled')
+        .map(appointment => appointment.id);
+      
+      if (cancelledAppointmentIds.length === 0) {
+        Alert.alert('Info', 'No cancelled appointments to delete.');
+        setShowDeleteModal(false);
+        return;
+      }
+      
+      // Delete cancelled appointments
+      for (const id of cancelledAppointmentIds) {
+        await apiService.deleteAppointment(id);
+      }
+      
+      console.log('✅ Cancelled appointments deleted successfully');
+      Alert.alert('Success', `${cancelledAppointmentIds.length} cancelled appointment(s) have been deleted.`);
+      fetchAppointments(); // Refresh the appointments list
+      setShowDeleteModal(false);
+      setSelectedDeleteOption(null);
+    } catch (error: any) {
+      console.error('❌ Error deleting cancelled appointments:', error);
+      Alert.alert('Error', 'Failed to delete cancelled appointments. Please try again.');
+      setShowDeleteModal(false);
+      setSelectedDeleteOption(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteConfirmation = () => {
+    if (!selectedDeleteOption) return;
+    
+    if (selectedDeleteOption === 'all') {
+      Alert.alert(
+        'Delete All Appointments',
+        `Are you sure you want to delete ALL ${appointments.length} appointments? This action cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Delete All', 
+            style: 'destructive',
+            onPress: () => {
+              handleDeleteAllAppointments();
+            }
+          }
+        ]
+      );
+    } else if (selectedDeleteOption === 'cancelled') {
+      const cancelledCount = appointments.filter(app => app.status === 'cancelled').length;
+      if (cancelledCount === 0) {
+        Alert.alert('Info', 'No cancelled appointments to delete.');
+        return;
+      }
+      
+      Alert.alert(
+        'Delete Cancelled Appointments',
+        `Are you sure you want to delete ${cancelledCount} cancelled appointment(s)? This action cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Delete Cancelled', 
+            style: 'destructive',
+            onPress: () => {
+              handleDeleteCancelledAppointments();
+            }
+          }
+        ]
+      );
     }
   };
 
@@ -786,8 +1170,8 @@ const AppointmentsScreen = () => {
               setLoading(true);
               console.log('🔄 Cancelling appointment:', appointment.id);
               
-              // For customers, use delete method directly (no status update route exists)
-              await apiService.deleteAppointment(appointment.id);
+              // Cancel appointment by updating status to cancelled
+              await apiService.cancelAppointment(appointment.id);
               console.log('✅ Appointment cancelled successfully');
               
               Alert.alert('Success', 'Appointment has been cancelled successfully.');
@@ -832,11 +1216,51 @@ const AppointmentsScreen = () => {
         {
           text: 'Edit',
           onPress: () => {
+            // Clear any existing time errors when editing
+            setTimeError('');
+            setAppointmentErrors({});
+            
+            // Extract time from appointment_date for preferred_time
+            let preferredTime = '10:00'; // Default time
+            
+            console.log('🔍 Debug - Extracting time from appointment:', {
+              appointment_date: appointment.appointment_date,
+              appointment_time: appointment.appointment_time
+            });
+            
+            // First try to use appointment_time field if it exists
+            if (appointment.appointment_time) {
+              preferredTime = appointment.appointment_time;
+              console.log('✅ Using appointment_time field:', preferredTime);
+            } else if (appointment.appointment_date.includes('T')) {
+              const timePart = appointment.appointment_date.split('T')[1];
+              preferredTime = timePart.split(':')[0] + ':' + timePart.split(':')[1];
+              console.log('✅ Extracted from T format:', preferredTime);
+            } else if (appointment.appointment_date.includes(' ')) {
+              const timePart = appointment.appointment_date.split(' ')[1];
+              preferredTime = timePart.split(':')[0] + ':' + timePart.split(':')[1];
+              console.log('✅ Extracted from space format:', preferredTime);
+            } else {
+              // Try to parse as Date object
+              try {
+                const date = new Date(appointment.appointment_date);
+                if (!isNaN(date.getTime())) {
+                  const hours = date.getHours().toString().padStart(2, '0');
+                  const minutes = date.getMinutes().toString().padStart(2, '0');
+                  preferredTime = `${hours}:${minutes}`;
+                  console.log('✅ Extracted from Date object:', preferredTime);
+                }
+              } catch (error) {
+                console.log('❌ Failed to extract time, using default:', preferredTime);
+              }
+            }
+            
             // Set the form data to the appointment data for editing
             setNewAppointment({
-              appointment_date: appointment.appointment_date,
+              appointment_date: appointment.appointment_date.split('T')[0] || appointment.appointment_date.split(' ')[0],
               service_type: appointment.service_type,
               notes: appointment.notes || '',
+              preferred_time: preferredTime,
             });
             setEditingAppointmentId(appointment.id);
             setModalVisible(true); // Open the appointment modal for editing
@@ -866,11 +1290,13 @@ const AppointmentsScreen = () => {
       // Only disable dates that are fully booked (5 appointments) and not today
       if (date !== today) {
         marked[date] = {
-          selected: false,
+          selected: true,
+          selectedColor: '#9CA3AF', // Gray background to indicate booked
+          selectedTextColor: '#fff',
           disabled: true,
           disableTouchEvent: true,
-          textColor: '#ccc',
-          backgroundColor: '#f5f5f5',
+          marked: true,
+          dotColor: '#9CA3AF', // Gray dot to indicate booked
         };
       }
     });
@@ -1041,14 +1467,26 @@ const AppointmentsScreen = () => {
         <View style={styles.appointmentsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Your Appointments</Text>
-            {/* Collapsible Sort Button */}
-            <CollapsibleSortButton
-              sortOption={sortOption}
-              sortDirection={sortDirection}
-              onSortChange={handleSortChange}
-              sortOptions={sortOptions}
-              style={styles.sortButtonContainer}
-            />
+            <View style={styles.headerActions}>
+              {/* Delete Button */}
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => setShowDeleteModal(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="trash-outline" size={16} color="#dc2626" />
+                <Text style={styles.deleteButtonText}>Delete</Text>
+                <Ionicons name="chevron-down" size={12} color="#dc2626" />
+              </TouchableOpacity>
+              {/* Collapsible Sort Button */}
+              <CollapsibleSortButton
+                sortOption={sortOption}
+                sortDirection={sortDirection}
+                onSortChange={handleSortChange}
+                sortOptions={sortOptions}
+                style={styles.sortButtonContainer}
+              />
+            </View>
           </View>
           {appointments.length === 0 ? (
             <View style={styles.emptyState}>
@@ -1179,7 +1617,7 @@ const AppointmentsScreen = () => {
               </View>
                <View style={styles.scheduleModalTitleContainer}>
                  <Text style={styles.scheduleModalTitle} numberOfLines={1}>
-                   Schedule Appointment
+                   {editingAppointmentId ? 'Edit Appointment' : 'Schedule Appointment'}
                  </Text>
                </View>
             </View>
@@ -1201,9 +1639,24 @@ const AppointmentsScreen = () => {
               </TouchableOpacity>
             </View>
             
-          <ScrollView style={styles.scheduleModalContent} showsVerticalScrollIndicator={false}>
+          <KeyboardAvoidingWrapper style={{ flex: 1 }}>
+          <ScrollView
+            ref={scheduleScrollRef}
+            style={styles.scheduleModalContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View ref={scrollContentRef}>
             {/* Service Type Card */}
-            <View style={styles.scheduleModalCard}>
+            <View
+              ref={serviceTypeSectionRef}
+              onLayout={(e) => {
+                const y = e.nativeEvent.layout.y;
+                if (y !== serviceTypeSectionY) {
+                  setServiceTypeSectionY(y);
+                }
+              }}
+              style={styles.scheduleModalCard}
+            >
               <View style={styles.scheduleModalCardHeader}>
                 <Ionicons name="shirt" size={20} color={Colors.primary} />
                 <Text style={styles.scheduleModalCardTitle}>Service Type</Text>
@@ -1252,6 +1705,14 @@ const AppointmentsScreen = () => {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              {/* Inline field error for Service Type */}
+              {fieldErrors.serviceType && (
+                <View style={[styles.errorContainer, { marginTop: 8 }]}>
+                  <Ionicons name="warning" size={16} color="#ff4444" />
+                  <Text style={styles.errorText}>{fieldErrors.serviceType}</Text>
+                </View>
+              )}
             </View>
 
             {/* Date Selection Card */}
@@ -1303,7 +1764,14 @@ const AppointmentsScreen = () => {
             </View>
 
             {/* Time Selection Card */}
-            <View style={styles.scheduleModalCard}>
+            <View
+              ref={timeSectionRef}
+              onLayout={(e) => {
+                const y = e.nativeEvent.layout.y;
+                if (y !== timeSectionY) setTimeSectionY(y);
+              }}
+              style={styles.scheduleModalCard}
+            >
               <View style={styles.scheduleModalCardHeader}>
                 <Ionicons name="time" size={20} color={Colors.primary} />
                 <Text style={styles.scheduleModalCardTitle}>Preferred Time</Text>
@@ -1353,6 +1821,16 @@ const AppointmentsScreen = () => {
                   mode="time"
                   is24Hour={false}
                   display="default"
+                  minimumDate={(() => {
+                    const minDate = new Date();
+                    minDate.setHours(10, 0, 0, 0); // 10:00 AM
+                    return minDate;
+                  })()}
+                  maximumDate={(() => {
+                    const maxDate = new Date();
+                    maxDate.setHours(19, 0, 0, 0); // 7:00 PM
+                    return maxDate;
+                  })()}
                   onChange={handleTimeChange}
                 />
               )}
@@ -1376,13 +1854,18 @@ const AppointmentsScreen = () => {
                 numberOfLines={4}
               />
             </View>
+            </View>
           </ScrollView>
+          </KeyboardAvoidingWrapper>
           
           {/* Error Messages */}
           {appointmentErrors.dailyLimit && (
-            <View style={styles.errorContainer}>
-              <Ionicons name="warning" size={16} color="#ff4444" />
-              <Text style={styles.errorText}>{appointmentErrors.dailyLimit}</Text>
+            <View
+              style={[styles.errorContainer, { backgroundColor: '#fff3e0', borderColor: '#ff9800' }]} 
+              onLayout={() => scheduleScrollRef.current?.scrollTo({ y: 0, animated: true })}
+            > 
+              <Ionicons name="person-outline" size={18} color="#ff9800" />
+              <Text style={[styles.errorText, { fontWeight: '600' }]}>{appointmentErrors.dailyLimit}</Text>
             </View>
           )}
           
@@ -1394,9 +1877,22 @@ const AppointmentsScreen = () => {
           )}
           
           {appointmentErrors.capacity && (
-            <View style={styles.errorContainer}>
+            <View
+              style={styles.errorContainer}
+              onLayout={() => scheduleScrollRef.current?.scrollTo({ y: 0, animated: true })}
+            >
               <Ionicons name="warning" size={16} color="#ff4444" />
               <Text style={styles.errorText}>{appointmentErrors.capacity}</Text>
+            </View>
+          )}
+          
+          {appointmentErrors.booked && (
+            <View
+              style={[styles.errorContainer, { backgroundColor: '#ffebee', borderColor: '#f44336' }]} 
+              onLayout={() => scheduleScrollRef.current?.scrollTo({ y: 0, animated: true })}
+            > 
+              <Ionicons name="calendar-outline" size={18} color="#f44336" />
+              <Text style={[styles.errorText, { fontWeight: '600' }]}>{appointmentErrors.booked}</Text>
             </View>
           )}
           
@@ -1431,7 +1927,9 @@ const AppointmentsScreen = () => {
                 onPress={handleCreateAppointment}
               >
               <Ionicons name="checkmark" size={20} color="#fff" />
-              <Text style={styles.scheduleModalConfirmButtonText}>Schedule</Text>
+              <Text style={styles.scheduleModalConfirmButtonText}>
+                {editingAppointmentId ? 'Update' : 'Schedule'}
+              </Text>
               </TouchableOpacity>
           </View>
         </View>
@@ -1716,6 +2214,122 @@ const AppointmentsScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Delete Options Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowDeleteModal(false);
+          setSelectedDeleteOption(null);
+        }}
+      >
+        <TouchableOpacity
+          style={styles.deleteModalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setShowDeleteModal(false);
+            setSelectedDeleteOption(null);
+          }}
+        >
+          <View style={styles.deleteDropdownContainer}>
+            <View style={styles.deleteDropdownHeader}>
+              <View style={styles.deleteTitleContainer}>
+                <Ionicons name="trash" size={20} color="#dc2626" />
+                <Text style={styles.deleteDropdownTitle}>Delete Appointments</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowDeleteModal(false);
+                  setSelectedDeleteOption(null);
+                }}
+                style={styles.deleteCloseButton}
+              >
+                <Ionicons name="close" size={20} color={Colors.text.secondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.deleteModalSubtitle}>Choose what you want to delete:</Text>
+            
+            {/* Delete All Option */}
+            <TouchableOpacity
+              style={[
+                styles.deleteOption,
+                selectedDeleteOption === 'all' && styles.selectedDeleteOption
+              ]}
+              onPress={() => setSelectedDeleteOption('all')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.deleteOptionContent}>
+                <View style={styles.radioButton}>
+                  {selectedDeleteOption === 'all' && (
+                    <View style={styles.radioButtonSelected} />
+                  )}
+                </View>
+                <Ionicons name="trash-outline" size={18} color="#dc2626" />
+                <View style={styles.deleteOptionTextContainer}>
+                  <Text style={styles.deleteOptionText}>Delete All Appointments</Text>
+                  <Text style={styles.deleteOptionSubtext}>
+                    Total: {appointments.length} appointments
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+            
+            {/* Delete Cancelled Only Option */}
+            <TouchableOpacity
+              style={[
+                styles.deleteOption,
+                selectedDeleteOption === 'cancelled' && styles.selectedDeleteOption
+              ]}
+              onPress={() => setSelectedDeleteOption('cancelled')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.deleteOptionContent}>
+                <View style={styles.radioButton}>
+                  {selectedDeleteOption === 'cancelled' && (
+                    <View style={styles.radioButtonSelected} />
+                  )}
+                </View>
+                <Ionicons name="close-circle-outline" size={18} color="#f59e0b" />
+                <View style={styles.deleteOptionTextContainer}>
+                  <Text style={styles.deleteOptionText}>Delete Cancelled Only</Text>
+                  <Text style={styles.deleteOptionSubtext}>
+                    Cancelled: {appointments.filter(app => app.status === 'cancelled').length} appointments
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+            
+            {/* Action Buttons */}
+            <View style={styles.deleteModalActions}>
+              <TouchableOpacity
+                style={styles.cancelActionButton}
+                onPress={() => {
+                  setShowDeleteModal(false);
+                  setSelectedDeleteOption(null);
+                }}
+              >
+                <Ionicons name="close-circle-outline" size={16} color="#dc2626" />
+                <Text style={styles.cancelActionButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.deleteActionButton,
+                  !selectedDeleteOption && styles.disabledButton
+                ]}
+                onPress={handleDeleteConfirmation}
+                disabled={!selectedDeleteOption}
+              >
+                <Ionicons name="trash" size={16} color="#fff" />
+                <Text style={styles.deleteActionButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingWrapper>
   );
 };
@@ -1852,6 +2466,178 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#014D40',
   },
+  
+  // Header Actions Styles
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef2f2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    gap: 4,
+    minWidth: 90,
+    width: 90,
+  },
+  deleteButtonText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#dc2626',
+    flex: 0,
+    flexShrink: 0,
+  },
+  
+  // Delete Modal Styles
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteDropdownContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    width: screenWidth * 0.8,
+    maxWidth: 300,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  deleteDropdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border.light,
+  },
+  deleteTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  deleteDropdownTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  deleteCloseButton: {
+    padding: 4,
+  },
+  deleteOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  deleteOptionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  deleteOptionTextContainer: {
+    flex: 1,
+  },
+  deleteOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.text.primary,
+    marginBottom: 2,
+  },
+  deleteOptionSubtext: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+  },
+  
+  // Updated Delete Modal Styles
+  deleteModalSubtitle: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  selectedDeleteOption: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#dc2626',
+    borderWidth: 1,
+  },
+  radioButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#d1d5db',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  radioButtonSelected: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#dc2626',
+  },
+  deleteModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border.light,
+  },
+  cancelActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#fef2f2',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    gap: 4,
+  },
+  cancelActionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#dc2626',
+  },
+  deleteActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#dc2626',
+    gap: 6,
+  },
+  deleteActionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  disabledButton: {
+    backgroundColor: '#d1d5db',
+    opacity: 0.6,
+  },
+  
   sortButtonContainer: {
     flex: 0,
   },

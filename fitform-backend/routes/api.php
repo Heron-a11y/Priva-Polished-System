@@ -125,27 +125,9 @@ Route::middleware([CorsMiddleware::class])->group(function () {
     Route::get('/catalog/popular', [\App\Http\Controllers\CatalogController::class, 'getPopularItems']);
     Route::get('/catalog/recent', [\App\Http\Controllers\CatalogController::class, 'getRecentItems']);
 
-    // Appointments - temporarily moved outside auth for testing
-    Route::get('/appointments', function() {
-        try {
-            $appointments = \App\Models\Appointment::with('user')->get();
-            return response()->json([
-                'success' => true,
-                'data' => $appointments,
-                'message' => 'Appointments retrieved successfully'
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch appointments',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    });
-    Route::post('/appointments', [AppointmentController::class, 'store']);
-    Route::put('/appointments/{id}', [AppointmentController::class, 'update']);
-    Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
+    // Appointments - moved back inside auth middleware for proper user filtering
     Route::get('/booked-dates', [AppointmentController::class, 'getBookedDates']);
+    Route::get('/debug-date-appointments', [AppointmentController::class, 'debugDateAppointments']);
     Route::get('/appointments/daily-capacity', [AppointmentController::class, 'getDailyCapacity']);
     Route::get('/appointments/available-slots', [AppointmentController::class, 'getAvailableSlots']);
 
@@ -153,6 +135,13 @@ Route::middleware([CorsMiddleware::class])->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
+        
+        // Customer Appointments - properly authenticated
+        Route::get('/appointments', [AppointmentController::class, 'index']);
+        Route::post('/appointments', [AppointmentController::class, 'store']);
+        Route::put('/appointments/{id}', [AppointmentController::class, 'update']);
+        Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
+        
         // Admin appointments - moved outside middleware for testing
         // Admin settings
         Route::get('/admin/settings', [\App\Http\Controllers\AdminSettingsController::class, 'getSettings']);

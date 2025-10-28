@@ -321,6 +321,10 @@ class ApiService {
         return this.request('/booked-dates');
     }
 
+    async debugDateAppointments(date = '2025-11-05') {
+        return this.request(`/debug-date-appointments?date=${date}`);
+    }
+
     async getDailyCapacity(date) {
         const params = date ? `?date=${date}` : '';
         return this.request(`/appointments/daily-capacity${params}`);
@@ -343,6 +347,13 @@ class ApiService {
     async deleteAppointment(id) {
         return this.request(`/appointments/${id}`, {
             method: 'DELETE',
+        });
+    }
+
+    async cancelAppointment(id) {
+        return this.request(`/appointments/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ status: 'cancelled' }),
         });
     }
 

@@ -46,29 +46,42 @@ class AppointmentController extends Controller
         try {
             $user = $request->user();
             
-            // If no authenticated user, return all appointments (for testing)
+            // Ensure user is authenticated (this should be handled by middleware, but double-check)
             if (!$user) {
-                $appointments = Appointment::with('user')
-                    ->orderBy('appointment_date', 'desc')
-                    ->orderBy('appointment_time', 'desc')
-                    ->get();
-                
                 return response()->json([
-                    'success' => true,
-                    'data' => $appointments,
-                    'message' => 'All appointments (no auth)'
-                ]);
+                    'success' => false,
+                    'message' => 'Authentication required',
+                    'data' => []
+                ], 401);
             }
             
-            // Get appointments for the authenticated user
+            // Get appointments for the authenticated user only
             $appointments = Appointment::where('user_id', $user->id)
                 ->orderBy('appointment_date', 'desc')
-                ->orderBy('appointment_time', 'desc')
                 ->get();
+            
+            // Format appointments to include separate date and time fields
+            $formattedAppointments = $appointments->map(function ($appointment) {
+                $appointmentDate = $appointment->appointment_date;
+                $date = $appointmentDate->format('Y-m-d');
+                $time = $appointmentDate->format('H:i');
+                
+                return [
+                    'id' => $appointment->id,
+                    'appointment_date' => $appointmentDate->format('Y-m-d H:i:s'),
+                    'appointment_time' => $time,
+                    'service_type' => $appointment->service_type,
+                    'status' => $appointment->status,
+                    'notes' => $appointment->notes,
+                    'created_at' => $appointment->created_at,
+                    'updated_at' => $appointment->updated_at,
+                ];
+            });
             
             return response()->json([
                 'success' => true,
-                'data' => $appointments
+                'data' => $formattedAppointments,
+                'message' => 'Appointments retrieved successfully'
             ]);
             
         } catch (\Exception $e) {
@@ -97,10 +110,14 @@ class AppointmentController extends Controller
             
             // Format appointments for frontend
             $formattedAppointments = $appointments->map(function ($appointment) {
+                $appointmentDate = $appointment->appointment_date;
+                $date = $appointmentDate->format('Y-m-d');
+                $time = $appointmentDate->format('H:i');
+                
                 return [
                     'id' => $appointment->id,
-                    'appointment_date' => $appointment->appointment_date,
-                    'appointment_time' => $appointment->appointment_time,
+                    'appointment_date' => $appointmentDate->format('Y-m-d H:i:s'),
+                    'appointment_time' => $time,
                     'service_type' => $appointment->service_type,
                     'status' => $appointment->status,
                     'notes' => $appointment->notes,
@@ -234,8 +251,15 @@ class AppointmentController extends Controller
         try {
             $user = $request->user();
             
-            // If no authenticated user, use a default customer ID (for testing)
-            $userId = $user ? $user->id : 5; // Use customer ID 5 as default
+            // Ensure user is authenticated
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Authentication required to book appointments'
+                ], 401);
+            }
+            
+            $userId = $user->id;
 
             $validated = $request->validate([
                 'appointment_date' => 'required|date|after_or_equal:today',
@@ -352,26 +376,158 @@ class AppointmentController extends Controller
         try {
             $user = $request->user();
             
-            // If no authenticated user, allow updates for any appointment (for testing)
-            $appointment = $user 
-                ? Appointment::where('id', $id)->where('user_id', $user->id)->first()
-                : Appointment::where('id', $id)->first();
+            // Ensure user is authenticated
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Authentication required to update appointments'
+                ], 401);
+            }
+            
+            // Only allow users to update their own appointments
+            $appointment = Appointment::where('id', $id)->where('user_id', $user->id)->first();
 
             if (!$appointment) {
+                \Log::warning('Appointment not found for update:', [
+                    'appointment_id' => $id,
+                    'user_id' => $user->id
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => 'Appointment not found'
                 ], 404);
             }
-
-            $validated = $request->validate([
-                'appointment_date' => 'sometimes|required|date|after:today',
-                'appointment_time' => 'sometimes|required|string',
-                'service_type' => 'sometimes|required|string',
-                'notes' => 'nullable|string'
+            
+            \Log::info('Found appointment for update:', [
+                'appointment_id' => $appointment->id,
+                'user_id' => $appointment->user_id,
+                'current_status' => $appointment->status,
+                'current_date' => $appointment->appointment_date
             ]);
 
-            $appointment->update($validated);
+            $validated = $request->validate([
+                'appointment_date' => 'sometimes|required|date|after_or_equal:today',
+                'appointment_time' => 'sometimes|required|string',
+                'service_type' => 'sometimes|required|string',
+                'notes' => 'nullable|string',
+                'status' => 'sometimes|required|in:pending,confirmed,cancelled'
+            ]);
+            
+            // Log the validated data for debugging
+            \Log::info('Validated appointment data:', $validated);
+
+            $oldStatus = $appointment->status;
+            
+            // Handle appointment_date and appointment_time combination
+            $updateData = $validated;
+            
+            // If both date and time are provided, combine them into appointment_date
+            if (isset($validated['appointment_date']) && isset($validated['appointment_time'])) {
+                $combinedDateTime = $validated['appointment_date'] . ' ' . $validated['appointment_time'] . ':00';
+                $updateData['appointment_date'] = $combinedDateTime;
+                unset($updateData['appointment_time']); // Remove appointment_time as it's not a database field
+            } elseif (isset($validated['appointment_time']) && !isset($validated['appointment_date'])) {
+                // If only time is provided, update the existing appointment_date with new time
+                $existingDate = $appointment->appointment_date->format('Y-m-d');
+                $combinedDateTime = $existingDate . ' ' . $validated['appointment_time'] . ':00';
+                $updateData['appointment_date'] = $combinedDateTime;
+                unset($updateData['appointment_time']); // Remove appointment_time as it's not a database field
+            } elseif (isset($validated['appointment_time'])) {
+                // Remove appointment_time if it's the only field provided without date
+                unset($updateData['appointment_time']);
+            }
+            
+            // Check if this is a confirmed appointment being modified
+            if ($appointment->status === 'confirmed' && !isset($updateData['status'])) {
+                // Check if any critical fields are being changed
+                $hasDateChanged = isset($updateData['appointment_date']) && 
+                    $appointment->appointment_date->format('Y-m-d H:i:s') !== $updateData['appointment_date'];
+                $hasServiceChanged = isset($updateData['service_type']) && 
+                    $appointment->service_type !== $updateData['service_type'];
+                
+                if ($hasDateChanged || $hasServiceChanged) {
+                    $updateData['status'] = 'pending';
+                    \Log::info('Confirmed appointment modified - changing status to pending for reconfirmation', [
+                        'appointment_id' => $appointment->id,
+                        'has_date_changed' => $hasDateChanged,
+                        'has_service_changed' => $hasServiceChanged
+                    ]);
+                }
+            }
+            
+            // Add validation for "one appointment per day" if date is being changed
+            if (isset($updateData['appointment_date'])) {
+                $newDate = date('Y-m-d', strtotime($updateData['appointment_date']));
+                
+                // Check if user already has another appointment on this date (excluding current appointment)
+                $existingAppointment = Appointment::where('user_id', $user->id)
+                    ->whereDate('appointment_date', $newDate)
+                    ->where('id', '!=', $id) // Exclude current appointment being edited
+                    ->where('status', '!=', 'cancelled')
+                    ->first();
+                
+                if ($existingAppointment) {
+                    \Log::warning('User already has appointment on this date during update:', [
+                        'user_id' => $user->id,
+                        'new_date' => $newDate,
+                        'existing_appointment_id' => $existingAppointment->id,
+                        'current_appointment_id' => $id
+                    ]);
+                    
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'You already have an appointment scheduled for this date. Only one appointment per day is allowed.',
+                        'error' => 'daily_limit_exceeded'
+                    ], 422);
+                }
+                
+                // Check if the new date has reached daily capacity (5 appointments)
+                $dailyAppointmentCount = Appointment::whereDate('appointment_date', $newDate)
+                    ->where('status', '!=', 'cancelled')
+                    ->where('id', '!=', $id) // Exclude current appointment being edited
+                    ->count();
+                
+                if ($dailyAppointmentCount >= 5) {
+                    \Log::warning('Daily capacity reached for date during update:', [
+                        'date' => $newDate,
+                        'count' => $dailyAppointmentCount,
+                        'current_appointment_id' => $id
+                    ]);
+                    
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This date has reached its daily capacity of 5 appointments. Please select another date.',
+                        'error' => 'daily_capacity_exceeded'
+                    ], 422);
+                }
+                
+                // Check if the time slot is already taken
+                $newTime = date('H:i:s', strtotime($updateData['appointment_date']));
+                $timeSlotTaken = Appointment::whereDate('appointment_date', $newDate)
+                    ->whereTime('appointment_date', $newTime)
+                    ->where('status', '!=', 'cancelled')
+                    ->where('id', '!=', $id) // Exclude current appointment being edited
+                    ->exists();
+                
+                if ($timeSlotTaken) {
+                    \Log::warning('Time slot already taken during update:', [
+                        'date' => $newDate,
+                        'time' => $newTime,
+                        'current_appointment_id' => $id
+                    ]);
+                    
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This time slot is already taken. Please choose another time.',
+                        'error' => 'time_slot_taken'
+                    ], 422);
+                }
+            }
+            
+            // Log the update data for debugging
+            \Log::info('Updating appointment with data:', $updateData);
+            
+            $appointment->update($updateData);
 
             // Get customer information for notifications
             $customer = User::find($appointment->user_id);
@@ -379,13 +535,39 @@ class AppointmentController extends Controller
             $appointmentDate = date('M j, Y', strtotime($appointment->appointment_date));
             $appointmentTime = date('g:i A', strtotime($appointment->appointment_date));
 
-            // Notify customer about appointment update
-            $customerMessage = "Your appointment for {$appointment->service_type} has been updated. New date: {$appointmentDate} at {$appointmentTime}.";
-            $this->createAppointmentNotification($appointment->user_id, 'admin', $customerMessage, $appointment->id);
+            // Check if status was changed
+            if (isset($validated['status']) && $validated['status'] !== $oldStatus) {
+                $statusText = ucfirst($validated['status']);
+                
+                // Notify customer about status change
+                $customerMessage = "Your appointment for {$appointment->service_type} on {$appointmentDate} at {$appointmentTime} has been {$statusText}.";
+                $this->createAppointmentNotification($appointment->user_id, 'admin', $customerMessage, $appointment->id);
 
-            // Notify all admins about appointment update
-            $adminMessage = "Appointment updated for {$customerName} - {$appointment->service_type} on {$appointmentDate} at {$appointmentTime}.";
-            $this->notifyAllAdmins($adminMessage, $appointment->id);
+                // Notify all admins about status change
+                $adminMessage = "Appointment status updated for {$customerName} - {$appointment->service_type} on {$appointmentDate} at {$appointmentTime}. Status: {$statusText}.";
+                $this->notifyAllAdmins($adminMessage, $appointment->id);
+            } else {
+                // Check if status was automatically changed to pending
+                $statusChangedToPending = $oldStatus === 'confirmed' && $appointment->status === 'pending';
+                
+                if ($statusChangedToPending) {
+                    // Notify customer about appointment update and status change
+                    $customerMessage = "Your confirmed appointment for {$appointment->service_type} has been updated and is now pending reconfirmation. New date: {$appointmentDate} at {$appointmentTime}.";
+                    $this->createAppointmentNotification($appointment->user_id, 'admin', $customerMessage, $appointment->id);
+
+                    // Notify all admins about appointment update and status change
+                    $adminMessage = "Confirmed appointment updated for {$customerName} - {$appointment->service_type} on {$appointmentDate} at {$appointmentTime}. Status changed to pending for reconfirmation.";
+                    $this->notifyAllAdmins($adminMessage, $appointment->id);
+                } else {
+                    // Notify customer about appointment update
+                    $customerMessage = "Your appointment for {$appointment->service_type} has been updated. New date: {$appointmentDate} at {$appointmentTime}.";
+                    $this->createAppointmentNotification($appointment->user_id, 'admin', $customerMessage, $appointment->id);
+
+                    // Notify all admins about appointment update
+                    $adminMessage = "Appointment updated for {$customerName} - {$appointment->service_type} on {$appointmentDate} at {$appointmentTime}.";
+                    $this->notifyAllAdmins($adminMessage, $appointment->id);
+                }
+            }
 
             return response()->json([
                 'success' => true,
@@ -394,6 +576,13 @@ class AppointmentController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Log::error('Error updating appointment:', [
+                'appointment_id' => $id,
+                'user_id' => $user ? $user->id : 'unknown',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update appointment',
@@ -410,10 +599,16 @@ class AppointmentController extends Controller
         try {
             $user = $request->user();
             
-            // If no authenticated user, allow deletion of any appointment (for testing)
-            $appointment = $user 
-                ? Appointment::where('id', $id)->where('user_id', $user->id)->first()
-                : Appointment::where('id', $id)->first();
+            // Ensure user is authenticated
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Authentication required to cancel appointments'
+                ], 401);
+            }
+            
+            // Only allow users to delete their own appointments
+            $appointment = Appointment::where('id', $id)->where('user_id', $user->id)->first();
 
             if (!$appointment) {
                 return response()->json([
@@ -458,20 +653,74 @@ class AppointmentController extends Controller
     public function getBookedDates()
     {
         try {
-            $bookedDates = Appointment::select('appointment_date')
+            // Get dates that have reached the daily capacity (5 appointments)
+            $bookedDates = Appointment::selectRaw('DATE(appointment_date) as date')
                 ->where('status', '!=', 'cancelled')
-                ->distinct()
-                ->pluck('appointment_date');
+                ->groupBy('date')
+                ->havingRaw('COUNT(*) >= 5')
+                ->pluck('date');
+
+            // Debug logging
+            \Log::info('Booked dates query result:', [
+                'booked_dates' => $bookedDates->toArray(),
+                'count' => $bookedDates->count()
+            ]);
 
             return response()->json([
                 'success' => true,
-                'data' => $bookedDates
+                'booked_dates' => $bookedDates
             ]);
 
         } catch (\Exception $e) {
+            \Log::error('Error fetching booked dates:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to fetch booked dates',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Debug endpoint to check appointments for a specific date
+     */
+    public function debugDateAppointments(Request $request)
+    {
+        try {
+            $date = $request->query('date', '2025-11-05');
+            
+            $appointments = Appointment::whereDate('appointment_date', $date)
+                ->where('status', '!=', 'cancelled')
+                ->get();
+            
+            $count = $appointments->count();
+            
+            return response()->json([
+                'success' => true,
+                'date' => $date,
+                'appointment_count' => $count,
+                'appointments' => $appointments->map(function($apt) {
+                    $appointmentDate = $apt->appointment_date;
+                    $time = $appointmentDate->format('H:i');
+                    
+                    return [
+                        'id' => $apt->id,
+                        'appointment_date' => $appointmentDate->format('Y-m-d H:i:s'),
+                        'appointment_time' => $time,
+                        'status' => $apt->status,
+                        'service_type' => $apt->service_type
+                    ];
+                })
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to debug date appointments',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -492,21 +741,35 @@ class AppointmentController extends Controller
                 ], 400);
             }
 
-            $bookedCount = Appointment::where('appointment_date', $date)
+            // Use whereDate to match any time on that date
+            $bookedCount = Appointment::whereDate('appointment_date', $date)
                 ->where('status', '!=', 'cancelled')
                 ->count();
 
-            $maxCapacity = 10; // You can make this configurable
+            // Collect taken time slots for this date to help frontend block selection
+            $takenTimes = Appointment::whereDate('appointment_date', $date)
+                ->where('status', '!=', 'cancelled')
+                ->get()
+                ->map(function ($apt) {
+                    return \Carbon\Carbon::parse($apt->appointment_date)->format('H:i');
+                })
+                ->unique()
+                ->values();
+
+            $maxCapacity = 5; // Maximum 5 appointments per day
             $availableSlots = $maxCapacity - $bookedCount;
 
             return response()->json([
                 'success' => true,
+                // Keep prior shape under data for existing callers
                 'data' => [
                     'date' => $date,
                     'booked_count' => $bookedCount,
                     'max_capacity' => $maxCapacity,
                     'available_slots' => max(0, $availableSlots)
-                ]
+                ],
+                // Also include taken_times at top-level for convenient access
+                'taken_times' => $takenTimes,
             ]);
 
         } catch (\Exception $e) {
