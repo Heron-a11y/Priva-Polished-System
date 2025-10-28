@@ -93,7 +93,10 @@ export default function CollapsibleSortButton({
         >
           <View style={styles.dropdownContainer}>
             <View style={styles.dropdownHeader}>
-              <Text style={styles.dropdownTitle}>Sort By</Text>
+              <View style={styles.sortTitleContainer}>
+                <Ionicons name="swap-vertical" size={20} color={Colors.primary} />
+                <Text style={styles.dropdownTitle}>Sort By</Text>
+              </View>
               <TouchableOpacity
                 onPress={() => setIsExpanded(false)}
                 style={styles.closeButton}
@@ -246,6 +249,11 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border.light,
+  },
+  sortTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   dropdownTitle: {
     fontSize: 16,
