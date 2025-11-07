@@ -39,12 +39,24 @@ abstract class PaginatedController extends Controller
 
             // Apply filters
             foreach ($options['filter_fields'] as $field) {
+                // Check for direct parameter first
                 if ($request->has($field) && $request->$field !== null && $request->$field !== '') {
                     $value = $request->$field;
                     if (is_array($value)) {
                         $query->whereIn($field, $value);
                     } else {
                         $query->where($field, $value);
+                    }
+                }
+                // Also check for nested filters parameter (e.g., filters[account_status])
+                elseif ($request->has('filters') && is_array($request->filters) && isset($request->filters[$field])) {
+                    $value = $request->filters[$field];
+                    if ($value !== null && $value !== '') {
+                        if (is_array($value)) {
+                            $query->whereIn($field, $value);
+                        } else {
+                            $query->where($field, $value);
+                        }
                     }
                 }
             }

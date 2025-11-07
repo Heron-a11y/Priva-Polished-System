@@ -52,7 +52,7 @@ class AdminMeasurementHistoryController extends Controller
             $query->whereDate('created_at', '<=', $request->to_date);
         }
 
-        $measurements = $query->paginate($request->get('per_page', 15));
+        $measurements = $query->paginate($request->get('per_page', 10));
 
         return response()->json([
             'data' => $measurements->items(),

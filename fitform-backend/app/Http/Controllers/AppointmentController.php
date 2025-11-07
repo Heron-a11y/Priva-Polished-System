@@ -11,7 +11,7 @@ use App\Services\ActivityLogService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
-class AppointmentController extends Controller
+class AppointmentController extends PaginatedController
 {
     /**
      * Create notification for appointment events
@@ -94,53 +94,60 @@ class AppointmentController extends Controller
     }
 
     /**
-     * Get appointments for admin dashboard
+     * Get appointments for admin dashboard with pagination
      */
-    public function indexAdmin()
+    public function indexAdmin(Request $request)
     {
         try {
-            // Get all appointments with customer information
-            $appointments = Appointment::with('user')->orderBy('created_at', 'desc')->get();
+            $query = Appointment::with('user');
             
-            // Calculate statistics
-            $totalAppointments = $appointments->count();
-            $pendingAppointments = $appointments->where('status', 'pending')->count();
-            $confirmedAppointments = $appointments->where('status', 'confirmed')->count();
-            $cancelledAppointments = $appointments->where('status', 'cancelled')->count();
+            // Configure pagination options
+            $options = [
+                'search_fields' => ['service_type', 'notes'],
+                'filter_fields' => ['status'],
+                'sort_fields' => ['created_at', 'appointment_date', 'status', 'service_type'],
+                'default_per_page' => 10,
+                'max_per_page' => 100,
+                'transform' => function ($appointment) {
+                    $appointmentDate = $appointment->appointment_date;
+                    $date = $appointmentDate->format('Y-m-d');
+                    $time = $appointmentDate->format('H:i');
+                    
+                    return [
+                        'id' => $appointment->id,
+                        'appointment_date' => $appointmentDate->format('Y-m-d H:i:s'),
+                        'appointment_time' => $time,
+                        'service_type' => $appointment->service_type,
+                        'status' => $appointment->status,
+                        'notes' => $appointment->notes,
+                        'customer_name' => $appointment->user->name ?? 'N/A',
+                        'customer_email' => $appointment->user->email ?? 'N/A',
+                        'customer_profile_image' => $appointment->user->profile_image 
+                            ? (\Illuminate\Support\Facades\Storage::disk('public')->exists($appointment->user->profile_image) 
+                                ? request()->getSchemeAndHttpHost() . '/storage/' . $appointment->user->profile_image
+                                : null)
+                            : null,
+                        'created_at' => $appointment->created_at,
+                        'updated_at' => $appointment->updated_at,
+                    ];
+                }
+            ];
             
-            // Format appointments for frontend
-            $formattedAppointments = $appointments->map(function ($appointment) {
-                $appointmentDate = $appointment->appointment_date;
-                $date = $appointmentDate->format('Y-m-d');
-                $time = $appointmentDate->format('H:i');
-                
-                return [
-                    'id' => $appointment->id,
-                    'appointment_date' => $appointmentDate->format('Y-m-d H:i:s'),
-                    'appointment_time' => $time,
-                    'service_type' => $appointment->service_type,
-                    'status' => $appointment->status,
-                    'notes' => $appointment->notes,
-                    'customer_name' => $appointment->user->name ?? 'N/A',
-                    'customer_email' => $appointment->user->email ?? 'N/A',
-                    'customer_profile_image' => $appointment->user->profile_image ?? null,
-                    'created_at' => $appointment->created_at,
-                    'updated_at' => $appointment->updated_at,
-                ];
-            });
+            $result = $this->paginate($query, $request, $options);
             
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'appointments' => $formattedAppointments,
-                    'stats' => [
-                        'total_appointments' => $totalAppointments,
-                        'pending_appointments' => $pendingAppointments,
-                        'confirmed_appointments' => $confirmedAppointments,
-                        'cancelled_appointments' => $cancelledAppointments,
-                    ]
-                ]
-            ]);
+            // Add stats to the response
+            $stats = [
+                'total_appointments' => Appointment::count(),
+                'pending_appointments' => Appointment::where('status', 'pending')->count(),
+                'confirmed_appointments' => Appointment::where('status', 'confirmed')->count(),
+                'cancelled_appointments' => Appointment::where('status', 'cancelled')->count(),
+            ];
+            
+            // Add stats to the response data
+            $responseData = $result->getData(true);
+            $responseData['stats'] = $stats;
+            
+            return response()->json($responseData);
             
         } catch (\Exception $e) {
             return response()->json([

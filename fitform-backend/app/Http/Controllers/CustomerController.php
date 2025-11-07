@@ -58,7 +58,7 @@ class CustomerController extends PaginatedController
                 'search_fields' => ['name', 'email', 'phone'],
                 'filter_fields' => ['account_status', 'role'],
                 'sort_fields' => ['created_at', 'name', 'email', 'account_status'],
-                'default_per_page' => 20,
+                'default_per_page' => 10,
                 'max_per_page' => 100,
                 'transform' => function ($customer) {
                     $customerArray = $customer->toArray();
@@ -71,9 +71,11 @@ class CustomerController extends PaginatedController
                     $customerArray['total_transactions'] = ($customer->rental_count ?? 0) + ($customer->purchase_count ?? 0);
                     $customerArray['last_activity'] = $customer->updated_at;
                     
-                    // Fix profile image URL
-                    if ($customerArray['profile_image']) {
-                        $customerArray['profile_image'] = url('storage/' . $customerArray['profile_image']);
+                    // Fix profile image URL - use current request host instead of APP_URL
+                    if ($customerArray['profile_image'] && \Illuminate\Support\Facades\Storage::disk('public')->exists($customerArray['profile_image'])) {
+                        $customerArray['profile_image'] = request()->getSchemeAndHttpHost() . '/storage/' . $customerArray['profile_image'];
+                    } else {
+                        $customerArray['profile_image'] = null;
                     }
                     
                     return $customerArray;

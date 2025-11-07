@@ -23,13 +23,13 @@ class RentalPurchaseHistoryController extends PaginatedController
             
             // Apply user-specific filtering
             if ($user && isset($user->role) && $user->role === 'admin') {
-                // Admin can see all history
+                // Admin can see all history - no status filtering for admin
+                // Admin can see all orders regardless of status
             } else {
                 // Regular users can only see their own history
                 $query->where('user_id', $user->id);
-            }
             
-            // Filter by specific statuses based on order type
+                // Filter by specific statuses based on order type for regular users
             $query->where(function ($q) {
                 $q->where(function ($rentalQuery) {
                     // For rentals: show only cancelled, declined, returned
@@ -41,13 +41,14 @@ class RentalPurchaseHistoryController extends PaginatedController
                         ->whereIn('status', ['cancelled', 'declined', 'picked_up']);
                 });
             });
+            }
             
             // Configure pagination options
             $options = [
                 'search_fields' => ['item_name', 'customer_name', 'customer_email', 'clothing_type', 'notes'],
                 'filter_fields' => ['order_type', 'status', 'clothing_type', 'user_id'],
                 'sort_fields' => ['created_at', 'order_date', 'status', 'item_name'],
-                'default_per_page' => 20,
+                'default_per_page' => 10,
                 'max_per_page' => 100,
                 'transform' => function ($historyItem) {
                     // Get the original order to fetch image information

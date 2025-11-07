@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,6 +10,8 @@ import {
   Modal,
   Dimensions,
   Text,
+  FlatList,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedView } from '../../../components/ThemedView';
@@ -41,6 +43,10 @@ export default function SizingManagementScreen() {
   const router = useRouter();
   const [standards, setStandards] = useState<SizingStandard[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMorePages, setHasMorePages] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingStandard, setEditingStandard] = useState<SizingStandard | null>(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
@@ -172,22 +178,65 @@ export default function SizingManagementScreen() {
   const [newSizeCategory, setNewSizeCategory] = useState('');
 
   useEffect(() => {
-    loadSizingStandards();
+    loadSizingStandards(1, true);
   }, []);
 
-  const loadSizingStandards = async () => {
-    try {
+  const loadSizingStandards = useCallback(async (page = 1, reset = false) => {
+    if (reset) {
       setLoading(true);
-      const response = await apiService.getSizingStandards();
-      if (response.success) {
-        setStandards(response.data);
+      setCurrentPage(1);
+      setHasMorePages(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
+    try {
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('per_page', '10');
+
+      const response = await apiService.get(`/admin/sizing/standards?${params}`);
+      
+      if (response && response.success) {
+        const newStandards = response.data || [];
+        
+        if (reset) {
+          setStandards(newStandards);
+        } else {
+          // Deduplicate standards by id to prevent duplicates
+          setStandards(prev => {
+            const existingIds = new Set(prev.map(standard => standard.id));
+            const uniqueNewStandards = newStandards.filter((standard: SizingStandard) => !existingIds.has(standard.id));
+            return [...prev, ...uniqueNewStandards];
+          });
+        }
+
+        setHasMorePages(response.pagination?.has_more_pages || false);
+        setCurrentPage(page);
+      } else {
+        throw new Error(response.message || 'Failed to fetch sizing standards');
       }
     } catch (error) {
       console.error('Error loading sizing standards:', error);
-      Alert.alert('Error', 'Failed to load sizing standards');
+      if (reset) {
+        Alert.alert('Error', 'Failed to load sizing standards');
+      }
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+      setRefreshing(false);
     }
+  }, []);
+
+  const loadMore = () => {
+    if (!loadingMore && hasMorePages) {
+      loadSizingStandards(currentPage + 1, false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadSizingStandards(1, true);
   };
 
   const openAddModal = () => {
@@ -537,7 +586,7 @@ export default function SizingManagementScreen() {
       if (response.success) {
         Alert.alert('Success', response.message);
         setModalVisible(false);
-        loadSizingStandards();
+        loadSizingStandards(1, true);
       }
     } catch (error: any) {
       console.error('Error saving sizing standard:', error);
@@ -566,7 +615,7 @@ export default function SizingManagementScreen() {
       };
       const response = await apiService.updateSizingStandard(updatedData);
       if (response.success) {
-        loadSizingStandards();
+        loadSizingStandards(1, true);
       }
     } catch (error) {
       console.error('Error updating status:', error);
@@ -591,7 +640,7 @@ export default function SizingManagementScreen() {
               setLoading(true);
               await apiService.deleteSizingStandard(standard.id);
               Alert.alert('Success', 'Sizing standard deleted successfully.');
-              loadSizingStandards();
+              loadSizingStandards(1, true);
             } catch (error) {
               console.error('Error deleting sizing standard:', error);
               Alert.alert('Error', 'Failed to delete sizing standard.');
@@ -1122,7 +1171,7 @@ export default function SizingManagementScreen() {
   };
 
   return (
-    <KeyboardAvoidingWrapper style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={Colors.primary} />
@@ -1132,32 +1181,56 @@ export default function SizingManagementScreen() {
           <Ionicons name="resize" size={20} color={Colors.primary} />
           <ThemedText style={styles.title} numberOfLines={1}>Manage Sizing Standards</ThemedText>
         </View>
-        
-        <TouchableOpacity style={styles.addIconButton} onPress={openAddModal}>
-          <Ionicons name="add" size={24} color={Colors.primary} />
-        </TouchableOpacity>
       </View>
 
       <View style={styles.contentContainer}>
-        {loading ? (
+        {loading && standards.length === 0 ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={Colors.secondary} />
             <ThemedText style={styles.loadingText}>Loading sizing standards...</ThemedText>
           </View>
-        ) : standards.length > 0 ? (
-          <ScrollView style={styles.standardsList} showsVerticalScrollIndicator={false}>
-            {standards.map(renderStandardCard)}
-          </ScrollView>
         ) : (
-          <View style={styles.emptyStateContainer}>
-            <ThemedText style={styles.emptyStateIcon}>📏</ThemedText>
-            <ThemedText style={styles.emptyStateText}>No sizing standards found</ThemedText>
-            <ThemedText style={styles.emptyStateSubtext}>Create your first sizing standard to get started</ThemedText>
+          <View style={styles.listContainer}>
+            <FlatList
+              data={standards}
+              renderItem={({ item }) => renderStandardCard(item)}
+              keyExtractor={(item) => item.id.toString()}
+              onEndReached={loadMore}
+              onEndReachedThreshold={0.5}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+              ListEmptyComponent={
+                !loading ? (
+                  <View style={styles.emptyStateContainer}>
+                    <ThemedText style={styles.emptyStateIcon}>📏</ThemedText>
+                    <ThemedText style={styles.emptyStateText}>No sizing standards found</ThemedText>
+                    <ThemedText style={styles.emptyStateSubtext}>Create your first sizing standard to get started</ThemedText>
+                  </View>
+                ) : null
+              }
+              ListFooterComponent={
+                loadingMore ? (
+                  <View style={styles.loadMoreContainer}>
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                    <ThemedText style={styles.loadMoreText}>Loading more standards...</ThemedText>
+                  </View>
+                ) : null
+              }
+              contentContainerStyle={styles.content}
+              showsVerticalScrollIndicator={false}
+              style={styles.flatList}
+            />
           </View>
         )}
       </View>
 
       {renderForm()}
+
+      {/* Floating Action Button */}
+      <TouchableOpacity style={styles.fab} onPress={openAddModal}>
+        <Ionicons name="add" size={28} color="#fff" />
+      </TouchableOpacity>
 
       {/* Summary Modal */}
       <Modal
@@ -1301,15 +1374,22 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     numberOfLines: 1,
   },
-  addIconButton: {
-    padding: 10,
-    borderRadius: 8,
-    backgroundColor: '#f8f9fa',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    zIndex: 1000,
   },
   standardCard: {
     backgroundColor: '#fff',
@@ -1438,8 +1518,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.text.muted,
   },
-  standardsList: {
+  listContainer: {
     flex: 1,
+  },
+  flatList: {
+    flex: 1,
+  },
+  content: {
+    padding: 20,
+  },
+  loadMoreContainer: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: Colors.text.secondary,
   },
   modalContainer: {
     flex: 1,

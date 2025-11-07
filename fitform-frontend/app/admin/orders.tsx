@@ -26,6 +26,9 @@ interface Order {
 const OrdersScreen = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMorePages, setHasMorePages] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>('All');
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -58,12 +61,15 @@ const OrdersScreen = () => {
     switch (status.toLowerCase()) {
       case 'pending': return '#f59e0b';
       case 'quotation_sent': return '#3b82f6';
+      case 'quotation_accepted': return '#10b981';
       case 'counter_offer_pending': return '#ff9800';
       case 'in_progress': return '#014D40';
       case 'ready_for_pickup': return '#10b981';
       case 'picked_up': return '#059669';
       case 'returned': return '#0d9488';
+      case 'quotation_rejected': return '#ef4444';
       case 'declined': return '#dc2626';
+      case 'cancelled': return '#991b1b';
       default: return '#6b7280';
     }
   };
@@ -74,6 +80,8 @@ const OrdersScreen = () => {
         return 'PENDING';
       case 'quotation_sent':
         return 'QUOTATION SENT';
+      case 'quotation_accepted':
+        return 'QUOTATION ACCEPTED';
       case 'counter_offer_pending':
         return 'COUNTER OFFER PENDING';
       case 'in_progress':
@@ -84,8 +92,12 @@ const OrdersScreen = () => {
         return 'PICKED UP';
       case 'returned':
         return 'RETURNED';
+      case 'quotation_rejected':
+        return 'QUOTATION REJECTED';
       case 'declined':
         return 'DECLINED';
+      case 'cancelled':
+        return 'CANCELLED';
       default:
         return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
@@ -116,6 +128,74 @@ const OrdersScreen = () => {
     }
   };
   
+  // Transform orders into grouped structure with headers for FlatList
+  const getGroupedOrdersData = () => {
+    // First, deduplicate orders by type and id
+    const uniqueOrders = orders.filter((order, index, self) => 
+      index === self.findIndex((o) => o.type === order.type && o.id === order.id)
+    );
+    
+    // Group orders by status
+    const groupedOrders = uniqueOrders.reduce((groups, order) => {
+      const status = order.status.toLowerCase();
+      if (!groups[status]) {
+        groups[status] = [];
+      }
+      groups[status].push(order);
+      return groups;
+    }, {} as Record<string, Order[]>);
+
+    // Define status order: pending at top, cancelled at bottom
+    const statusOrder = [
+      'pending',
+      'quotation_sent',
+      'quotation_accepted',
+      'counter_offer_pending',
+      'in_progress',
+      'ready_for_pickup',
+      'picked_up',
+      'returned',
+      'quotation_rejected',
+      'declined',
+      'cancelled'
+    ];
+
+    // Sort status groups by priority
+    const sortedStatusGroups = Object.keys(groupedOrders).sort((a, b) => {
+      const aIndex = statusOrder.indexOf(a);
+      const bIndex = statusOrder.indexOf(b);
+      // If status not in order list, put it at the end
+      if (aIndex === -1 && bIndex === -1) return 0;
+      if (aIndex === -1) return 1;
+      if (bIndex === -1) return -1;
+      return aIndex - bIndex;
+    });
+
+    // Flatten into array with group headers and items
+    const flatData: Array<{ type: 'header' | 'order'; status?: string; count?: number; order?: Order }> = [];
+    
+    sortedStatusGroups.forEach((status) => {
+      const statusOrders = groupedOrders[status];
+      if (statusOrders.length > 0) {
+        // Add header
+        flatData.push({
+          type: 'header',
+          status: status,
+          count: statusOrders.length
+        });
+        // Add orders
+        statusOrders.forEach(order => {
+          flatData.push({
+            type: 'order',
+            order: order
+          });
+        });
+      }
+    });
+
+    return flatData;
+  };
+
   // FlatList render function for mobile table
   const renderFlatListItem = ({ item }: { item: Order }) => {
     return (
@@ -155,7 +235,7 @@ const OrdersScreen = () => {
     );
   };
 
-  const renderOrderCard = (order: Order) => {
+  const renderOrderCard = ({ item: order }: { item: Order }) => {
     const getStatusIcon = (status: string) => {
       switch (status) {
         case 'pending': return 'time';
@@ -170,7 +250,7 @@ const OrdersScreen = () => {
     };
 
     return (
-      <View key={`${order.type}-${order.id}`} style={styles.orderCard}>
+      <View style={styles.orderCard}>
         <View style={styles.cardHeader}>
           <View style={styles.orderInfo}>
             <Text style={styles.orderId}>#{order.id}</Text>
@@ -294,14 +374,19 @@ const OrdersScreen = () => {
 
   const renderStatusGroupHeader = (status: string, count: number) => {
     const getStatusIcon = (status: string) => {
-      switch (status) {
+      const statusLower = status.toLowerCase();
+      switch (statusLower) {
         case 'pending': return 'time';
         case 'quotation_sent': return 'mail';
         case 'quotation_accepted': return 'checkmark-circle';
         case 'quotation_rejected': return 'close-circle';
+        case 'counter_offer_pending': return 'hourglass';
+        case 'in_progress': return 'construct';
+        case 'ready_for_pickup': return 'cube';
         case 'picked_up': return 'car';
         case 'returned': return 'checkmark-done';
         case 'declined': return 'close';
+        case 'cancelled': return 'close-circle';
         default: return 'help-circle';
       }
     };
@@ -310,7 +395,7 @@ const OrdersScreen = () => {
       <View style={styles.statusGroupHeader}>
         <View style={[styles.statusGroupTitle, { borderLeftColor: getStatusColor(status) }]}>
           <Ionicons 
-            name={getStatusIcon(status)} 
+            name={getStatusIcon(status) as any} 
             size={20} 
             color={getStatusColor(status)} 
           />
@@ -322,55 +407,80 @@ const OrdersScreen = () => {
     );
   };
 
-  useEffect(() => {
-    const fetchOrders = async (showLoading = true) => {
-      if (showLoading) setLoading(true);
-      try {
-        const rentalsRes = await apiService.request('/rentals');
-        const rentalsArr = Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data;
-        const rentals = (rentalsArr || []).map((r: any) => ({
-          id: r.id,
-          type: 'Rental',
-          customer: r.customer_name || r.customer_email || 'N/A',
-          status: r.status || 'N/A',
-          details: r.item_name + (r.notes ? ` - ${r.notes}` : ''),
-          quotation_amount: r.quotation_amount,
-          quotation_notes: r.quotation_notes,
-          quotation_schedule: r.quotation_schedule,
-          penalty_status: r.penalty_status,
-          counter_offer_amount: r.counter_offer_amount,
-          counter_offer_notes: r.counter_offer_notes,
-          counter_offer_status: r.counter_offer_status,
-        }));
-        const purchasesRes = await apiService.request('/purchases');
-        const purchasesArr = Array.isArray(purchasesRes) ? purchasesRes : purchasesRes.data;
-        const purchases = (purchasesArr || []).map((p: any) => ({
-          id: p.id,
-          type: 'Purchase',
-          customer: p.customer_name || p.customer_email || 'N/A',
-          status: p.status || 'N/A',
-          details: p.item_name + (p.notes ? ` - ${p.notes}` : ''),
-          quotation_price: p.quotation_price,
-          quotation_notes: p.quotation_notes,
-          quotation_schedule: p.quotation_schedule,
-          counter_offer_amount: p.counter_offer_amount,
-          counter_offer_notes: p.counter_offer_notes,
-          counter_offer_status: p.counter_offer_status,
-        }));
-        setOrders([...rentals, ...purchases]);
-        setLastUpdated(new Date());
-      } catch (err) {
-        if (showLoading) {
-        Alert.alert('Error', 'Failed to fetch orders.');
-        }
-      } finally {
-        if (showLoading) setLoading(false);
-      }
-    };
+  const fetchOrders = async (page = 1, reset = false) => {
+    if (reset) {
+      setLoading(true);
+      setCurrentPage(1);
+      setHasMorePages(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
+    try {
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('per_page', '10');
+      if (typeFilter !== 'All') params.append('filters[order_type]', typeFilter.toLowerCase());
+      if (statusFilter !== 'All') params.append('filters[status]', statusFilter.toLowerCase());
+      if (search) params.append('search', search);
 
-    // Initial fetch
-    fetchOrders(true);
-  }, []);
+      const response = await apiService.get(`/admin/orders?${params}`);
+      
+      if (response.success && response.data) {
+        // Debug: Log pagination info
+        console.log(`[Orders] Page ${page}, Received ${response.data.length} orders, Has more: ${response.pagination?.has_more_pages}, Total: ${response.pagination?.total}`);
+        
+        const newOrders = response.data.map((item: any) => ({
+          id: item.id,
+          type: item.order_type === 'rental' ? 'Rental' : 'Purchase',
+          customer: item.customer_name || item.customer_email || 'N/A',
+          status: item.status || 'N/A',
+          details: item.item_name + (item.notes ? ` - ${item.notes}` : ''),
+          quotation_amount: item.quotation_amount,
+          quotation_price: item.quotation_price,
+          quotation_notes: item.quotation_notes,
+          quotation_schedule: item.order_date,
+          penalty_status: item.penalty_status,
+          counter_offer_amount: item.counter_offer_amount,
+          counter_offer_notes: item.counter_offer_notes,
+          counter_offer_status: item.counter_offer_status,
+        }));
+
+        if (reset) {
+          setOrders(newOrders);
+        } else {
+          // Deduplicate orders by id and order_type to prevent duplicates
+          setOrders(prev => {
+            const existingIds = new Set(prev.map(o => `${o.type}-${o.id}`));
+            const uniqueNewOrders = newOrders.filter(o => !existingIds.has(`${o.type}-${o.id}`));
+            return [...prev, ...uniqueNewOrders];
+          });
+        }
+
+        setHasMorePages(response.pagination?.has_more_pages || false);
+        setCurrentPage(page);
+        setLastUpdated(new Date());
+      }
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+      if (reset) {
+        Alert.alert('Error', 'Failed to fetch orders.');
+      }
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders(1, true);
+  }, [typeFilter, statusFilter, search]);
+
+  const loadMore = () => {
+    if (!loadingMore && hasMorePages) {
+      fetchOrders(currentPage + 1, false);
+    }
+  };
 
   const handleViewDetails = (order: Order) => {
     setSelectedOrder(order);
@@ -497,7 +607,7 @@ const OrdersScreen = () => {
   const handleGenerateReport = async () => {
     try {
       const { Linking } = require('react-native');
-      const reportUrl = `http://192.168.1.56:8000/api/admin/orders/generate-report`;
+      const reportUrl = `http://192.168.1.54:8000/api/admin/orders/generate-report`;
       await Linking.openURL(reportUrl);
       Alert.alert('Success', 'Report opened in browser');
     } catch (error) {
@@ -855,25 +965,51 @@ const OrdersScreen = () => {
           <View style={styles.sectionHeaderLeft}>
             <Text style={styles.sectionTitle}>Transactions Monitoring</Text>
             <Text style={styles.sectionSubtitle}>
-              {filteredOrders.length} transactions • {filteredOrders.filter(o => o.type === 'Rental').length} rentals, {filteredOrders.filter(o => o.type === 'Purchase').length} purchases
+              {orders.length} transactions • {orders.filter(o => o.type === 'Rental').length} rentals, {orders.filter(o => o.type === 'Purchase').length} purchases
             </Text>
           </View>
           <View style={styles.sectionHeaderRight}>
-            <Text style={styles.transactionCount}>{filteredOrders.length} transactions</Text>
+            <Text style={styles.transactionCount}>{orders.length} transactions</Text>
           </View>
         </View>
         
         <View style={styles.transactionsContent}>
-          {loading ? (
+          {loading && orders.length === 0 ? (
             <ActivityIndicator size="large" color={Colors.primary} />
-          ) : filteredOrders.length === 0 ? (
+          ) : orders.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>No orders found</Text>
             </View>
           ) : (
-            <View style={styles.cardsContainer}>
-              {renderOrderGroups()}
-            </View>
+            <FlatList
+              data={getGroupedOrdersData()}
+              renderItem={({ item }) => {
+                if (item.type === 'header') {
+                  return renderStatusGroupHeader(item.status || '', item.count || 0);
+                } else {
+                  return renderOrderCard({ item: item.order! });
+                }
+              }}
+              keyExtractor={(item, index) => {
+                if (item.type === 'header') {
+                  return `header-${item.status}`;
+                } else {
+                  return `order-${item.order?.type}-${item.order?.id}`;
+                }
+              }}
+              onEndReached={loadMore}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={
+                loadingMore ? (
+                  <View style={styles.loadMoreContainer}>
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                    <Text style={styles.loadMoreText}>Loading more orders...</Text>
+                  </View>
+                ) : null
+              }
+              contentContainerStyle={styles.cardsContainer}
+              showsVerticalScrollIndicator={false}
+            />
           )}
         </View>
       </View>
@@ -2438,6 +2574,16 @@ const styles = StyleSheet.create({
     zIndex: 1, // Lower z-index to ensure dropdowns appear above
   },
   // Modal styles
+  loadMoreContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: Colors.text.secondary,
+  },
   modalScrollView: {
     flex: 1,
   },

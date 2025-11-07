@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   TextInput,
   Alert,
@@ -63,6 +64,9 @@ const ManageCustomersScreen = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [stats, setStats] = useState<CustomerStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMorePages, setHasMorePages] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<{ [id: number]: boolean }>({});
   const [statusFilter, setStatusFilter] = useState('all');
@@ -105,29 +109,32 @@ const ManageCustomersScreen = () => {
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
-  const fetchData = useCallback(async () => {
-    try {
+  const fetchData = useCallback(async (page = 1, reset = false) => {
+    if (reset) {
       setLoading(true);
-      
+      setCurrentPage(1);
+      setHasMorePages(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
+    try {
       const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.append('status', statusFilter);
+      params.append('page', page.toString());
+      params.append('per_page', '10');
+      if (statusFilter !== 'all') params.append('filters[account_status]', statusFilter);
       if (search) params.append('search', search);
 
       const response = await apiService.get(`/admin/customers?${params}`);
       
-      console.log('API Response:', response);
-      console.log('Customers from API:', response.data);
-      
       if (response.success) {
+        // Debug: Log pagination info
+        console.log(`[ManageCustomers] Page ${page}, Received ${(response.data || []).length} customers, Has more: ${response.pagination?.has_more_pages}, Total: ${response.pagination?.total}`);
+        
         // Ensure all customer objects have the required properties with safe defaults
-        const safeCustomers = (response.data || []).map((customer: any, index: number) => {
-          console.log(`Processing customer ${index}:`, customer);
-          
-          const safeCustomer = {
+        const safeCustomers = (response.data || []).map((customer: any) => {
+          return {
             id: customer.id || 0,
             name: String(customer.name || 'Unknown'),
             email: String(customer.email || ''),
@@ -151,35 +158,48 @@ const ManageCustomersScreen = () => {
             order_count: Number(customer.order_count || 0),
             profile_image: customer.profile_image || null,
           };
-          
-          console.log(`Safe customer ${index}:`, safeCustomer);
-          return safeCustomer;
         });
         
-        console.log('All customers from API:', safeCustomers.map(c => ({ email: c.email, role: c.role, name: c.name })));
-        
-        // Check specifically for bonikobonik@gmail.com
-        const bonikoUser = safeCustomers.find(c => c.email === 'bonikobonik@gmail.com');
-        console.log('Boniko user found:', bonikoUser);
-        
-        setCustomers(safeCustomers);
+        if (reset) {
+          setCustomers(safeCustomers);
+        } else {
+          setCustomers(prev => [...prev, ...safeCustomers]);
+        }
+
+        setHasMorePages(response.pagination?.has_more_pages || false);
+        setCurrentPage(page);
         
         // Use stats from backend (already excludes super admin)
-        setStats(response.stats || null);
+        if (reset) {
+          setStats(response.stats || null);
+        }
       } else {
         throw new Error(response.message || 'Failed to fetch customers');
       }
     } catch (error) {
       console.error('Error fetching customers:', error);
-      showNotification('Failed to fetch customers', 'error');
+      if (reset) {
+        showNotification('Failed to fetch customers', 'error');
+      }
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, [statusFilter, search]);
 
+  useEffect(() => {
+    fetchData(1, true);
+  }, [statusFilter, search]);
+
+  const loadMore = () => {
+    if (!loadingMore && hasMorePages) {
+      fetchData(currentPage + 1, false);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchData();
+    await fetchData(1, true);
     setRefreshing(false);
   };
 
@@ -428,7 +448,7 @@ const ManageCustomersScreen = () => {
       const { Linking } = require('react-native');
       
       // The backend now returns a PDF file directly, so we can open the URL directly
-      const pdfUrl = `http://192.168.1.56:8000/api/admin/customers/${customer.id}/generate-report`;
+      const pdfUrl = `http://192.168.1.54:8000/api/admin/customers/${customer.id}/generate-report`;
       
       // Open the PDF in the browser
       await Linking.openURL(pdfUrl);
@@ -557,24 +577,100 @@ const ManageCustomersScreen = () => {
            customer.email;
   };
 
-  const filteredCustomers = customers.filter(customer => {
-    // First validate the customer object
-    if (!validateCustomer(customer)) {
-      console.warn('Invalid customer object:', customer);
-      return false;
+  const renderCustomerCard = ({ item: customer }: { item: Customer }) => {
+    try {
+      return (
+        <View style={styles.customerCard}>
+          <View style={styles.customerHeader}>
+            <View style={styles.customerInfo}>
+              <View style={styles.customerAvatar}>
+                {customer.profile_image ? (
+                  <Image 
+                    source={{ uri: customer.profile_image }} 
+                    style={styles.avatarImage}
+                  />
+                ) : (
+                  <Ionicons name="person" size={24} color="#014D40" />
+                )}
+              </View>
+              <View style={styles.customerDetails}>
+                <Text style={styles.customerName}>{String(customer.name || 'Unknown')}</Text>
+                <Text style={styles.customerEmail}>{String(customer.email || '')}</Text>
+                <Text style={styles.customerPhone}>{customer.phone ? String(customer.phone) : 'No phone'}</Text>
+              </View>
+            </View>
+            <View style={styles.customerStatus}>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(customer.account_status) + '20' }]}>
+                <Ionicons 
+                  name={getStatusIcon(customer.account_status) as any} 
+                  size={16} 
+                  color={getStatusColor(customer.account_status)} 
+                />
+                <Text style={[styles.statusText, { color: getStatusColor(customer.account_status) }]}>
+                  {String(customer.account_status || 'active').charAt(0).toUpperCase() + String(customer.account_status || 'active').slice(1)}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.customerStats}>
+            <View style={styles.statItem}>
+              <Text style={styles.statItemValue}>{String(customer.total_orders || 0)}</Text>
+              <Text style={styles.statItemLabel}>Orders</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statItemValue}>{String(customer.total_appointments || 0)}</Text>
+              <Text style={styles.statItemLabel}>Appointments</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statItemValue}>{String(customer.total_transactions || 0)}</Text>
+              <Text style={styles.statItemLabel}>Transactions</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statItemValue}>
+                {customer.last_activity ? String(new Date(customer.last_activity).toLocaleDateString()) : 'Never'}
+              </Text>
+              <Text style={styles.statItemLabel}>Last Activity</Text>
+            </View>
+          </View>
+
+          <View style={styles.customerActions}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => {
+                setSelectedCustomer(customer);
+                setShowCustomerModal(true);
+              }}
+            >
+              <Ionicons name="eye" size={16} color="#014D40" />
+              <Text style={styles.actionButtonText}>View Details</Text>
+            </TouchableOpacity>
+            
+            {customer.role === 'admin' && !customer.is_super_admin && (
+              <View style={[styles.actionButton, styles.adminBadge]}>
+                <Ionicons name="person" size={16} color="#4CAF50" />
+                <Text style={styles.actionButtonText}>Admin</Text>
+              </View>
+            )}
+            
+            {customer.is_super_admin && (
+              <View style={[styles.actionButton, styles.superAdminBadge]}>
+                <Ionicons name="shield" size={16} color="#FF6B35" />
+                <Text style={styles.actionButtonText}>Super Admin</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      );
+    } catch (error) {
+      console.error('Error rendering customer card:', error, customer);
+      return (
+        <View style={styles.customerCard}>
+          <Text style={styles.customerName}>Error loading user data</Text>
+        </View>
+      );
     }
-    
-    const matchesStatus = statusFilter === 'all' || customer.account_status === statusFilter;
-    const matchesSearch = !search || 
-      customer.name.toLowerCase().includes(search.toLowerCase()) ||
-      customer.email.toLowerCase().includes(search.toLowerCase()) ||
-      customer.phone.includes(search);
-    
-    const shouldInclude = matchesStatus && matchesSearch;
-    console.log(`Customer ${customer.email} (${customer.role}): status=${matchesStatus}, search=${matchesSearch}, include=${shouldInclude}`);
-    
-    return shouldInclude;
-  });
+  };
 
   if (loading) {
     return (
@@ -586,7 +682,7 @@ const ManageCustomersScreen = () => {
   }
 
   return (
-    <KeyboardAvoidingWrapper style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
       {/* Notification */}
       {notification && (
         <View style={[styles.notification, notification.type === 'success' ? styles.successNotification : styles.errorNotification]}>
@@ -594,223 +690,149 @@ const ManageCustomersScreen = () => {
         </View>
       )}
 
-      <ScrollView 
-        style={styles.container}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.titleContainer}>
-            <Ionicons name="people" size={28} color="#014D40" />
-            <Text style={styles.title}>User Management</Text>
+      <View style={styles.container}>
+        {/* Customer List with Infinite Scroll */}
+        {loading && customers.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#014D40" />
+            <Text style={styles.loadingText}>Loading customers...</Text>
           </View>
-        </View>
+        ) : (
+          <FlatList
+            data={customers}
+            renderItem={renderCustomerCard}
+            keyExtractor={(item) => `customer-${item.id}`}
+            onEndReached={loadMore}
+            onEndReachedThreshold={0.5}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            ListHeaderComponent={
+              <>
+                {/* Header */}
+                <View style={styles.header}>
+                  <View style={styles.titleContainer}>
+                    <Ionicons name="people" size={28} color="#014D40" />
+                    <Text style={styles.title}>User Management</Text>
+                  </View>
+                </View>
 
-        {/* Stats Cards */}
-        {stats && (
-          <View style={styles.statsContainer}>
-            <View style={styles.statsRow}>
-              <View style={styles.statCard}>
-                <View style={styles.statIconContainer}>
-                  <Ionicons name="people" size={24} color="#014D40" />
-                </View>
-                <Text style={styles.statValue}>{stats.total_customers}</Text>
-                <Text style={styles.statLabel}>Total Users</Text>
-              </View>
-              <View style={styles.statCard}>
-                <View style={[styles.statIconContainer, { backgroundColor: '#E8F5E8' }]}>
-                  <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-                </View>
-                <Text style={styles.statValue}>{stats.active_customers}</Text>
-                <Text style={styles.statLabel}>Active</Text>
-              </View>
-              <View style={styles.statCard}>
-                <View style={[styles.statIconContainer, { backgroundColor: '#FFF3E0' }]}>
-                  <Ionicons name="pause-circle" size={24} color="#FFA000" />
-                </View>
-                <Text style={styles.statValue}>{stats.suspended_customers}</Text>
-                <Text style={styles.statLabel}>Suspended</Text>
-              </View>
-              <View style={styles.statCard}>
-                <View style={[styles.statIconContainer, { backgroundColor: '#FFEBEE' }]}>
-                  <Ionicons name="close-circle" size={24} color="#F44336" />
-                </View>
-                <Text style={styles.statValue}>{stats.banned_customers}</Text>
-                <Text style={styles.statLabel}>Banned</Text>
-              </View>
-            </View>
-          </View>
-        )}
+                {/* Stats Cards */}
+                {stats && (
+                  <View style={styles.statsContainer}>
+                    <View style={styles.statsRow}>
+                      <View style={styles.statCard}>
+                        <View style={styles.statIconContainer}>
+                          <Ionicons name="people" size={24} color="#014D40" />
+                        </View>
+                        <Text style={styles.statValue}>{stats.total_customers}</Text>
+                        <Text style={styles.statLabel}>Total Users</Text>
+                      </View>
+                      <View style={styles.statCard}>
+                        <View style={[styles.statIconContainer, { backgroundColor: '#E8F5E8' }]}>
+                          <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                        </View>
+                        <Text style={styles.statValue}>{stats.active_customers}</Text>
+                        <Text style={styles.statLabel}>Active</Text>
+                      </View>
+                      <View style={styles.statCard}>
+                        <View style={[styles.statIconContainer, { backgroundColor: '#FFF3E0' }]}>
+                          <Ionicons name="pause-circle" size={24} color="#FFA000" />
+                        </View>
+                        <Text style={styles.statValue}>{stats.suspended_customers}</Text>
+                        <Text style={styles.statLabel}>Suspended</Text>
+                      </View>
+                      <View style={styles.statCard}>
+                        <View style={[styles.statIconContainer, { backgroundColor: '#FFEBEE' }]}>
+                          <Ionicons name="close-circle" size={24} color="#F44336" />
+                        </View>
+                        <Text style={styles.statValue}>{stats.banned_customers}</Text>
+                        <Text style={styles.statLabel}>Banned</Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
 
-        {/* Filters */}
-        <View style={styles.filtersContainer}>
-          <View style={styles.filtersRow}>
-            {/* Status Filter */}
-            <View style={styles.filterItem}>
-              <Text style={styles.filterLabel}>Status:</Text>
-              <TouchableOpacity 
-                style={styles.dropdownButton}
-                onPress={() => setShowStatusDropdown(!showStatusDropdown)}
-              >
-                <Text style={styles.dropdownButtonText}>
-                  {STATUS_OPTIONS.find(opt => opt.value === statusFilter)?.label || 'All'}
-                </Text>
-                <Ionicons 
-                  name={showStatusDropdown ? "chevron-up" : "chevron-down"} 
-                  size={18} 
-                  color="#014D40" 
-                />
-              </TouchableOpacity>
-              
-              {showStatusDropdown && (
-                <View style={styles.dropdownMenu}>
-                  {STATUS_OPTIONS.map((option) => (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={styles.dropdownItem}
-                      onPress={() => {
-                        setStatusFilter(option.value);
-                        setShowStatusDropdown(false);
-                      }}
-                    >
-                      <Ionicons name={option.icon as any} size={16} color={option.color} />
-                      <Text style={styles.dropdownItemText}>{option.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            {/* Search */}
-            <View style={styles.searchItem}>
-              <Text style={styles.searchLabel}>Search:</Text>
-              <View style={styles.searchContainer}>
-                <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search by name, email, or phone..."
-                  value={search}
-                  onChangeText={setSearch}
-                  placeholderTextColor="#999"
-                />
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Customer List */}
-        <View style={styles.customersContainer}>
-          {filteredCustomers.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="people-outline" size={64} color="#ccc" />
-              <Text style={styles.emptyStateTitle}>No users found</Text>
-              <Text style={styles.emptyStateText}>
-                {search ? 'Try adjusting your search criteria' : 'No users match the current filters'}
-              </Text>
-            </View>
-          ) : (
-            filteredCustomers.map((customer) => {
-              try {
-                return (
-                  <View key={customer.id} style={styles.customerCard}>
-                <View style={styles.customerHeader}>
-                  <View style={styles.customerInfo}>
-                    <View style={styles.customerAvatar}>
-                      {customer.profile_image ? (
-                        <Image 
-                          source={{ uri: customer.profile_image }} 
-                          style={styles.avatarImage}
+                {/* Filters */}
+                <View style={styles.filtersContainer}>
+                  <View style={styles.filtersRow}>
+                    {/* Status Filter */}
+                    <View style={styles.filterItem}>
+                      <Text style={styles.filterLabel}>Status:</Text>
+                      <TouchableOpacity 
+                        style={styles.dropdownButton}
+                        onPress={() => setShowStatusDropdown(!showStatusDropdown)}
+                      >
+                        <Text style={styles.dropdownButtonText}>
+                          {STATUS_OPTIONS.find(opt => opt.value === statusFilter)?.label || 'All'}
+                        </Text>
+                        <Ionicons 
+                          name={showStatusDropdown ? "chevron-up" : "chevron-down"} 
+                          size={18} 
+                          color="#014D40" 
                         />
-                      ) : (
-                        <Ionicons name="person" size={24} color="#014D40" />
+                      </TouchableOpacity>
+                      
+                      {showStatusDropdown && (
+                        <View style={styles.dropdownMenu}>
+                          {STATUS_OPTIONS.map((option) => (
+                            <TouchableOpacity
+                              key={option.value}
+                              style={styles.dropdownItem}
+                              onPress={() => {
+                                setStatusFilter(option.value);
+                                setShowStatusDropdown(false);
+                              }}
+                            >
+                              <Ionicons name={option.icon as any} size={16} color={option.color} />
+                              <Text style={styles.dropdownItemText}>{option.label}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
                       )}
                     </View>
-                    <View style={styles.customerDetails}>
-                      <Text style={styles.customerName}>{String(customer.name || 'Unknown')}</Text>
-                      <Text style={styles.customerEmail}>{String(customer.email || '')}</Text>
-                      <Text style={styles.customerPhone}>{customer.phone ? String(customer.phone) : 'No phone'}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.customerStatus}>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(customer.account_status) + '20' }]}>
-                      <Ionicons 
-                        name={getStatusIcon(customer.account_status) as any} 
-                        size={16} 
-                        color={getStatusColor(customer.account_status)} 
-                      />
-                      <Text style={[styles.statusText, { color: getStatusColor(customer.account_status) }]}>
-                        {String(customer.account_status || 'active').charAt(0).toUpperCase() + String(customer.account_status || 'active').slice(1)}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
 
-                <View style={styles.customerStats}>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statItemValue}>{String(customer.total_orders || 0)}</Text>
-                    <Text style={styles.statItemLabel}>Orders</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statItemValue}>{String(customer.total_appointments || 0)}</Text>
-                    <Text style={styles.statItemLabel}>Appointments</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statItemValue}>{String(customer.total_transactions || 0)}</Text>
-                    <Text style={styles.statItemLabel}>Transactions</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statItemValue}>
-                      {customer.last_activity ? String(new Date(customer.last_activity).toLocaleDateString()) : 'Never'}
-                    </Text>
-                    <Text style={styles.statItemLabel}>Last Activity</Text>
+                    {/* Search */}
+                    <View style={styles.searchItem}>
+                      <Text style={styles.searchLabel}>Search:</Text>
+                      <View style={styles.searchContainer}>
+                        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+                        <TextInput
+                          style={styles.searchInput}
+                          placeholder="Search by name, email, or phone..."
+                          value={search}
+                          onChangeText={setSearch}
+                          placeholderTextColor="#999"
+                        />
+                      </View>
+                    </View>
                   </View>
                 </View>
-
-                <View style={styles.customerActions}>
-                  <TouchableOpacity 
-                    style={styles.actionButton}
-                    onPress={() => {
-                      setSelectedCustomer(customer);
-                      setShowCustomerModal(true);
-                    }}
-                  >
-                    <Ionicons name="eye" size={16} color="#014D40" />
-                    <Text style={styles.actionButtonText}>View Details</Text>
-                  </TouchableOpacity>
-                  
-                  {/* Role Management */}
-                  
-                  {customer.role === 'admin' && !customer.is_super_admin && (
-                    <View style={[styles.actionButton, styles.adminBadge]}>
-                      <Ionicons name="person" size={16} color="#4CAF50" />
-                      <Text style={styles.actionButtonText}>Admin</Text>
-                    </View>
-                  )}
-                  
-                  {customer.is_super_admin && (
-                    <View style={[styles.actionButton, styles.superAdminBadge]}>
-                      <Ionicons name="shield" size={16} color="#FF6B35" />
-                      <Text style={styles.actionButtonText}>Super Admin</Text>
-                    </View>
-                  )}
-                </View>
+              </>
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Ionicons name="people-outline" size={64} color="#ccc" />
+                <Text style={styles.emptyStateTitle}>No users found</Text>
+                <Text style={styles.emptyStateText}>
+                  {search ? 'Try adjusting your search criteria' : 'No users match the current filters'}
+                </Text>
               </View>
-                );
-              } catch (error) {
-                console.error('Error rendering customer card:', error, customer);
-                return (
-                  <View key={customer.id} style={styles.customerCard}>
-                    <Text style={styles.customerName}>Error loading user data</Text>
-                  </View>
-                );
-              }
-            })
-          )}
-        </View>
-      </ScrollView>
+            }
+            ListFooterComponent={
+              loadingMore ? (
+                <View style={styles.loadMoreContainer}>
+                  <ActivityIndicator size="small" color="#014D40" />
+                  <Text style={styles.loadMoreText}>Loading more customers...</Text>
+                </View>
+              ) : null
+            }
+            contentContainerStyle={styles.customersContainer}
+            showsVerticalScrollIndicator={false}
+            style={styles.container}
+          />
+        )}
+      </View>
 
       {/* Customer Details Modal */}
       <Modal
@@ -1631,12 +1653,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e9ecef',
+    width: '100%',
   },
   statsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: 12,
+    width: '100%',
   },
   statCard: {
     width: '48%',
@@ -2393,6 +2416,16 @@ const styles = StyleSheet.create({
   },
   roleOptionTextSelected: {
     color: 'white',
+  },
+  loadMoreContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
   },
   roleModalActions: {
     flexDirection: 'row',

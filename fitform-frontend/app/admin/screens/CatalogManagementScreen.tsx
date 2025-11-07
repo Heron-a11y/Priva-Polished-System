@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -72,6 +72,9 @@ const MEASUREMENT_OPTIONS = Object.keys(MEASUREMENT_FIELDS);
 export default function CatalogManagementScreen() {
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMorePages, setHasMorePages] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -133,28 +136,8 @@ export default function CatalogManagementScreen() {
   };
 
   useEffect(() => {
-    // Test API connection first
-    const testConnection = async () => {
-      try {
-        console.log('🧪 Testing API connection...');
-        const testResult = await apiService.testConnection();
-        console.log('🧪 Test result:', testResult);
-        
-        if (testResult.success) {
-          console.log('✅ API connection successful, loading catalog items...');
-          loadCatalogItems();
-        } else {
-          console.log('❌ API connection failed:', testResult.error);
-          Alert.alert('Connection Error', 'Failed to connect to backend: ' + testResult.error);
-        }
-      } catch (error) {
-        console.error('❌ Connection test error:', error);
-        Alert.alert('Connection Error', 'Failed to test connection: ' + error.message);
-      }
-    };
-    
-    testConnection();
-  }, []);
+    fetchData(1, true);
+  }, [searchQuery, selectedCategory]);
 
   // Refresh modal when catalogItems change
   useEffect(() => {
@@ -166,85 +149,92 @@ export default function CatalogManagementScreen() {
     }
   }, [catalogItems, showItemModal, selectedItem]);
 
-  const loadCatalogItems = async (category?: string) => {
-    try {
+  const fetchData = useCallback(async (page = 1, reset = false) => {
+    if (reset) {
       setLoading(true);
-      const currentCategory = category !== undefined ? category : selectedCategory;
-      const params = {
-        search: searchQuery,
-        category: currentCategory === 'all' ? undefined : currentCategory
-      };
-      
-      const response = await apiService.get('/admin/catalog', { params });
-      
+      setCurrentPage(1);
+      setHasMorePages(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
+    try {
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('per_page', '10');
+      if (selectedCategory !== 'all') params.append('category', selectedCategory);
+      if (searchQuery) params.append('search', searchQuery);
+
+      const response = await apiService.get(`/admin/catalog?${params}`);
       
       if (response && response.success) {
-        setCatalogItems(response.data);
+        // Debug: Log pagination info
+        console.log(`[ManageCatalog] Page ${page}, Received ${(response.data || []).length} items, Has more: ${response.pagination?.has_more_pages}, Total: ${response.pagination?.total}`);
+        
+        const newItems = (response.data || []).map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          description: item.description,
+          clothing_type: item.clothing_type,
+          category: item.category,
+          image_path: item.image_path,
+          image_url: item.image_url,
+          measurements_required: item.measurements_required || [],
+          is_available: item.is_available,
+          is_featured: item.is_featured,
+          sort_order: item.sort_order,
+          notes: item.notes,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+        }));
+        
+        if (reset) {
+          setCatalogItems(newItems);
+        } else {
+          // Deduplicate items by id to prevent duplicates
+          setCatalogItems(prev => {
+            const existingIds = new Set(prev.map(item => item.id));
+            const uniqueNewItems = newItems.filter(item => !existingIds.has(item.id));
+            return [...prev, ...uniqueNewItems];
+          });
+        }
+
+        setHasMorePages(response.pagination?.has_more_pages || false);
+        setCurrentPage(page);
       } else {
-        // Show sample data for testing
-        const sampleData = [
-          {
-            id: 1,
-            name: 'Sample Suit',
-            description: 'This is a sample item for testing',
-            clothing_type: 'Suit',
-            category: 'formal_attire',
-            image_path: 'catalog/suit-katrina.webp',
-            measurements_required: ['bust', 'waist', 'shoulder_width'],
-            is_available: true,
-            is_featured: false,
-            sort_order: 1,
-            notes: 'Sample item',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }
-        ];
-        setCatalogItems(sampleData);
+        throw new Error(response.message || 'Failed to fetch catalog items');
       }
     } catch (error) {
-      console.error('Error loading catalog items:', error);
-      
-      // Show sample data for testing
-      const sampleData = [
-        {
-          id: 1,
-          name: 'Sample Suit',
-          description: 'This is a sample item for testing',
-          clothing_type: 'Suit',
-          category: 'formal_attire',
-          image_path: 'catalog/suit-katrina.webp',
-          measurements_required: ['bust', 'waist', 'shoulder_width'],
-          is_available: true,
-          is_featured: false,
-          sort_order: 1,
-          notes: 'Sample item',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-      ];
-      setCatalogItems(sampleData);
+      console.error('Error fetching catalog items:', error);
+      if (reset) {
+        Alert.alert('Error', 'Failed to fetch catalog items');
+      }
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+      setRefreshing(false);
+    }
+  }, [searchQuery, selectedCategory]);
+  
+  const loadMore = () => {
+    if (!loadingMore && hasMorePages) {
+      fetchData(currentPage + 1, false);
     }
   };
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadCatalogItems();
-    setRefreshing(false);
+    await fetchData(1, true);
   };
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
-    // Debounce search
-    setTimeout(() => {
-      loadCatalogItems();
-    }, 500);
+    // fetchData will be called automatically via useEffect when searchQuery changes
   };
 
   const handleCategoryFilter = (category: string) => {
     setSelectedCategory(category);
-    loadCatalogItems(category);
+    // fetchData will be called automatically via useEffect when selectedCategory changes
   };
 
   const handleAddItem = () => {
@@ -533,7 +523,7 @@ export default function CatalogManagementScreen() {
           Alert.alert('Success', 'Catalog item updated successfully');
           
           // Refresh the catalog items after successful update
-          await loadCatalogItems();
+          await fetchData(1, true);
         } catch (error) {
           console.error('❌ Error updating catalog item:', error);
           if (error.message && error.message.includes('Network request failed')) {
@@ -599,7 +589,7 @@ export default function CatalogManagementScreen() {
       });
       
       // Force refresh of catalog items
-      await loadCatalogItems();
+      await fetchData(1, true);
       
       // If modal is open, refresh the selected item
       if (showItemModal && selectedItem) {
@@ -649,7 +639,7 @@ export default function CatalogManagementScreen() {
             try {
               await apiService.delete(`/admin/catalog/${item.id}`);
               Alert.alert('Success', 'Catalog item deleted successfully');
-              loadCatalogItems();
+              fetchData(1, true);
             } catch (error) {
               console.error('Error deleting catalog item:', error);
               Alert.alert('Error', 'Failed to delete catalog item');
@@ -665,7 +655,7 @@ export default function CatalogManagementScreen() {
       await apiService.put(`/admin/catalog/${item.id}`, {
         is_available: !item.is_available
       });
-      loadCatalogItems();
+      fetchData(1, true);
     } catch (error) {
       console.error('Error updating availability:', error);
       Alert.alert('Error', 'Failed to update availability');
@@ -677,7 +667,7 @@ export default function CatalogManagementScreen() {
       await apiService.post(`/admin/catalog/${item.id}/featured`, {
         is_featured: !item.is_featured
       });
-      loadCatalogItems();
+      fetchData(1, true);
     } catch (error) {
       console.error('Error updating featured status:', error);
       Alert.alert('Error', 'Failed to update featured status');
@@ -1333,9 +1323,6 @@ export default function CatalogManagementScreen() {
           <Ionicons name="shirt" size={28} color="#014D40" style={styles.titleIcon} />
           <Text style={styles.headerTitle}>Catalog Management</Text>
         </View>
-        <TouchableOpacity style={styles.addButton} onPress={handleAddItem}>
-          <Ionicons name="add" size={24} color="#fff" />
-        </TouchableOpacity>
       </View>
 
       <View style={styles.filters}>
@@ -1452,8 +1439,18 @@ export default function CatalogManagementScreen() {
           data={catalogItems}
           renderItem={renderCatalogItem}
           keyExtractor={(item) => item.id.toString()}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.loadMoreContainer}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.loadMoreText}>Loading more items...</Text>
+              </View>
+            ) : null
           }
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
@@ -1462,6 +1459,11 @@ export default function CatalogManagementScreen() {
 
       {renderForm()}
       {renderItemModal()}
+      
+      {/* Floating Action Button */}
+      <TouchableOpacity style={styles.fab} onPress={handleAddItem}>
+        <Ionicons name="add" size={28} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -1503,13 +1505,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#014D40',
   },
-  addButton: {
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#014D40',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    zIndex: 1000,
   },
   filters: {
     backgroundColor: '#fff',
@@ -2514,5 +2525,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#DC2626',
     fontWeight: '500',
+  },
+  loadMoreContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
   },
 });

@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
   ScrollView, 
+  FlatList,
   TouchableOpacity, 
   ActivityIndicator, 
   Alert, 
@@ -66,6 +67,9 @@ const ManageAppointmentsScreen = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [stats, setStats] = useState<AppointmentStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMorePages, setHasMorePages] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<{ [id: number]: boolean }>({});
   const [statusFilter, setStatusFilter] = useState('all');
@@ -92,8 +96,8 @@ const ManageAppointmentsScreen = () => {
   const refreshAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchData(1, true);
+  }, [statusFilter, search]);
 
   // Update toggle animation when setting changes
   useEffect(() => {
@@ -104,100 +108,102 @@ const ManageAppointmentsScreen = () => {
     }).start();
   }, [adminSettings.auto_approve_appointments]);
 
-  const fetchData = async (isRefresh = false) => {
+  const fetchData = useCallback(async (page = 1, reset = false) => {
+    if (reset) {
+      setLoading(true);
+      setCurrentPage(1);
+      setHasMorePages(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
     try {
-      if (isRefresh) {
-        console.log('🔄 Quick refresh started');
-        // For refresh, prioritize appointments first for immediate UI update
-        // Add timeout to prevent hanging
-        const appointmentsRes = await Promise.race([
-          apiService.getAllAppointments(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Appointments fetch timeout')), 5000)
-          )
-        ]) as any;
-        
-        const appointmentsData = appointmentsRes.data?.appointments || appointmentsRes.appointments || [];
-        setAppointments(Array.isArray(appointmentsData) ? appointmentsData : []);
-        
-        // Then fetch stats and settings in background with timeout
-        Promise.all([
-          Promise.race([
-            apiService.getAppointmentStats(),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Stats fetch timeout')), 3000)
-            )
-          ]).then(statsRes => {
-            const statsData = (statsRes as any).data || statsRes;
-            setStats(statsData);
-          }),
-          Promise.race([
-            apiService.getAdminSettings(),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Settings fetch timeout')), 3000)
-            )
-          ]).then(settingsRes => {
-            if ((settingsRes as any) && (settingsRes as any).settings) {
-              setAdminSettings((settingsRes as any).settings);
-            }
-          })
-        ]).catch(error => {
-          console.warn('Background data fetch failed:', error);
-        });
-      } else {
-        // For initial load, fetch all data
-        const [appointmentsRes, statsRes, settingsRes] = await Promise.all([
-          apiService.getAllAppointments(),
-          apiService.getAppointmentStats(),
-          apiService.getAdminSettings()
-        ]);
-        
-        console.log('🔍 Admin Appointments API Response:', JSON.stringify(appointmentsRes, null, 2));
-        
-        const appointmentsData = appointmentsRes.data?.appointments || appointmentsRes.appointments || [];
-        const statsData = statsRes.data || statsRes;
-        
-        if (appointmentsData.length > 0) {
-          console.log('🔍 First appointment data:', appointmentsData[0]);
-          console.log('🔍 Customer profile image:', appointmentsData[0].customer_profile_image);
-          console.log('🔍 Customer name:', appointmentsData[0].customer_name);
-        }
-        
-        setAppointments(Array.isArray(appointmentsData) ? appointmentsData : []);
-        setStats(statsData);
-        
-        // Update admin settings
-        if (settingsRes && settingsRes.settings) {
-          setAdminSettings(settingsRes.settings);
-        }
-      }
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('per_page', '10');
+      if (statusFilter !== 'all') params.append('filters[status]', statusFilter);
+      if (search) params.append('search', search);
+
+      const response = await apiService.get(`/admin/appointments?${params}`);
       
-      // Reset image load errors when fetching new data
-      setImageLoadErrors({});
-    } catch (e) {
-      console.error('Error fetching data:', e);
-      if (!isRefresh) {
-        setAppointments([]);
-        setStats(null);
+      if (response.success) {
+        // Debug: Log pagination info
+        console.log(`[ManageAppointments] Page ${page}, Received ${(response.data || []).length} appointments, Has more: ${response.pagination?.has_more_pages}, Total: ${response.pagination?.total}`);
+        
+        const newAppointments = (response.data || []).map((item: any) => ({
+          id: item.id,
+          appointment_date: item.appointment_date,
+          appointment_time: item.appointment_time,
+          service_type: item.service_type,
+          status: item.status,
+          notes: item.notes,
+          customer_name: item.customer_name || 'N/A',
+          customer_email: item.customer_email || 'N/A',
+          customer_profile_image: item.customer_profile_image || null,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+        }));
+        
+        if (reset) {
+          setAppointments(newAppointments);
+        } else {
+          // Deduplicate appointments by id to prevent duplicates
+          setAppointments(prev => {
+            const existingIds = new Set(prev.map(a => a.id));
+            const uniqueNewAppointments = newAppointments.filter(a => !existingIds.has(a.id));
+            return [...prev, ...uniqueNewAppointments];
+          });
+        }
+
+        setHasMorePages(response.pagination?.has_more_pages || false);
+        setCurrentPage(page);
+        
+        // Use stats from backend
+        if (reset) {
+          setStats(response.stats || null);
+        }
+        
+        // Fetch admin settings separately (only on reset)
+        if (reset) {
+          try {
+            const settingsRes = await apiService.getAdminSettings();
+            if (settingsRes && settingsRes.settings) {
+              setAdminSettings(settingsRes.settings);
+            }
+          } catch (error) {
+            console.warn('Failed to fetch admin settings:', error);
+          }
+        }
+      } else {
+        throw new Error(response.message || 'Failed to fetch appointments');
+      }
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      if (reset) {
+        Alert.alert('Error', 'Failed to fetch appointments');
       }
     } finally {
       setLoading(false);
+      setLoadingMore(false);
       setRefreshing(false);
+    }
+  }, [statusFilter, search]);
+  
+  const loadMore = () => {
+    if (!loadingMore && hasMorePages) {
+      fetchData(currentPage + 1, false);
     }
   };
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    // Add a small delay to ensure UI shows refreshing state
-    setTimeout(() => {
-      fetchData(true); // Pass true to indicate this is a refresh
-    }, 50);
+    await fetchData(1, true);
   };
 
   const handleGenerateReport = async () => {
     try {
       const { Linking } = require('react-native');
-      const reportUrl = `http://192.168.1.56:8000/api/admin/appointments/generate-report`;
+      const reportUrl = `http://192.168.1.54:8000/api/admin/appointments/generate-report`;
       await Linking.openURL(reportUrl);
       Alert.alert('Success', 'Report opened in browser');
     } catch (error) {
@@ -239,7 +245,7 @@ const ManageAppointmentsScreen = () => {
     setActionLoading((prev) => ({ ...prev, [id]: true }));
     try {
       await apiService.updateAdminAppointmentStatus(id, status);
-      fetchData();
+      fetchData(1, true); // Reset to page 1 and refresh
       Alert.alert('Success', `Appointment ${status === 'confirmed' ? 'confirmed' : status === 'cancelled' ? 'cancelled' : 'set to pending'}.`);
     } catch (e) {
       Alert.alert('Error', 'Failed to update appointment.');
@@ -283,6 +289,8 @@ const ManageAppointmentsScreen = () => {
   };
 
   const handleRemoveAllCancelled = async () => {
+    // This function should be updated to work with pagination
+    // For now, it will refresh the data after removal
     const cancelledAppointments = appointments.filter(app => app.status === 'cancelled');
     
     if (cancelledAppointments.length === 0) {
@@ -307,12 +315,8 @@ const ManageAppointmentsScreen = () => {
               
               await Promise.all(deletePromises);
               
-              // Remove cancelled appointments from local state
-              setAppointments(prev => prev.filter(app => app.status !== 'cancelled'));
-              
-              // Update stats
-              const newStats = await apiService.getAppointmentStats();
-              setStats(newStats);
+              // Refresh data from server
+              fetchData(1, true); // Reset to page 1 and refresh
               
               Alert.alert('Success', `${cancelledAppointments.length} cancelled appointments removed successfully!`);
             } catch (error) {
@@ -503,34 +507,59 @@ const ManageAppointmentsScreen = () => {
     };
   };
 
-  // Filtered appointments
-  const filteredAppointments = appointments.filter((a) => {
-    const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
-    const matchesSearch =
-      search.trim() === '' ||
-      (a.customer_name && a.customer_name.toLowerCase().includes(search.trim().toLowerCase())) ||
-      (a.service_type && a.service_type.toLowerCase().includes(search.trim().toLowerCase())) ||
-      (a.notes && a.notes.toLowerCase().includes(search.trim().toLowerCase()));
-    return matchesStatus && matchesSearch;
-  });
+  // Transform appointments into grouped structure with headers for FlatList
+  const getGroupedAppointmentsData = () => {
+    // First, deduplicate appointments by id
+    const uniqueAppointments = appointments.filter((appointment, index, self) => 
+      index === self.findIndex((a) => a.id === appointment.id)
+    );
+    
+    // Group appointments by status
+    const groupedAppointments = uniqueAppointments.reduce((groups, appointment) => {
+      const status = appointment.status.toLowerCase();
+      if (!groups[status]) {
+        groups[status] = [];
+      }
+      groups[status].push(appointment);
+      return groups;
+    }, {} as Record<string, Appointment[]>);
 
-  // Group appointments by status
-  const groupedAppointments = filteredAppointments.reduce((groups, appointment) => {
-    const status = appointment.status;
-    if (!groups[status]) {
-      groups[status] = [];
-    }
-    groups[status].push(appointment);
-    return groups;
-  }, {} as Record<string, typeof filteredAppointments>);
+    // Sort status groups by business priority (most important first)
+    const statusOrder = ['pending', 'confirmed', 'cancelled'];
+    const sortedStatusGroups = Object.keys(groupedAppointments).sort((a, b) => {
+      const aIndex = statusOrder.indexOf(a);
+      const bIndex = statusOrder.indexOf(b);
+      // If status not in order list, put it at the end
+      if (aIndex === -1 && bIndex === -1) return 0;
+      if (aIndex === -1) return 1;
+      if (bIndex === -1) return -1;
+      return aIndex - bIndex;
+    });
 
-  // Sort status groups by business priority (most important first)
-  const statusOrder = ['pending', 'confirmed', 'cancelled'];
-  const sortedStatusGroups = Object.keys(groupedAppointments).sort((a, b) => {
-    const aIndex = statusOrder.indexOf(a);
-    const bIndex = statusOrder.indexOf(b);
-    return aIndex - bIndex;
-  });
+    // Flatten into array with group headers and items
+    const flatData: Array<{ type: 'header' | 'appointment'; status?: string; count?: number; appointment?: Appointment }> = [];
+    
+    sortedStatusGroups.forEach((status) => {
+      const statusAppointments = groupedAppointments[status];
+      if (statusAppointments.length > 0) {
+        // Add header
+        flatData.push({
+          type: 'header',
+          status: status,
+          count: statusAppointments.length
+        });
+        // Add appointments
+        statusAppointments.forEach(appointment => {
+          flatData.push({
+            type: 'appointment',
+            appointment: appointment
+          });
+        });
+      }
+    });
+
+    return flatData;
+  };
 
   const renderStatusGroupHeader = (status: string, count: number) => (
     <View style={styles.statusGroupHeader}>
@@ -710,186 +739,13 @@ const ManageAppointmentsScreen = () => {
   }
 
   return (
-    <KeyboardAvoidingWrapper style={styles.container}>
-      <ScrollView 
-        style={styles.scrollView}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.header}>
-        <View style={styles.titleContainer}>
-          <Ionicons name="calendar" size={28} color="#014D40" />
-          <Text style={styles.title} numberOfLines={1}>Manage Appointments</Text>
-          <TouchableOpacity 
-            style={styles.refreshIconButton}
-            onPress={refreshAllImages}
-          >
-            <Animated.View
-              style={{
-                transform: [{
-                  rotate: refreshAnimation.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0deg', '360deg'],
-                  })
-                }]
-              }}
-            >
-              <Ionicons name="refresh" size={24} color="#014D40" />
-            </Animated.View>
-          </TouchableOpacity>
-        </View>
-      </View>
-      
-      {/* Auto-Approval Settings Card */}
-      <View style={styles.autoApprovalContainer}>
-        <View style={styles.autoApprovalHeader}>
-          <View style={styles.autoApprovalTitleContainer}>
-            <Ionicons name="settings" size={20} color="#014D40" />
-            <Text style={styles.autoApprovalTitle}>Auto-Approval Settings</Text>
-          </View>
-          <TouchableOpacity
-            style={[
-              styles.autoApprovalToggleSwitch,
-              adminSettings.auto_approve_appointments && styles.autoApprovalToggleSwitchActive
-            ]}
-            onPress={handleToggleAutoApproval}
-            disabled={settingsLoading}
-            activeOpacity={0.7}
-          >
-            <Animated.View 
-              style={[
-                styles.autoApprovalToggleThumb,
-                {
-                  transform: [{
-                    translateX: toggleAnimation.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, 20],
-                    })
-                  }]
-                }
-              ]} 
-            />
-          </TouchableOpacity>
-        </View>
-        
-        <View style={styles.autoApprovalContent}>
-          <Text style={styles.autoApprovalDescription}>
-            Automatically approve appointments that meet all conditions (including existing pending ones):
-          </Text>
-          <View style={styles.autoApprovalConditionsList}>
-            <Text style={styles.autoApprovalConditions}>
-              • Within business hours ({adminSettings.business_start_time} - {adminSettings.business_end_time})
-            </Text>
-            <Text style={styles.autoApprovalConditions}>
-              • Daily limit not exceeded ({adminSettings.max_appointments_per_day} appointments/day)
-            </Text>
-            <Text style={styles.autoApprovalConditions}>
-              • First-come-first-served priority for time slots
-            </Text>
-            <Text style={styles.autoApprovalConditions}>
-              • Later appointments automatically cancelled if time slot taken
-            </Text>
-          </View>
-        </View>
-      </View>
-      
-      {/* Statistics Cards */}
-      {stats && renderStatsCards()}
-      
-      {/* Filters and Search */}
-      <View style={styles.filtersContainer}>
-        {/* Search Input - Moved to top */}
-        <View style={styles.searchContainer}>
-          <Ionicons 
-            name="search" 
-            size={18} 
-            color="#014D40" 
-            style={styles.searchIcon} 
-          />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search customers, services, notes..."
-            placeholderTextColor="#999"
-            value={search}
-            onChangeText={setSearch}
-          />
-        </View>
-        
-        <View style={styles.filtersRow}>
-          {/* Status Filter */}
-          <View style={styles.filterGroup}>
-            <Text style={styles.filterLabel}>Status:</Text>
-            <View style={styles.dropdownContainer}>
-              <TouchableOpacity 
-                style={styles.dropdownButton}
-                onPress={() => setShowStatusDropdown(!showStatusDropdown)}
-              >
-                <Text style={styles.dropdownButtonText}>
-                  {getStatusLabel(statusFilter)}
-                </Text>
-                <Ionicons 
-                  name={showStatusDropdown ? "chevron-up" : "chevron-down"} 
-                  size={18} 
-                  color="#014D40" 
-                />
-              </TouchableOpacity>
-              
-              {showStatusDropdown && (
-                <View style={styles.dropdownMenu}>
-                  {STATUS_OPTIONS.map(opt => (
-                    <TouchableOpacity
-                      key={opt.value}
-                      style={styles.dropdownItem}
-                      onPress={() => {
-                        setStatusFilter(opt.value);
-                        setShowStatusDropdown(false);
-                      }}
-                    >
-                      <Ionicons name={opt.icon as any} size={18} color={opt.color} />
-                      <Text style={styles.dropdownItemText}>{opt.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-        
-        {/* Action Buttons */}
-        <View style={styles.actionButtonsContainer}>
-          <TouchableOpacity 
-            style={styles.reportButton}
-            onPress={handleGenerateReport}
-          >
-            <Ionicons name="document-text" size={18} color="#014D40" />
-            <Text style={styles.reportButtonText}>Generate Report</Text>
-          </TouchableOpacity>
-          
-          {appointments.some(app => app.status === 'cancelled') && (
-            <TouchableOpacity
-              style={styles.removeAllButton}
-              onPress={handleRemoveAllCancelled}
-            >
-              <Ionicons name="trash" size={18} color="#fff" />
-              <Text style={styles.removeAllButtonText}>
-                Remove All Cancelled ({appointments.filter(app => app.status === 'cancelled').length})
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        
-        {/* Results Count */}
-        <View style={styles.resultsInfo}>
-          <Text style={styles.resultsText}>
-            Showing {filteredAppointments.length} of {appointments.length} appointments
-          </Text>
-        </View>
-      </View>
-      
+    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
       {/* Content */}
-      {filteredAppointments.length === 0 ? (
+      {loading && appointments.length === 0 ? (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : appointments.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="calendar-outline" size={64} color="#ccc" />
           <Text style={styles.emptyStateTitle}>No appointments found</Text>
@@ -901,14 +757,211 @@ const ManageAppointmentsScreen = () => {
           </Text>
         </View>
       ) : (
-        <View style={styles.cardsContainer}>
-          {sortedStatusGroups.map((status) => (
-            <View key={status}>
-              {renderStatusGroupHeader(status, groupedAppointments[status].length)}
-              {groupedAppointments[status].map(renderAppointmentCard)}
-            </View>
-          ))}
-        </View>
+        <FlatList
+          data={getGroupedAppointmentsData()}
+          renderItem={({ item }) => {
+            if (item.type === 'header') {
+              return renderStatusGroupHeader(item.status || '', item.count || 0);
+            } else {
+              return renderAppointmentCard(item.appointment!);
+            }
+          }}
+          keyExtractor={(item, index) => {
+            if (item.type === 'header') {
+              return `header-${item.status}`;
+            } else {
+              return `appointment-${item.appointment?.id}`;
+            }
+          }}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListHeaderComponent={
+            <>
+              <View style={styles.header}>
+                <View style={styles.titleContainer}>
+                  <Ionicons name="calendar" size={28} color="#014D40" />
+                  <Text style={styles.title} numberOfLines={1}>Manage Appointments</Text>
+                  <TouchableOpacity 
+                    style={styles.refreshIconButton}
+                    onPress={refreshAllImages}
+                  >
+                    <Animated.View
+                      style={{
+                        transform: [{
+                          rotate: refreshAnimation.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ['0deg', '360deg'],
+                          })
+                        }]
+                      }}
+                    >
+                      <Ionicons name="refresh" size={24} color="#014D40" />
+                    </Animated.View>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              {/* Auto-Approval Settings Card */}
+              <View style={styles.autoApprovalContainer}>
+                <View style={styles.autoApprovalHeader}>
+                  <View style={styles.autoApprovalTitleContainer}>
+                    <Ionicons name="settings" size={20} color="#014D40" />
+                    <Text style={styles.autoApprovalTitle}>Auto-Approval Settings</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.autoApprovalToggleSwitch,
+                      adminSettings.auto_approve_appointments && styles.autoApprovalToggleSwitchActive
+                    ]}
+                    onPress={handleToggleAutoApproval}
+                    disabled={settingsLoading}
+                    activeOpacity={0.7}
+                  >
+                    <Animated.View 
+                      style={[
+                        styles.autoApprovalToggleThumb,
+                        {
+                          transform: [{
+                            translateX: toggleAnimation.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, 20],
+                            })
+                          }]
+                        }
+                      ]} 
+                    />
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={styles.autoApprovalContent}>
+                  <Text style={styles.autoApprovalDescription}>
+                    Automatically approve appointments that meet all conditions (including existing pending ones):
+                  </Text>
+                  <View style={styles.autoApprovalConditionsList}>
+                    <Text style={styles.autoApprovalConditions}>
+                      • Within business hours ({adminSettings.business_start_time} - {adminSettings.business_end_time})
+                    </Text>
+                    <Text style={styles.autoApprovalConditions}>
+                      • Daily limit not exceeded ({adminSettings.max_appointments_per_day} appointments/day)
+                    </Text>
+                    <Text style={styles.autoApprovalConditions}>
+                      • First-come-first-served priority for time slots
+                    </Text>
+                    <Text style={styles.autoApprovalConditions}>
+                      • Later appointments automatically cancelled if time slot taken
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              
+              {/* Statistics Cards */}
+              {stats && renderStatsCards()}
+              
+              {/* Filters and Search */}
+              <View style={styles.filtersContainer}>
+                {/* Search Input - Moved to top */}
+                <View style={styles.searchContainer}>
+                  <Ionicons 
+                    name="search" 
+                    size={18} 
+                    color="#014D40" 
+                    style={styles.searchIcon} 
+                  />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search customers, services, notes..."
+                    placeholderTextColor="#999"
+                    value={search}
+                    onChangeText={setSearch}
+                  />
+                </View>
+                
+                <View style={styles.filtersRow}>
+                  {/* Status Filter */}
+                  <View style={styles.filterGroup}>
+                    <Text style={styles.filterLabel}>Status:</Text>
+                    <View style={styles.dropdownContainer}>
+                      <TouchableOpacity 
+                        style={styles.dropdownButton}
+                        onPress={() => setShowStatusDropdown(!showStatusDropdown)}
+                      >
+                        <Text style={styles.dropdownButtonText}>
+                          {getStatusLabel(statusFilter)}
+                        </Text>
+                        <Ionicons 
+                          name={showStatusDropdown ? "chevron-up" : "chevron-down"} 
+                          size={18} 
+                          color="#014D40" 
+                        />
+                      </TouchableOpacity>
+                      
+                      {showStatusDropdown && (
+                        <View style={styles.dropdownMenu}>
+                          {STATUS_OPTIONS.map(opt => (
+                            <TouchableOpacity
+                              key={opt.value}
+                              style={styles.dropdownItem}
+                              onPress={() => {
+                                setStatusFilter(opt.value);
+                                setShowStatusDropdown(false);
+                              }}
+                            >
+                              <Ionicons name={opt.icon as any} size={18} color={opt.color} />
+                              <Text style={styles.dropdownItemText}>{opt.label}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </View>
+                
+                {/* Action Buttons */}
+                <View style={styles.actionButtonsContainer}>
+                  <TouchableOpacity 
+                    style={styles.reportButton}
+                    onPress={handleGenerateReport}
+                  >
+                    <Ionicons name="document-text" size={18} color="#014D40" />
+                    <Text style={styles.reportButtonText}>Generate Report</Text>
+                  </TouchableOpacity>
+                  
+                  {appointments.some(app => app.status === 'cancelled') && (
+                    <TouchableOpacity
+                      style={styles.removeAllButton}
+                      onPress={handleRemoveAllCancelled}
+                    >
+                      <Ionicons name="trash" size={18} color="#fff" />
+                      <Text style={styles.removeAllButtonText}>
+                        Remove All Cancelled ({appointments.filter(app => app.status === 'cancelled').length})
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+              
+              {/* Results Count */}
+              <View style={styles.resultsInfo}>
+                <Text style={styles.resultsText}>
+                  Showing {appointments.length} appointments
+                </Text>
+              </View>
+            </>
+          }
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.loadMoreContainer}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.loadMoreText}>Loading more appointments...</Text>
+              </View>
+            ) : null
+          }
+          contentContainerStyle={styles.cardsContainer}
+          showsVerticalScrollIndicator={false}
+        />
       )}
       
       {/* Appointment Details Modal */}
@@ -1059,7 +1112,6 @@ const ManageAppointmentsScreen = () => {
           </View>
         )}
       </Modal>
-      </ScrollView>
     </KeyboardAvoidingWrapper>
   );
 };
@@ -1108,15 +1160,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e9ecef',
+    width: '100%',
   },
   statsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: 12,
+    width: '100%',
+    alignItems: 'flex-start',
   },
   statCard: {
     width: '48%',
+    maxWidth: '48%',
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 18,
@@ -1585,6 +1640,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
     borderRadius: 8,
     borderLeftWidth: 4,
+  },
+  loadMoreContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
   },
   statusGroupTitleText: {
     fontSize: 16,

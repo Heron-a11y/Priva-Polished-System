@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Dimensions,
   Modal,
   TextInput,
+  FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
@@ -62,6 +64,9 @@ const AdminMeasurementHistory = () => {
   const [measurements, setMeasurements] = useState<MeasurementHistory[]>([]);
   const [stats, setStats] = useState<MeasurementStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMorePages, setHasMorePages] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMeasurement, setSelectedMeasurement] = useState<MeasurementHistory | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -74,19 +79,30 @@ const AdminMeasurementHistory = () => {
   const [filtering, setFiltering] = useState(false);
 
   useEffect(() => {
-    fetchMeasurementHistory();
+    fetchMeasurementHistory(1, true);
     fetchStats();
   }, []);
 
   useEffect(() => {
-    fetchMeasurementHistory();
+    fetchMeasurementHistory(1, true);
   }, [unitFilter, typeFilter]);
 
-  const fetchMeasurementHistory = async () => {
+  const fetchMeasurementHistory = useCallback(async (page = 1, reset = false) => {
+    if (reset) {
+      setLoading(true);
+      setCurrentPage(1);
+      setHasMorePages(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
     try {
       setFiltering(true);
-      console.log('Fetching admin measurement history with filters:', { unitFilter, typeFilter });
-      const params: any = {};
+      console.log('Fetching admin measurement history with filters:', { unitFilter, typeFilter, page });
+      const params: any = {
+        page: page.toString(),
+        per_page: '10'
+      };
       if (unitFilter !== 'all') params.unit_system = unitFilter;
       if (typeFilter !== 'all') params.type = typeFilter;
       
@@ -94,20 +110,40 @@ const AdminMeasurementHistory = () => {
       const response = await apiService.getAdminMeasurementHistory(params);
       console.log('Admin measurement history response:', response);
       if (response && response.data) {
-        setMeasurements(response.data);
-        console.log('Filtered measurements count:', response.data.length);
+        const newMeasurements = response.data || [];
+        const pagination = response.pagination;
+        
+        // Deduplicate measurements
+        if (reset) {
+          setMeasurements(newMeasurements);
+        } else {
+          setMeasurements(prev => {
+            const existingIds = new Set(prev.map(m => m.id));
+            const uniqueNew = newMeasurements.filter((m: MeasurementHistory) => !existingIds.has(m.id));
+            return [...prev, ...uniqueNew];
+          });
+        }
+        
+        setHasMorePages(pagination ? (pagination.current_page < pagination.last_page) : false);
+        setCurrentPage(page);
+        console.log('Filtered measurements count:', newMeasurements.length, 'Has more:', pagination ? (pagination.current_page < pagination.last_page) : false);
       } else {
-        setMeasurements([]);
+        if (reset) {
+          setMeasurements([]);
+        }
       }
     } catch (error) {
       console.error('Error fetching admin measurement history:', error);
-      Alert.alert('Error', 'Failed to load measurement history. Please check your connection and try again.');
-      setMeasurements([]);
+      if (reset) {
+        Alert.alert('Error', 'Failed to load measurement history. Please check your connection and try again.');
+        setMeasurements([]);
+      }
     } finally {
       setLoading(false);
+      setLoadingMore(false);
       setFiltering(false);
     }
-  };
+  }, [unitFilter, typeFilter]);
 
   const fetchStats = async () => {
     try {
@@ -123,9 +159,15 @@ const AdminMeasurementHistory = () => {
     }
   };
 
+  const loadMore = () => {
+    if (!loadingMore && hasMorePages) {
+      fetchMeasurementHistory(currentPage + 1, false);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchMeasurementHistory(), fetchStats()]);
+    await Promise.all([fetchMeasurementHistory(1, true), fetchStats()]);
     setRefreshing(false);
   };
 
@@ -141,7 +183,7 @@ const AdminMeasurementHistory = () => {
           onPress: async () => {
             try {
               await apiService.deleteAdminMeasurementHistory(id);
-              await fetchMeasurementHistory();
+              await fetchMeasurementHistory(1, true);
               await fetchStats();
               Alert.alert('Success', 'Measurement deleted successfully');
             } catch (error) {
@@ -168,7 +210,7 @@ const AdminMeasurementHistory = () => {
         notes: editingNotes
       });
       setModalVisible(false);
-      await fetchMeasurementHistory();
+      await fetchMeasurementHistory(1, true);
       Alert.alert('Success', 'Notes updated successfully');
     } catch (error) {
       console.error('Error updating notes:', error);
@@ -401,7 +443,7 @@ const AdminMeasurementHistory = () => {
   }
 
   return (
-    <KeyboardAvoidingWrapper style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
       <View style={styles.header}>
         <View style={styles.titleContainer}>
           <Ionicons name="analytics" size={24} color={Colors.primary} style={styles.titleIcon} />
@@ -409,124 +451,143 @@ const AdminMeasurementHistory = () => {
         </View>
       </View>
 
-      <ScrollView
-        style={styles.content}
+      <View style={styles.listContainer}>
+        <FlatList
+        data={measurements}
+        renderItem={({ item: measurement }) => (
+          <TouchableOpacity 
+            style={styles.measurementCard}
+            onPress={() => {
+              setSelectedMeasurement(measurement);
+              setDetailsModalVisible(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.measurementHeader}>
+              <View style={styles.measurementInfo}>
+                <View style={styles.titleRow}>
+                  <View style={styles.measurementIconContainer}>
+                    <Ionicons 
+                      name={measurement.measurement_type === 'ar' ? 'scan' : 'create'} 
+                      size={18} 
+                      color="#fff" 
+                    />
+                  </View>
+                  <Text style={styles.measurementType}>
+                    {measurement.measurement_type.toUpperCase()} Measurement
+                  </Text>
+                </View>
+                <Text style={styles.measurementDate}>
+                  {formatDate(measurement.created_at)}
+                </Text>
+                <View style={styles.userInfo}>
+                  <Ionicons name="person" size={14} color="#6b7280" />
+                  <Text style={styles.userText}>
+                    {/* Check if this is an admin measurement by looking for client name in notes field */}
+                    {measurement.notes && measurement.notes.startsWith('Client:') ? 
+                     `Client: ${measurement.notes.replace('Client: ', '')}` : 
+                     `User: ${measurement.user_name || measurement.user_email || `User #${measurement.user_id}`}`}
+                  </Text>
+                </View>
+                {measurement.admin_name && (
+                  <View style={styles.userInfo}>
+                    <Ionicons name="shield-checkmark" size={14} color="#6b7280" />
+                    <Text style={styles.userText}>
+                      Admin: {measurement.admin_name || measurement.admin_email || `Admin #${measurement.admin_id}`}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.measurementActions}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleEditNotes(measurement);
+                  }}
+                >
+                  <Ionicons name="create-outline" size={18} color={Colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleDeleteMeasurement(measurement.id);
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#ff6b6b" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {measurement.confidence_score && (
+              <View style={styles.confidenceContainer}>
+                <Text style={styles.confidenceLabel}>Confidence:</Text>
+                <Text style={styles.confidenceValue}>
+                  {Math.round(measurement.confidence_score)}%
+                </Text>
+              </View>
+            )}
+
+            {measurement.notes && (
+              <View style={styles.notesContainer}>
+                <Text style={styles.notesLabel}>Notes:</Text>
+                <Text style={styles.notesText} numberOfLines={2}>
+                  {measurement.notes}
+                </Text>
+              </View>
+            )}
+            
+            <View style={styles.cardFooter}>
+              <Text style={styles.viewDetailsText}>Tap to view details</Text>
+              <Ionicons name="chevron-forward" size={16} color="#666" />
+            </View>
+          </TouchableOpacity>
+        )}
+        keyExtractor={(item) => item.id.toString()}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-      >
-        {renderStatsCard()}
-        {renderFilters()}
-        
-        {filtering ? (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Filtering measurements...</Text>
-          </View>
-        ) : measurements.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="body-outline" size={80} color="#ccc" />
-            <Text style={styles.emptyTitle}>No Measurements Found</Text>
-            <Text style={styles.emptySubtitle}>
-              {unitFilter !== 'all' || typeFilter !== 'all' 
-                ? 'No measurements match your current filters'
-                : 'No measurements have been recorded yet'
-              }
-            </Text>
-          </View>
-        ) : (
-          measurements.map((measurement) => (
-            <TouchableOpacity 
-              key={measurement.id} 
-              style={styles.measurementCard}
-              onPress={() => {
-                setSelectedMeasurement(measurement);
-                setDetailsModalVisible(true);
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.measurementHeader}>
-                <View style={styles.measurementInfo}>
-                  <View style={styles.titleRow}>
-                    <View style={styles.measurementIconContainer}>
-                      <Ionicons 
-                        name={measurement.measurement_type === 'ar' ? 'scan' : 'create'} 
-                        size={18} 
-                        color="#fff" 
-                      />
-                    </View>
-                    <Text style={styles.measurementType}>
-                      {measurement.measurement_type.toUpperCase()} Measurement
-                    </Text>
-                  </View>
-                  <Text style={styles.measurementDate}>
-                    {formatDate(measurement.created_at)}
-                  </Text>
-                  <View style={styles.userInfo}>
-                    <Ionicons name="person" size={14} color="#6b7280" />
-                    <Text style={styles.userText}>
-                      {/* Check if this is an admin measurement by looking for client name in notes field */}
-                      {measurement.notes && measurement.notes.startsWith('Client:') ? 
-                       `Client: ${measurement.notes.replace('Client: ', '')}` : 
-                       `User: ${measurement.user_name || measurement.user_email || `User #${measurement.user_id}`}`}
-                    </Text>
-                  </View>
-                  {measurement.admin_name && (
-                    <View style={styles.userInfo}>
-                      <Ionicons name="shield-checkmark" size={14} color="#6b7280" />
-                      <Text style={styles.userText}>
-                        Admin: {measurement.admin_name || measurement.admin_email || `Admin #${measurement.admin_id}`}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <View style={styles.measurementActions}>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleEditNotes(measurement);
-                    }}
-                  >
-                    <Ionicons name="create-outline" size={18} color={Colors.primary} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleDeleteMeasurement(measurement.id);
-                    }}
-                  >
-                    <Ionicons name="trash-outline" size={18} color="#ff6b6b" />
-                  </TouchableOpacity>
-                </View>
+        ListHeaderComponent={
+          <>
+            {renderStatsCard()}
+            {renderFilters()}
+            {filtering && (
+              <View style={styles.loadingContainer}>
+                <Text style={styles.loadingText}>Filtering measurements...</Text>
               </View>
-
-              {measurement.confidence_score && (
-                <View style={styles.confidenceContainer}>
-                  <Text style={styles.confidenceLabel}>Confidence:</Text>
-                  <Text style={styles.confidenceValue}>
-                    {Math.round(measurement.confidence_score)}%
-                  </Text>
-                </View>
-              )}
-
-              {measurement.notes && (
-                <View style={styles.notesContainer}>
-                  <Text style={styles.notesLabel}>Notes:</Text>
-                  <Text style={styles.notesText} numberOfLines={2}>
-                    {measurement.notes}
-                  </Text>
-                </View>
-              )}
-              
-              <View style={styles.cardFooter}>
-                <Text style={styles.viewDetailsText}>Tap to view details</Text>
-                <Ionicons name="chevron-forward" size={16} color="#666" />
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
+            )}
+          </>
+        }
+        ListEmptyComponent={
+          !filtering ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="body-outline" size={80} color="#ccc" />
+              <Text style={styles.emptyTitle}>No Measurements Found</Text>
+              <Text style={styles.emptySubtitle}>
+                {unitFilter !== 'all' || typeFilter !== 'all' 
+                  ? 'No measurements match your current filters'
+                  : 'No measurements have been recorded yet'
+                }
+              </Text>
+            </View>
+          ) : null
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={styles.loadMoreContainer}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={styles.loadMoreText}>Loading more measurements...</Text>
+            </View>
+          ) : null
+        }
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        style={styles.flatList}
+      />
+      </View>
 
       {/* Detailed Measurement Modal */}
       <Modal
@@ -677,8 +738,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.primary,
   },
-  content: {
+  listContainer: {
     flex: 1,
+  },
+  flatList: {
+    flex: 1,
+  },
+  content: {
     paddingHorizontal: 20,
   },
   loadingContainer: {
@@ -1195,6 +1261,16 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'right',
     flexWrap: 'wrap',
+  },
+  loadMoreContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
   },
 });
 

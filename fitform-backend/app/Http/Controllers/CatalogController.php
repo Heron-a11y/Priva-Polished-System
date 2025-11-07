@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 
-class CatalogController extends Controller
+class CatalogController extends PaginatedController
 {
     /**
      * Create notification for catalog events
@@ -70,47 +70,54 @@ class CatalogController extends Controller
     }
 
     /**
-     * Display a listing of the resource.
+     * Display a listing of the resource with pagination.
      */
     public function index(Request $request)
     {
-        $query = CatalogItem::query();
+        try {
+            $query = CatalogItem::query();
 
-        // Filter by category
-        if ($request->has('category') && $request->category !== 'all') {
-            if ($request->category === 'special') {
-                // Popular category shows all featured items regardless of their original category
-                $query->where('is_featured', true);
-            } else {
-                $query->where('category', $request->category);
+            // Configure pagination options
+            $options = [
+                'search_fields' => ['name', 'description', 'clothing_type'],
+                'filter_fields' => ['category', 'is_available', 'is_featured'],
+                'sort_fields' => ['sort_order', 'name', 'created_at', 'updated_at'],
+                'default_per_page' => 10,
+                'max_per_page' => 100,
+                'transform' => function ($item) {
+                    // Ensure image URL is properly formatted
+                    if ($item->image_path) {
+                        $item->image_url = request()->getSchemeAndHttpHost() . '/storage/' . $item->image_path;
+                    }
+                    return $item;
+                }
+            ];
+
+            // Apply custom category filter (special handling for 'special' category)
+            if ($request->has('category') && $request->category !== 'all' && $request->category !== null) {
+                if ($request->category === 'special') {
+                    // Popular category shows all featured items regardless of their original category
+                    $query->where('is_featured', true);
+                } else {
+                    $query->where('category', $request->category);
+                }
             }
+
+            $result = $this->paginate($query, $request, $options);
+            
+            // Add categories to the response
+            $responseData = $result->getData(true);
+            $responseData['categories'] = $this->getCategories();
+            
+            return response()->json($responseData);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch catalog items',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        // Filter by availability
-        if ($request->has('available_only') && $request->available_only) {
-            $query->where('is_available', true);
-        }
-
-        // Search by name or description
-        if ($request->has('search') && $request->search) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%")
-                  ->orWhere('clothing_type', 'like', "%{$search}%");
-            });
-        }
-
-        // Sort by sort_order, then by name
-        $query->orderBy('sort_order')->orderBy('name');
-
-        $items = $query->get();
-
-        return response()->json([
-            'success' => true,
-            'data' => $items,
-            'categories' => $this->getCategories()
-        ]);
     }
 
     /**

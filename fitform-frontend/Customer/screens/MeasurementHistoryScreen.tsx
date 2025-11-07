@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Dimensions,
   Modal,
   TextInput,
+  FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
@@ -49,6 +51,9 @@ const MeasurementHistoryScreen = () => {
   const [measurements, setMeasurements] = useState<MeasurementHistory[]>([]);
   const [stats, setStats] = useState<MeasurementStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMorePages, setHasMorePages] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMeasurement, setSelectedMeasurement] = useState<MeasurementHistory | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -61,19 +66,30 @@ const MeasurementHistoryScreen = () => {
   const [filtering, setFiltering] = useState(false);
 
   useEffect(() => {
-    fetchMeasurementHistory();
+    fetchMeasurementHistory(1, true);
     fetchStats();
   }, []);
 
   useEffect(() => {
-    fetchMeasurementHistory();
+    fetchMeasurementHistory(1, true);
   }, [unitFilter, typeFilter]);
 
-  const fetchMeasurementHistory = async () => {
+  const fetchMeasurementHistory = useCallback(async (page = 1, reset = false) => {
+    if (reset) {
+      setLoading(true);
+      setCurrentPage(1);
+      setHasMorePages(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
     try {
       setFiltering(true);
-      console.log('Fetching measurement history with filters:', { unitFilter, typeFilter });
-      const params: any = {};
+      console.log('Fetching measurement history with filters:', { unitFilter, typeFilter, page });
+      const params: any = {
+        page: page.toString(),
+        per_page: '10'
+      };
       if (unitFilter !== 'all') params.unit_system = unitFilter;
       if (typeFilter !== 'all') params.type = typeFilter;
       
@@ -81,20 +97,40 @@ const MeasurementHistoryScreen = () => {
       const response = await apiService.getMeasurementHistory(params);
       console.log('Measurement history response:', response);
       if (response && response.data) {
-        setMeasurements(response.data);
-        console.log('Filtered measurements count:', response.data.length);
+        const newMeasurements = response.data || [];
+        const pagination = response.pagination;
+        
+        // Deduplicate measurements
+        if (reset) {
+          setMeasurements(newMeasurements);
+        } else {
+          setMeasurements(prev => {
+            const existingIds = new Set(prev.map(m => m.id));
+            const uniqueNew = newMeasurements.filter((m: MeasurementHistory) => !existingIds.has(m.id));
+            return [...prev, ...uniqueNew];
+          });
+        }
+        
+        setHasMorePages(pagination ? (pagination.current_page < pagination.last_page) : false);
+        setCurrentPage(page);
+        console.log('Filtered measurements count:', newMeasurements.length, 'Has more:', pagination ? (pagination.current_page < pagination.last_page) : false);
       } else {
-        setMeasurements([]);
+        if (reset) {
+          setMeasurements([]);
+        }
       }
     } catch (error) {
       console.error('Error fetching measurement history:', error);
-      Alert.alert('Error', 'Failed to load measurement history. Please check your connection and try again.');
-      setMeasurements([]);
+      if (reset) {
+        Alert.alert('Error', 'Failed to load measurement history. Please check your connection and try again.');
+        setMeasurements([]);
+      }
     } finally {
       setLoading(false);
+      setLoadingMore(false);
       setFiltering(false);
     }
-  };
+  }, [unitFilter, typeFilter]);
 
   const fetchStats = async () => {
     try {
@@ -116,9 +152,15 @@ const MeasurementHistoryScreen = () => {
     }
   };
 
+  const loadMore = () => {
+    if (!loadingMore && hasMorePages) {
+      fetchMeasurementHistory(currentPage + 1, false);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchMeasurementHistory(), fetchStats()]);
+    await Promise.all([fetchMeasurementHistory(1, true), fetchStats()]);
     setRefreshing(false);
   };
 
@@ -134,7 +176,7 @@ const MeasurementHistoryScreen = () => {
           onPress: async () => {
             try {
               await apiService.deleteMeasurementHistory(id);
-              await fetchMeasurementHistory();
+              await fetchMeasurementHistory(1, true);
               await fetchStats();
               Alert.alert('Success', 'Measurement deleted successfully');
             } catch (error) {
@@ -161,7 +203,7 @@ const MeasurementHistoryScreen = () => {
         notes: editingNotes
       });
       setModalVisible(false);
-      await fetchMeasurementHistory();
+      await fetchMeasurementHistory(1, true);
       Alert.alert('Success', 'Notes updated successfully');
     } catch (error) {
       console.error('Error updating notes:', error);
@@ -387,7 +429,6 @@ const MeasurementHistoryScreen = () => {
 
   const renderMeasurementCard = (measurement: MeasurementHistory) => (
     <TouchableOpacity 
-      key={measurement.id} 
       style={styles.measurementCard}
       onPress={() => {
         setSelectedMeasurement(measurement);
@@ -473,7 +514,7 @@ const MeasurementHistoryScreen = () => {
   }
 
   return (
-    <KeyboardAvoidingWrapper style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={Colors.primary} />
@@ -490,42 +531,59 @@ const MeasurementHistoryScreen = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.content}
+      <FlatList
+        data={measurements}
+        renderItem={({ item }) => renderMeasurementCard(item)}
+        keyExtractor={(item) => item.id.toString()}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-      >
-        {renderStatsCard()}
-        {renderFilters()}
-
-        {filtering ? (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Filtering measurements...</Text>
-          </View>
-        ) : measurements.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="body-outline" size={80} color="#ccc" />
-            <Text style={styles.emptyTitle}>No Measurements Found</Text>
-            <Text style={styles.emptySubtitle}>
-              {unitFilter !== 'all' || typeFilter !== 'all' 
-                ? 'No measurements match your current filters'
-                : 'Start by taking your first AR measurement'
-              }
-            </Text>
-            {unitFilter === 'all' && typeFilter === 'all' && (
-              <TouchableOpacity
-                style={styles.startButton}
-                onPress={() => router.push('/customer/ar-measurements')}
-              >
-                <Text style={styles.startButtonText}>Take Measurement</Text>
-              </TouchableOpacity>
+        ListHeaderComponent={
+          <>
+            {renderStatsCard()}
+            {renderFilters()}
+            {filtering && (
+              <View style={styles.loadingContainer}>
+                <Text style={styles.loadingText}>Filtering measurements...</Text>
+              </View>
             )}
-          </View>
-        ) : (
-          measurements.map(renderMeasurementCard)
-        )}
-      </ScrollView>
+          </>
+        }
+        ListEmptyComponent={
+          !filtering ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="body-outline" size={80} color="#ccc" />
+              <Text style={styles.emptyTitle}>No Measurements Found</Text>
+              <Text style={styles.emptySubtitle}>
+                {unitFilter !== 'all' || typeFilter !== 'all' 
+                  ? 'No measurements match your current filters'
+                  : 'Start by taking your first AR measurement'
+                }
+              </Text>
+              {unitFilter === 'all' && typeFilter === 'all' && (
+                <TouchableOpacity
+                  style={styles.startButton}
+                  onPress={() => router.push('/customer/ar-measurements')}
+                >
+                  <Text style={styles.startButtonText}>Take Measurement</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : null
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={styles.loadMoreContainer}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={styles.loadMoreText}>Loading more measurements...</Text>
+            </View>
+          ) : null
+        }
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      />
 
       <Modal
         visible={modalVisible}
@@ -1211,6 +1269,16 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'right',
     flexWrap: 'wrap',
+  },
+  loadMoreContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
   },
 });
 

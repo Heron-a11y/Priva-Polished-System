@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
-class SizingController extends Controller
+class SizingController extends PaginatedController
 {
     /**
      * Get size recommendations for a customer
@@ -188,7 +188,7 @@ class SizingController extends Controller
     }
 
     /**
-     * Admin: Get all sizing standards
+     * Admin: Get all sizing standards with pagination
      */
     public function getSizingStandards(Request $request)
     {
@@ -199,15 +199,21 @@ class SizingController extends Controller
             ], 403);
         }
 
-        $standards = SizingStandard::with('updatedBy')
+        $query = SizingStandard::with('updatedBy')
+            ->orderBy('is_active', 'desc') // Active standards first
             ->orderBy('category')
-            ->orderBy('gender')
-            ->get();
+            ->orderBy('gender');
 
-        return response()->json([
-            'success' => true,
-            'data' => $standards
-        ]);
+        // Configure pagination options
+        $options = [
+            'search_fields' => ['name', 'category', 'gender'],
+            'filter_fields' => ['is_active', 'category', 'gender'],
+            'sort_fields' => ['name', 'category', 'gender', 'is_active', 'created_at', 'updated_at'],
+            'default_per_page' => 10,
+            'max_per_page' => 100,
+        ];
+
+        return $this->paginate($query, $request, $options);
     }
 
     /**
