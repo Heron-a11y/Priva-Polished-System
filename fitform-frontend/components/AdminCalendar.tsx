@@ -59,24 +59,52 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
   const fetchAppointments = async () => {
     try {
       setLoading(true);
-      const data = await apiService.getAllAppointments();
-      console.log('Fetched appointments data:', data);
-      console.log('Data type:', typeof data);
-      console.log('Is array:', Array.isArray(data));
+      let allAppointments: any[] = [];
+      let currentPage = 1;
+      let hasMorePages = true;
       
-      // Handle the new API response structure
-      const appointmentsData = data?.data?.appointments || data?.appointments || (Array.isArray(data) ? data : []);
-      console.log('Processed appointments:', appointmentsData);
-      
-      // Ensure appointmentsData is an array before filtering
-      if (!Array.isArray(appointmentsData)) {
-        console.error('Appointments data is not an array:', appointmentsData);
-        setAppointments([]);
-        return;
+      // Fetch all appointments by paginating through all pages
+      while (hasMorePages) {
+        const params = new URLSearchParams();
+        params.append('page', currentPage.toString());
+        params.append('per_page', '100'); // Fetch 100 per page to minimize requests
+        
+        const response = await apiService.get(`/admin/appointments?${params}`);
+        
+        if (response && response.success) {
+          const pageAppointments = response.data || [];
+          
+          // Transform appointments to match the expected format
+          const transformedAppointments = pageAppointments.map((item: any) => ({
+            id: item.id,
+            appointment_date: item.appointment_date,
+            service_type: item.service_type,
+            status: item.status,
+            customer_name: item.customer_name || 'Unknown Customer',
+            notes: item.notes,
+          }));
+          
+          allAppointments = [...allAppointments, ...transformedAppointments];
+          
+          // Check if there are more pages
+          hasMorePages = response.pagination?.has_more_pages || false;
+          currentPage++;
+          
+          // Safety limit to prevent infinite loops
+          if (currentPage > 100) {
+            console.warn('Reached maximum page limit (100)');
+            break;
+          }
+        } else {
+          console.error('Failed to fetch appointments:', response);
+          break;
+        }
       }
       
+      console.log('Fetched all appointments:', allAppointments.length);
+      
       // Validate and filter appointments data
-      const validatedAppointments = appointmentsData.filter((appointment: any) => {
+      const validatedAppointments = allAppointments.filter((appointment: any) => {
         // Check if appointment has required fields
         if (!appointment.id || !appointment.appointment_date || !appointment.status) {
           console.warn('Invalid appointment data:', appointment);
@@ -100,18 +128,18 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ onAppointmentSelect }) =>
         return true;
       });
       
-      console.log('Validated appointments:', validatedAppointments);
+      console.log('Validated appointments:', validatedAppointments.length);
       setAppointments(validatedAppointments);
     } catch (error) {
       console.error('Error fetching appointments:', error);
       
       // Enhanced error handling
       let errorMessage = 'Failed to load appointments';
-        if ((error as any).response?.data?.message) {
-          errorMessage = (error as any).response.data.message;
-        } else if ((error as any).message) {
-          errorMessage = (error as any).message;
-        }
+      if ((error as any).response?.data?.message) {
+        errorMessage = (error as any).response.data.message;
+      } else if ((error as any).message) {
+        errorMessage = (error as any).message;
+      }
       
       Alert.alert('Error', errorMessage, [
         { text: 'Retry', onPress: fetchAppointments },

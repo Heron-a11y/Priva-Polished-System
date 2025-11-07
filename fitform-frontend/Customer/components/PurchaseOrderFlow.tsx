@@ -15,7 +15,8 @@ import {
   Animated,
   LayoutAnimation,
   UIManager,
-  Image
+  Image,
+  RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -115,6 +116,9 @@ export default function PurchaseOrderFlow() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMorePages, setHasMorePages] = useState(true);
   const [showCounterOfferModal, setShowCounterOfferModal] = useState(false);
   const [counterOfferAmount, setCounterOfferAmount] = useState('');
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
@@ -327,13 +331,57 @@ export default function PurchaseOrderFlow() {
         Alert.alert('Success', 'Order has been cancelled successfully.');
       }
       
-      fetchPurchaseOrders(); // Refresh the orders list
+      fetchPurchaseOrders(1, true); // Refresh the orders list
     } catch (error: any) {
       console.error('Error cancelling order:', error);
       Alert.alert('Error', `Failed to cancel order: ${error.message}`);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDeleteOrder = async (order: any) => {
+    // Check if order can be deleted (only pending or declined orders)
+    if (!['pending', 'declined'].includes(order.status)) {
+      Alert.alert(
+        'Cannot Delete',
+        'Only pending or declined orders can be deleted. Orders that are in progress or completed cannot be deleted.',
+        [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Delete Order',
+      `Are you sure you want to permanently delete order #${order.id}? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await apiService.deletePurchase(order.id);
+              
+              Alert.alert('Success', 'Order has been permanently deleted.');
+              
+              // Refresh the orders list
+              fetchPurchaseOrders(1, true);
+            } catch (error: any) {
+              console.error('Error deleting order:', error);
+              const errorMessage = error.response?.data?.error || error.message || 'Failed to delete order';
+              Alert.alert('Error', errorMessage);
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleEditOrder = (order: any) => {
@@ -502,10 +550,17 @@ export default function PurchaseOrderFlow() {
     setStep(0);
   };
 
-  const fetchPurchaseOrders = useCallback(async (showLoading = true) => {
-    if (showLoading) setLoading(true);
+  const fetchPurchaseOrders = useCallback(async (page = 1, reset = false) => {
+    if (reset) {
+      setLoading(true);
+      setCurrentPage(1);
+      setHasMorePages(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
     try {
-      console.log('🔄 Fetching purchase orders...');
+      console.log('🔄 Fetching purchase orders... Page:', page);
       
       // Check if user is authenticated first
       if (!user) {
@@ -514,43 +569,100 @@ export default function PurchaseOrderFlow() {
         return;
       }
       
-      const response = await apiService.getPurchases();
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('per_page', '10');
+      
+      const response = await apiService.get(`/purchases?${params}`);
       console.log('📥 Purchase orders response:', response);
       
-      // Handle different response structures
-      let purchaseOrders = [];
-      if (response && response.success !== false) {
-        purchaseOrders = Array.isArray(response.data) ? response.data : (Array.isArray(response) ? response : []);
-        console.log('✅ Purchase orders loaded successfully, count:', purchaseOrders.length);
+      if (response && response.success) {
+        const newOrders = (response.data || []).map((item: any) => ({
+          id: item.id,
+          status: item.status,
+          quotation_status: item.quotation_status,
+          quotation_amount: item.quotation_amount,
+          quotation_notes: item.quotation_notes,
+          quotation_price: item.quotation_price,
+          quotation_sent_at: item.quotation_sent_at,
+          quotation_responded_at: item.quotation_responded_at,
+          counter_offer_amount: item.counter_offer_amount,
+          counter_offer_notes: item.counter_offer_notes,
+          counter_offer_status: item.counter_offer_status,
+          customer_email: item.customer_email,
+          purchase_date: item.purchase_date,
+          item_name: item.item_name,
+          clothing_type: item.clothing_type,
+          notes: item.notes,
+          measurements: item.measurements,
+        }));
+        
+        // Debug: Log pagination info
+        console.log(`[PurchaseOrders] Page ${page}, Received ${newOrders.length} orders, Has more: ${response.pagination?.has_more_pages}, Total: ${response.pagination?.total}`);
+        
+        if (reset) {
+          setOrders(newOrders);
+        } else {
+          // Deduplicate orders by id to prevent duplicates
+          setOrders(prev => {
+            const existingIds = new Set(prev.map(order => order.id));
+            const uniqueNewOrders = newOrders.filter(order => !existingIds.has(order.id));
+            return [...prev, ...uniqueNewOrders];
+          });
+        }
+        
+        setHasMorePages(response.pagination?.has_more_pages || false);
+        setCurrentPage(page);
       } else {
-        console.log('⚠️ No purchase orders or API error:', response?.message);
-        purchaseOrders = [];
+        // Handle legacy response format (array or data property)
+        let purchaseOrders = [];
+        if (Array.isArray(response)) {
+          purchaseOrders = response;
+        } else if (response && response.data) {
+          purchaseOrders = Array.isArray(response.data) ? response.data : [];
+        }
+        
+        if (reset) {
+          setOrders(purchaseOrders);
+        } else {
+          setOrders(prev => {
+            const existingIds = new Set(prev.map(order => order.id));
+            const uniqueNewOrders = purchaseOrders.filter((order: PurchaseOrder) => !existingIds.has(order.id));
+            return [...prev, ...uniqueNewOrders];
+          });
+        }
       }
-      
-      setOrders(purchaseOrders);
     } catch (error) {
       console.error('❌ Error fetching purchase orders:', error);
       
       // Handle authentication errors
       if (error.message?.includes('401') || error.message?.includes('Unauthenticated')) {
         console.log('🔐 Authentication required - user needs to log in');
-        setOrders([]);
-      } else {
+      }
+      
+      if (reset) {
         setOrders([]);
       }
     } finally {
-      if (showLoading) setLoading(false);
+      setLoading(false);
+      setLoadingMore(false);
       setRefreshing(false);
     }
   }, [user]);
+  
+  const loadMore = useCallback(() => {
+    if (!loadingMore && hasMorePages) {
+      fetchPurchaseOrders(currentPage + 1, false);
+    }
+  }, [loadingMore, hasMorePages, currentPage, fetchPurchaseOrders]);
 
   useEffect(() => {
-    fetchPurchaseOrders();
+    fetchPurchaseOrders(1, true);
   }, [fetchPurchaseOrders]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchPurchaseOrders(false);
+    fetchPurchaseOrders(1, true).finally(() => setRefreshing(false));
   }, [fetchPurchaseOrders]);
 
   // Memoize filtered orders to avoid re-filtering on every render
@@ -691,8 +803,7 @@ export default function PurchaseOrderFlow() {
       setCounterOfferNotes('');
       
       // Refresh orders
-      const res = await apiService.getPurchases();
-      setOrders(Array.isArray(res) ? res : res.data || []);
+      fetchPurchaseOrders(1, true);
     } catch (error) {
       Alert.alert('Error', 'Failed to submit counter offer');
     }
@@ -916,10 +1027,20 @@ export default function PurchaseOrderFlow() {
           contentContainerStyle={styles.ordersList}
           refreshing={refreshing}
           onRefresh={onRefresh}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
           removeClippedSubviews={true}
           maxToRenderPerBatch={10}
           windowSize={10}
           initialNumToRender={5}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.loadMoreContainer}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.loadMoreText}>Loading more orders...</Text>
+              </View>
+            ) : null
+          }
           getItemLayout={(data, index) => ({
             length: 200, // Approximate height of each item
             offset: 200 * index,
@@ -3953,5 +4074,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
+  },
+  // Pagination styles
+  loadMoreContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: Colors.text.secondary,
   },
 }); 

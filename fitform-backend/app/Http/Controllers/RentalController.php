@@ -7,7 +7,7 @@ use App\Models\Notification;
 use App\Models\RentalPurchaseHistory;
 use Carbon\Carbon;
 
-class RentalController extends Controller
+class RentalController extends PaginatedController
 {
     /**
      * Update history entry when rental status changes
@@ -39,26 +39,35 @@ class RentalController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
+        
+        // Build base query
+        $query = Rental::with('user:id,name')->whereNull('deleted_at');
+        
+        // Apply user-specific filtering
         if ($user && isset($user->role) && $user->role === 'admin') {
-            $rentals = Rental::with('user:id,name')->whereNull('deleted_at')->get();
-            $rentals->transform(function ($rental) {
+            // Admin can see all rentals
+        } else {
+            // Regular users can only see their own rentals
+            $query->where('user_id', $user->id);
+        }
+        
+        // Configure pagination options
+        $options = [
+            'search_fields' => ['item_name', 'customer_name', 'customer_email', 'clothing_type'],
+            'filter_fields' => ['status', 'clothing_type', 'user_id'],
+            'sort_fields' => ['created_at', 'rental_date', 'return_date', 'status', 'item_name'],
+            'default_per_page' => 10,
+            'max_per_page' => 100,
+            'transform' => function ($rental) {
                 $rental->customer_name = $rental->user ? $rental->user->name : null;
                 // Add penalty breakdown to each rental
                 $rental->penalty_breakdown = $rental->getPenaltyBreakdown();
                 unset($rental->user);
                 return $rental;
-            });
-            return response()->json(['data' => $rentals]);
-        }
-        $rentals = Rental::with('user:id,name')->where('user_id', $user->id)->whereNull('deleted_at')->get();
-        $rentals->transform(function ($rental) {
-            $rental->customer_name = $rental->user ? $rental->user->name : null;
-            // Add penalty breakdown to each rental
-            $rental->penalty_breakdown = $rental->getPenaltyBreakdown();
-            unset($rental->user);
-            return $rental;
-        });
-        return response()->json(['data' => $rentals]);
+            }
+        ];
+        
+        return $this->paginate($query, $request, $options);
     }
 
     public function store(Request $request)

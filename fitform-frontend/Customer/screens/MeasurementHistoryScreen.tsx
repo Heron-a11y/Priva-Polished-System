@@ -96,24 +96,32 @@ const MeasurementHistoryScreen = () => {
       console.log('API params:', params);
       const response = await apiService.getMeasurementHistory(params);
       console.log('Measurement history response:', response);
+      console.log('Response data type:', Array.isArray(response?.data) ? 'array' : typeof response?.data);
+      console.log('Response data length:', Array.isArray(response?.data) ? response.data.length : 'not an array');
+      console.log('Response pagination:', response?.pagination);
+      
       if (response && response.data) {
-        const newMeasurements = response.data || [];
+        const newMeasurements = Array.isArray(response.data) ? response.data : [];
         const pagination = response.pagination;
+        
+        console.log('Processing measurements - count:', newMeasurements.length, 'page:', page, 'reset:', reset);
         
         // Deduplicate measurements
         if (reset) {
           setMeasurements(newMeasurements);
+          console.log('Reset measurements - set to:', newMeasurements.length);
         } else {
           setMeasurements(prev => {
             const existingIds = new Set(prev.map(m => m.id));
             const uniqueNew = newMeasurements.filter((m: MeasurementHistory) => !existingIds.has(m.id));
+            console.log('Appending measurements - existing:', prev.length, 'new unique:', uniqueNew.length);
             return [...prev, ...uniqueNew];
           });
         }
         
         setHasMorePages(pagination ? (pagination.current_page < pagination.last_page) : false);
         setCurrentPage(page);
-        console.log('Filtered measurements count:', newMeasurements.length, 'Has more:', pagination ? (pagination.current_page < pagination.last_page) : false);
+        console.log('Filtered measurements count:', newMeasurements.length, 'Has more:', pagination ? (pagination.current_page < pagination.last_page) : false, 'Current page:', pagination?.current_page, 'Last page:', pagination?.last_page);
       } else {
         if (reset) {
           setMeasurements([]);
@@ -531,59 +539,64 @@ const MeasurementHistoryScreen = () => {
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={measurements}
-        renderItem={({ item }) => renderMeasurementCard(item)}
-        keyExtractor={(item) => item.id.toString()}
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.5}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListHeaderComponent={
-          <>
-            {renderStatsCard()}
-            {renderFilters()}
-            {filtering && (
-              <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>Filtering measurements...</Text>
-              </View>
-            )}
-          </>
-        }
-        ListEmptyComponent={
-          !filtering ? (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="body-outline" size={80} color="#ccc" />
-              <Text style={styles.emptyTitle}>No Measurements Found</Text>
-              <Text style={styles.emptySubtitle}>
-                {unitFilter !== 'all' || typeFilter !== 'all' 
-                  ? 'No measurements match your current filters'
-                  : 'Start by taking your first AR measurement'
-                }
-              </Text>
-              {unitFilter === 'all' && typeFilter === 'all' && (
-                <TouchableOpacity
-                  style={styles.startButton}
-                  onPress={() => router.push('/customer/ar-measurements')}
-                >
-                  <Text style={styles.startButtonText}>Take Measurement</Text>
-                </TouchableOpacity>
+      <View style={styles.listWrapper}>
+        <FlatList
+          data={measurements}
+          renderItem={({ item }) => renderMeasurementCard(item)}
+          keyExtractor={(item) => item.id.toString()}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+          }
+          ListHeaderComponent={
+            <>
+              {renderStatsCard()}
+              {renderFilters()}
+              {filtering && (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <Text style={styles.loadingText}>Filtering measurements...</Text>
+                </View>
               )}
-            </View>
-          ) : null
-        }
-        ListFooterComponent={
-          loadingMore ? (
-            <View style={styles.loadMoreContainer}>
-              <ActivityIndicator size="small" color={Colors.primary} />
-              <Text style={styles.loadMoreText}>Loading more measurements...</Text>
-            </View>
-          ) : null
-        }
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      />
+            </>
+          }
+          ListEmptyComponent={
+            !filtering ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="body-outline" size={80} color="#ccc" />
+                <Text style={styles.emptyTitle}>No Measurements Found</Text>
+                <Text style={styles.emptySubtitle}>
+                  {unitFilter !== 'all' || typeFilter !== 'all' 
+                    ? 'No measurements match your current filters'
+                    : 'Start by taking your first AR measurement'
+                  }
+                </Text>
+                {unitFilter === 'all' && typeFilter === 'all' && (
+                  <TouchableOpacity
+                    style={styles.startButton}
+                    onPress={() => router.push('/customer/ar-measurements')}
+                  >
+                    <Text style={styles.startButtonText}>Take Measurement</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : null
+          }
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.loadMoreContainer}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.loadMoreText}>Loading more measurements...</Text>
+              </View>
+            ) : (
+              <View style={styles.bottomSpacing} />
+            )
+          }
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+        />
+      </View>
 
       <Modal
         visible={modalVisible}
@@ -752,9 +765,12 @@ const styles = StyleSheet.create({
   addButton: {
     padding: 8,
   },
-  content: {
+  listWrapper: {
     flex: 1,
+  },
+  listContainer: {
     paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -1279,6 +1295,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 14,
     color: '#666',
+  },
+  bottomSpacing: {
+    height: 20,
   },
 });
 

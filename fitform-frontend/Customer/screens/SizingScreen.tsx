@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   Dimensions,
   Modal,
+  FlatList,
+  RefreshControl,
 } from 'react-native';
 import { ThemedView } from '../../components/ThemedView';
 import { ThemedText } from '../../components/ThemedText';
@@ -47,6 +49,18 @@ export default function SizingScreen() {
   const [standards, setStandards] = useState<SizingStandard[]>([]);
   const [allStandards, setAllStandards] = useState<SizingStandard[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // Pagination state for recommendations
+  const [recommendationsLoadingMore, setRecommendationsLoadingMore] = useState(false);
+  const [recommendationsCurrentPage, setRecommendationsCurrentPage] = useState(1);
+  const [recommendationsHasMorePages, setRecommendationsHasMorePages] = useState(true);
+  const [recommendationsRefreshing, setRecommendationsRefreshing] = useState(false);
+  
+  // Pagination state for size charts
+  const [chartsLoadingMore, setChartsLoadingMore] = useState(false);
+  const [chartsCurrentPage, setChartsCurrentPage] = useState(1);
+  const [chartsHasMorePages, setChartsHasMorePages] = useState(true);
+  const [chartsRefreshing, setChartsRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedGender, setSelectedGender] = useState('all');
   const [customCategory, setCustomCategory] = useState('');
@@ -498,24 +512,24 @@ export default function SizingScreen() {
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
       if (activeTab === 'recommendations') {
-        loadRecommendations();
+        loadRecommendations(1, true);
       } else if (activeTab === 'charts') {
-        loadSizeCharts();
+        loadSizeCharts(1, true);
       }
     }
-  }, [activeTab, isAuthenticated, isLoading]);
+  }, [activeTab, isAuthenticated, isLoading, loadRecommendations, loadSizeCharts]);
 
   // Separate effect for category/gender changes when on charts tab
   useEffect(() => {
     if (!isLoading && isAuthenticated && activeTab === 'charts') {
       // Add a small delay to prevent rapid successive calls
       const timer = setTimeout(() => {
-        loadSizeCharts();
+        loadSizeCharts(1, true);
       }, 100);
       
       return () => clearTimeout(timer);
     }
-  }, [selectedCategory, selectedGender]);
+  }, [selectedCategory, selectedGender, isLoading, isAuthenticated, activeTab, loadSizeCharts]);
 
   // Effect to update measurements when category changes
   useEffect(() => {
@@ -529,25 +543,52 @@ export default function SizingScreen() {
     console.log('📊 Measurements state changed:', measurements);
   }, [measurements]);
 
-  const loadRecommendations = async () => {
+  const loadRecommendations = useCallback(async (page = 1, reset = false) => {
     if (!isAuthenticated) {
       Alert.alert('Error', 'Please log in to view size recommendations');
       return;
     }
     
-    try {
+    if (reset) {
       setLoading(true);
-      const response = await apiService.getSizeRecommendations();
+      setRecommendationsCurrentPage(1);
+      setRecommendationsHasMorePages(true);
+    } else {
+      setRecommendationsLoadingMore(true);
+    }
+    
+    try {
+      const response = await apiService.getSizeRecommendations(page, 10);
       if (response.success) {
-        setRecommendations(response.data);
+        const newRecommendations = response.data || [];
+        
+        console.log(`[Recommendations] Page ${page}, Received ${newRecommendations.length} items, Has more: ${response.pagination?.has_more_pages}, Total: ${response.pagination?.total}`);
+        
+        if (reset) {
+          setRecommendations(newRecommendations);
+        } else {
+          // Deduplicate recommendations by id
+          setRecommendations(prev => {
+            const existingIds = new Set(prev.map(rec => rec.id));
+            const uniqueNewRecommendations = newRecommendations.filter((rec: SizeRecommendation) => !existingIds.has(rec.id));
+            return [...prev, ...uniqueNewRecommendations];
+          });
+        }
+        
+        setRecommendationsHasMorePages(response.pagination?.has_more_pages || false);
+        setRecommendationsCurrentPage(page);
       }
     } catch (error) {
       console.error('Error loading recommendations:', error);
-      Alert.alert('Error', 'Failed to load size recommendations');
+      if (reset) {
+        Alert.alert('Error', 'Failed to load size recommendations');
+      }
     } finally {
       setLoading(false);
+      setRecommendationsLoadingMore(false);
+      setRecommendationsRefreshing(false);
     }
-  };
+  }, [isAuthenticated]);
 
   // Load all available size charts to determine dynamic filtering
   const loadAllSizeCharts = async () => {
@@ -557,46 +598,73 @@ export default function SizingScreen() {
     
     try {
       console.log('🔄 Loading all available size charts for dynamic filtering...');
-      const response = await apiService.getSizeCharts('all', 'all');
+      // Load first page with a larger per_page to get all standards for filtering
+      const response = await apiService.getSizeCharts('all', 'all', 1, 100);
       if (response.success) {
-        console.log('✅ All size charts loaded:', response.data.length, 'standards found');
-        setAllStandards(response.data);
+        const allData = response.data || [];
+        console.log('✅ All size charts loaded:', allData.length, 'standards found');
+        setAllStandards(allData);
       }
     } catch (error) {
       console.error('❌ Error loading all size charts:', error);
     }
   };
 
-  const loadSizeCharts = async () => {
+  const loadSizeCharts = useCallback(async (page = 1, reset = false) => {
     if (!isAuthenticated) {
       Alert.alert('Error', 'Please log in to view size charts');
       return;
     }
     
-    try {
+    if (reset) {
       setLoading(true);
+      setChartsCurrentPage(1);
+      setChartsHasMorePages(true);
+    } else {
+      setChartsLoadingMore(true);
+    }
+    
+    try {
       // Handle "ALL" options and custom categories
       const category = selectedCategory === 'all' ? 'all' : selectedCategory;
       const gender = selectedGender === 'all' ? 'all' : selectedGender;
       
-      console.log('🔄 Loading size charts with category:', category, 'gender:', gender);
+      console.log('🔄 Loading size charts with category:', category, 'gender:', gender, 'page:', page);
       console.log('📊 Current state - selectedCategory:', selectedCategory, 'selectedGender:', selectedGender);
       
-      const response = await apiService.getSizeCharts(category, gender);
+      const response = await apiService.getSizeCharts(category, gender, page, 10);
       if (response.success) {
-        console.log('✅ Size charts loaded successfully:', response.data.length, 'standards found');
-        console.log('📋 Standards data:', response.data);
-        setStandards(response.data);
+        const newStandards = response.data || [];
+        
+        console.log(`[SizeCharts] Page ${page}, Received ${newStandards.length} items, Has more: ${response.pagination?.has_more_pages}, Total: ${response.pagination?.total}`);
+        
+        if (reset) {
+          setStandards(newStandards);
+        } else {
+          // Deduplicate standards by id
+          setStandards(prev => {
+            const existingIds = new Set(prev.map(std => std.id));
+            const uniqueNewStandards = newStandards.filter((std: SizingStandard) => !existingIds.has(std.id));
+            return [...prev, ...uniqueNewStandards];
+          });
+        }
+        
+        setChartsHasMorePages(response.pagination?.has_more_pages || false);
+        setChartsCurrentPage(page);
       } else {
         console.log('❌ API response not successful:', response);
       }
     } catch (error) {
       console.error('❌ Error loading size charts:', error);
-      return;
+      if (reset) {
+        return;
+      }
     } finally {
       setLoading(false);
+      setChartsLoadingMore(false);
+      setChartsRefreshing(false);
     }
-  };
+  }, [isAuthenticated, selectedCategory, selectedGender]);
 
 
   const handleCustomCategorySubmit = () => {
@@ -677,7 +745,7 @@ export default function SizingScreen() {
               text: 'View Recommendations',
               onPress: () => {
                 setActiveTab('recommendations');
-                loadRecommendations();
+                loadRecommendations(1, true);
               }
             },
             {
@@ -690,7 +758,7 @@ export default function SizingScreen() {
         // Reset form
         setMeasurements(getDefaultMeasurements(selectedCategory));
         // Refresh recommendations
-        loadRecommendations();
+        loadRecommendations(1, true);
         
         // Reset success state after 3 seconds
         setTimeout(() => {
@@ -705,38 +773,109 @@ export default function SizingScreen() {
     }
   };
 
+  const loadMoreRecommendations = useCallback(() => {
+    if (!recommendationsLoadingMore && recommendationsHasMorePages) {
+      loadRecommendations(recommendationsCurrentPage + 1, false);
+    }
+  }, [recommendationsLoadingMore, recommendationsHasMorePages, recommendationsCurrentPage, loadRecommendations]);
+
+  const onRefreshRecommendations = useCallback(() => {
+    setRecommendationsRefreshing(true);
+    loadRecommendations(1, true).finally(() => setRecommendationsRefreshing(false));
+  }, [loadRecommendations]);
+
+  const renderRecommendationCard = useCallback(({ item: rec }: { item: SizeRecommendation }) => (
+    <View style={styles.recommendationCard}>
+      <View style={styles.recommendationHeader}>
+        <ThemedText style={styles.recommendationTitle}>
+          {rec.sizing_standard.name}
+        </ThemedText>
+        <View style={styles.confidenceBadge}>
+          <ThemedText style={styles.confidenceBadgeText}>
+            {(rec.confidence_score * 100).toFixed(0)}%
+          </ThemedText>
+        </View>
+      </View>
+      <ThemedText style={styles.recommendationSize}>
+        Recommended Size: <Text style={styles.highlightText}>{rec.recommended_size}</Text>
+      </ThemedText>
+      <ThemedText style={styles.lastUpdated}>
+        Last Updated: {new Date(rec.last_updated).toLocaleDateString()}
+      </ThemedText>
+    </View>
+  ), []);
+
+  const renderStandardCard = useCallback(({ item: standard }: { item: SizingStandard }) => (
+    <View style={styles.standardCard}>
+      <View style={styles.standardHeader}>
+        <ThemedText style={styles.standardTitle}>{standard.name}</ThemedText>
+        <View style={styles.standardBadge}>
+          <ThemedText style={styles.standardBadgeText}>
+            {standard.category} • {standard.gender}
+          </ThemedText>
+        </View>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sizeTableContainer}>
+        <View style={styles.sizeTable}>
+          {Object.entries(standard.size_categories).map(([size, measurements]) => (
+            <View key={size} style={styles.sizeColumn}>
+              <View style={styles.sizeHeader}>
+                <ThemedText style={styles.sizeHeaderText}>{size}</ThemedText>
+              </View>
+              {Object.entries(measurements).map(([key, value]) => (
+                <View key={key} style={styles.measurementRow}>
+                  <ThemedText style={styles.measurementKey}>{key}:</ThemedText>
+                  <ThemedText style={styles.measurementValue}>{value}"</ThemedText>
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
+  ), []);
+
   const renderRecommendations = () => (
     <View style={styles.tabContent}>
-      <ThemedText style={styles.sectionTitle}>Your Size Recommendations</ThemedText>
-      {loading ? (
-        <ActivityIndicator size="large" color={Colors.secondary} />
-      ) : recommendations.length > 0 ? (
-        recommendations.map((rec) => (
-          <View key={rec.id} style={styles.recommendationCard}>
-            <View style={styles.recommendationHeader}>
-              <ThemedText style={styles.recommendationTitle}>
-                {rec.sizing_standard.name}
-              </ThemedText>
-              <View style={styles.confidenceBadge}>
-                <ThemedText style={styles.confidenceBadgeText}>
-                  {(rec.confidence_score * 100).toFixed(0)}%
-                </ThemedText>
-              </View>
-            </View>
-            <ThemedText style={styles.recommendationSize}>
-              Recommended Size: <Text style={styles.highlightText}>{rec.recommended_size}</Text>
-            </ThemedText>
-            <ThemedText style={styles.lastUpdated}>
-              Last Updated: {new Date(rec.last_updated).toLocaleDateString()}
-            </ThemedText>
-          </View>
-        ))
-      ) : (
-        <View style={styles.emptyStateContainer}>
-          <ThemedText style={styles.emptyStateIcon}>📏</ThemedText>
-          <ThemedText style={styles.noData}>No size recommendations yet</ThemedText>
-          <ThemedText style={styles.emptyStateSubtext}>Submit your measurements to get started!</ThemedText>
+      {loading && recommendations.length === 0 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.secondary} />
         </View>
+      ) : (
+        <FlatList
+          data={recommendations}
+          renderItem={renderRecommendationCard}
+          keyExtractor={(item) => item.id.toString()}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.flatListContent}
+          ListHeaderComponent={
+            <ThemedText style={styles.sectionTitle}>Your Size Recommendations</ThemedText>
+          }
+          onEndReached={loadMoreRecommendations}
+          onEndReachedThreshold={0.5}
+          refreshControl={
+            <RefreshControl
+              refreshing={recommendationsRefreshing}
+              onRefresh={onRefreshRecommendations}
+              colors={[Colors.primary]}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyStateContainer}>
+              <ThemedText style={styles.emptyStateIcon}>📏</ThemedText>
+              <ThemedText style={styles.noData}>No size recommendations yet</ThemedText>
+              <ThemedText style={styles.emptyStateSubtext}>Submit your measurements to get started!</ThemedText>
+            </View>
+          }
+          ListFooterComponent={
+            recommendationsLoadingMore ? (
+              <View style={styles.loadMoreContainer}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <ThemedText style={styles.loadMoreText}>Loading more recommendations...</ThemedText>
+              </View>
+            ) : null
+          }
+        />
       )}
     </View>
   );
@@ -751,193 +890,197 @@ export default function SizingScreen() {
        ? genders.filter(gender => gender !== 'all')
        : getAvailableGenders(selectedCategory);
 
+     const renderListHeader = () => (
+       <View style={styles.filterContainer}>
+         {/* Category Selection - Collapsible */}
+         <View style={styles.collapsibleSection}>
+           <TouchableOpacity 
+             style={styles.collapsibleHeader}
+             onPress={() => setIsCategoryExpanded(!isCategoryExpanded)}
+           >
+             <View style={styles.collapsibleHeaderContent}>
+               <ThemedText style={styles.filterLabel}>Category:</ThemedText>
+               <View style={styles.selectedValueContainer}>
+                 <ThemedText style={styles.selectedValue}>
+                   {selectedCategory === 'all' ? 'All Categories' : selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)}
+                 </ThemedText>
+                 <Ionicons 
+                   name={isCategoryExpanded ? "chevron-up" : "chevron-down"} 
+                   size={20} 
+                   color={Colors.text.secondary} 
+                 />
+               </View>
+             </View>
+           </TouchableOpacity>
+           
+           {isCategoryExpanded && (
+             <View style={styles.collapsibleContent}>
+               <View style={styles.optionsGrid}>
+                 {availableCategories.map((cat) => {
+                   const isAvailable = isCombinationAvailable(cat, selectedGender);
+                   const isSelected = selectedCategory === cat;
+                   
+                   return (
+                     <TouchableOpacity
+                       key={cat}
+                       style={[
+                         styles.filterChip,
+                         isSelected && styles.filterChipActive,
+                         !isAvailable && styles.filterChipDisabled
+                       ]}
+                       onPress={() => isAvailable && handleCategorySelect(cat)}
+                       disabled={!isAvailable}
+                     >
+                       <Ionicons 
+                         name={getCategoryIcon(cat) as any} 
+                         size={16} 
+                         color={
+                           isSelected ? Colors.text.inverse : 
+                           !isAvailable ? Colors.text.muted : 
+                           Colors.text.secondary
+                         }
+                         style={styles.chipIcon}
+                       />
+                       <ThemedText style={[
+                         styles.filterChipText,
+                         isSelected && styles.filterChipTextActive,
+                         !isAvailable && styles.filterChipTextDisabled
+                       ]}>
+                         {cat === 'custom' ? 'Custom' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                       </ThemedText>
+                     </TouchableOpacity>
+                   );
+                 })}
+               </View>
+             </View>
+           )}
+         </View>
+         
+         {/* Gender Selection - Collapsible */}
+         <View style={styles.collapsibleSection}>
+           <TouchableOpacity 
+             style={styles.collapsibleHeader}
+             onPress={() => setIsGenderExpanded(!isGenderExpanded)}
+           >
+             <View style={styles.collapsibleHeaderContent}>
+               <ThemedText style={styles.filterLabel}>Gender:</ThemedText>
+               <View style={styles.selectedValueContainer}>
+                 <ThemedText style={styles.selectedValue}>
+                   {selectedGender === 'all' ? 'All Genders' : selectedGender.charAt(0).toUpperCase() + selectedGender.slice(1)}
+                 </ThemedText>
+                 <Ionicons 
+                   name={isGenderExpanded ? "chevron-up" : "chevron-down"} 
+                   size={20} 
+                   color={Colors.text.secondary} 
+                 />
+               </View>
+             </View>
+           </TouchableOpacity>
+           
+           {isGenderExpanded && (
+             <View style={styles.collapsibleContent}>
+               <View style={styles.optionsGrid}>
+                 {availableGenders.map((gender) => {
+                   const isAvailable = isCombinationAvailable(selectedCategory, gender);
+                   const isSelected = selectedGender === gender;
+                   
+                   return (
+                     <TouchableOpacity
+                       key={gender}
+                       style={[
+                         styles.filterChip,
+                         isSelected && styles.filterChipActive,
+                         !isAvailable && styles.filterChipDisabled
+                       ]}
+                       onPress={() => isAvailable && handleGenderSelect(gender)}
+                       disabled={!isAvailable}
+                     >
+                       <Ionicons 
+                         name={getGenderIcon(gender) as any} 
+                         size={16} 
+                         color={
+                           isSelected ? Colors.text.inverse : 
+                           !isAvailable ? Colors.text.muted : 
+                           Colors.text.secondary
+                         }
+                         style={styles.chipIcon}
+                       />
+                       <ThemedText style={[
+                         styles.filterChipText,
+                         isSelected && styles.filterChipTextActive,
+                         !isAvailable && styles.filterChipTextDisabled
+                       ]}>
+                         {gender.charAt(0).toUpperCase() + gender.slice(1)}
+                       </ThemedText>
+                     </TouchableOpacity>
+                   );
+                 })}
+               </View>
+             </View>
+           )}
+         </View>
+
+         {selectedCategory !== 'all' && (
+           <View style={styles.selectedCategoryInfo}>
+             <ThemedText style={styles.selectedCategoryText}>
+               📍 Selected: <Text style={styles.highlightText}>{selectedCategory}</Text> • <Text style={styles.highlightText}>{selectedGender}</Text>
+             </ThemedText>
+           </View>
+         )}
+       </View>
+     );
+
      return (
        <View style={styles.tabContent}>
-         <View style={styles.filterContainer}>
-           {/* Category Selection - Collapsible */}
-           <View style={styles.collapsibleSection}>
-             <TouchableOpacity 
-               style={styles.collapsibleHeader}
-               onPress={() => setIsCategoryExpanded(!isCategoryExpanded)}
-             >
-               <View style={styles.collapsibleHeaderContent}>
-                 <ThemedText style={styles.filterLabel}>Category:</ThemedText>
-                 <View style={styles.selectedValueContainer}>
-                   <ThemedText style={styles.selectedValue}>
-                     {selectedCategory === 'all' ? 'All Categories' : selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)}
-                   </ThemedText>
-                   <Ionicons 
-                     name={isCategoryExpanded ? "chevron-up" : "chevron-down"} 
-                     size={20} 
-                     color={Colors.text.secondary} 
-                   />
-                 </View>
-               </View>
-             </TouchableOpacity>
-             
-             {isCategoryExpanded && (
-               <View style={styles.collapsibleContent}>
-                 <View style={styles.optionsGrid}>
-                   {availableCategories.map((cat) => {
-                     const isAvailable = isCombinationAvailable(cat, selectedGender);
-                     const isSelected = selectedCategory === cat;
-                     
-                     return (
-                       <TouchableOpacity
-                         key={cat}
-                         style={[
-                           styles.filterChip,
-                           isSelected && styles.filterChipActive,
-                           !isAvailable && styles.filterChipDisabled
-                         ]}
-                         onPress={() => isAvailable && handleCategorySelect(cat)}
-                         disabled={!isAvailable}
-                       >
-                         <Ionicons 
-                           name={getCategoryIcon(cat) as any} 
-                           size={16} 
-                           color={
-                             isSelected ? Colors.text.inverse : 
-                             !isAvailable ? Colors.text.muted : 
-                             Colors.text.secondary
-                           }
-                           style={styles.chipIcon}
-                         />
-                         <ThemedText style={[
-                           styles.filterChipText,
-                           isSelected && styles.filterChipTextActive,
-                           !isAvailable && styles.filterChipTextDisabled
-                         ]}>
-                           {cat === 'custom' ? 'Custom' : cat.charAt(0).toUpperCase() + cat.slice(1)}
-                         </ThemedText>
-                       </TouchableOpacity>
-                     );
-                   })}
-                 </View>
-               </View>
-             )}
+         {loading && standards.length === 0 ? (
+           <View style={styles.loadingContainer}>
+             <ActivityIndicator size="large" color={Colors.secondary} />
+             <ThemedText style={styles.loadingText}>Loading size charts...</ThemedText>
            </View>
-           
-           {/* Gender Selection - Collapsible */}
-           <View style={styles.collapsibleSection}>
-             <TouchableOpacity 
-               style={styles.collapsibleHeader}
-               onPress={() => setIsGenderExpanded(!isGenderExpanded)}
-             >
-               <View style={styles.collapsibleHeaderContent}>
-                 <ThemedText style={styles.filterLabel}>Gender:</ThemedText>
-                 <View style={styles.selectedValueContainer}>
-                   <ThemedText style={styles.selectedValue}>
-                     {selectedGender === 'all' ? 'All Genders' : selectedGender.charAt(0).toUpperCase() + selectedGender.slice(1)}
-                   </ThemedText>
-                   <Ionicons 
-                     name={isGenderExpanded ? "chevron-up" : "chevron-down"} 
-                     size={20} 
-                     color={Colors.text.secondary} 
-                   />
-                 </View>
+         ) : (
+           <FlatList
+             data={standards}
+             renderItem={renderStandardCard}
+             keyExtractor={(item) => item.id.toString()}
+             showsVerticalScrollIndicator={false}
+             contentContainerStyle={styles.flatListContent}
+             ListHeaderComponent={renderListHeader}
+             onEndReached={() => {
+               if (!chartsLoadingMore && chartsHasMorePages) {
+                 loadSizeCharts(chartsCurrentPage + 1, false);
+               }
+             }}
+             onEndReachedThreshold={0.5}
+             refreshControl={
+               <RefreshControl
+                 refreshing={chartsRefreshing}
+                 onRefresh={() => {
+                   setChartsRefreshing(true);
+                   loadSizeCharts(1, true).finally(() => setChartsRefreshing(false));
+                 }}
+                 colors={[Colors.primary]}
+               />
+             }
+             ListEmptyComponent={
+               <View style={styles.emptyStateContainer}>
+                 <ThemedText style={styles.emptyStateIcon}>📊</ThemedText>
+                 <ThemedText style={styles.noData}>No size charts available</ThemedText>
+                 <ThemedText style={styles.emptyStateSubtext}>Try adjusting your filters</ThemedText>
                </View>
-             </TouchableOpacity>
-             
-             {isGenderExpanded && (
-               <View style={styles.collapsibleContent}>
-                 <View style={styles.optionsGrid}>
-                   {availableGenders.map((gender) => {
-                     const isAvailable = isCombinationAvailable(selectedCategory, gender);
-                     const isSelected = selectedGender === gender;
-                     
-                     return (
-                       <TouchableOpacity
-                         key={gender}
-                         style={[
-                           styles.filterChip,
-                           isSelected && styles.filterChipActive,
-                           !isAvailable && styles.filterChipDisabled
-                         ]}
-                         onPress={() => isAvailable && handleGenderSelect(gender)}
-                         disabled={!isAvailable}
-                       >
-                         <Ionicons 
-                           name={getGenderIcon(gender) as any} 
-                           size={16} 
-                           color={
-                             isSelected ? Colors.text.inverse : 
-                             !isAvailable ? Colors.text.muted : 
-                             Colors.text.secondary
-                           }
-                           style={styles.chipIcon}
-                         />
-                         <ThemedText style={[
-                           styles.filterChipText,
-                           isSelected && styles.filterChipTextActive,
-                           !isAvailable && styles.filterChipTextDisabled
-                         ]}>
-                           {gender.charAt(0).toUpperCase() + gender.slice(1)}
-                         </ThemedText>
-                       </TouchableOpacity>
-                     );
-                   })}
+             }
+             ListFooterComponent={
+               chartsLoadingMore ? (
+                 <View style={styles.loadMoreContainer}>
+                   <ActivityIndicator size="small" color={Colors.primary} />
+                   <ThemedText style={styles.loadMoreText}>Loading more size charts...</ThemedText>
                  </View>
-               </View>
-             )}
-           </View>
-
-        {selectedCategory !== 'all' && (
-          <View style={styles.selectedCategoryInfo}>
-            <ThemedText style={styles.selectedCategoryText}>
-              📍 Selected: <Text style={styles.highlightText}>{selectedCategory}</Text> • <Text style={styles.highlightText}>{selectedGender}</Text>
-            </ThemedText>
-          </View>
-        )}
-      </View>
-
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.secondary} />
-          <ThemedText style={styles.loadingText}>Loading size charts...</ThemedText>
-        </View>
-       ) : standards.length > 0 ? (
-         <>
-           {standards.map((standard) => (
-            <View key={standard.id} style={styles.standardCard}>
-              <View style={styles.standardHeader}>
-                <ThemedText style={styles.standardTitle}>{standard.name}</ThemedText>
-                <View style={styles.standardBadge}>
-                  <ThemedText style={styles.standardBadgeText}>
-                    {standard.category} • {standard.gender}
-                  </ThemedText>
-                </View>
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sizeTableContainer}>
-                <View style={styles.sizeTable}>
-                  {Object.entries(standard.size_categories).map(([size, measurements]) => (
-                    <View key={size} style={styles.sizeColumn}>
-                      <View style={styles.sizeHeader}>
-                        <ThemedText style={styles.sizeHeaderText}>{size}</ThemedText>
-                      </View>
-                      {Object.entries(measurements).map(([key, value]) => (
-                        <View key={key} style={styles.measurementRow}>
-                          <ThemedText style={styles.measurementKey}>{key}:</ThemedText>
-                          <ThemedText style={styles.measurementValue}>{value}"</ThemedText>
-                        </View>
-                      ))}
-                    </View>
-                  ))}
-                </View>
-              </ScrollView>
-            </View>
-          ))}
-        </>
-      ) : (
-        <View style={styles.emptyStateContainer}>
-          <ThemedText style={styles.emptyStateIcon}>📊</ThemedText>
-          <ThemedText style={styles.noData}>No size charts available</ThemedText>
-          <ThemedText style={styles.emptyStateSubtext}>Try adjusting your filters</ThemedText>
-        </View>
-      )}
-    </View>
-  );
-};
+               ) : null
+             }
+           />
+         )}
+       </View>
+     );
+   };
 
   const renderMeasurements = () => (
     <View style={styles.tabContent}>
@@ -1434,11 +1577,13 @@ export default function SizingScreen() {
       </View>
 
       {/* Tab Content */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {activeTab === 'recommendations' && renderRecommendations()}
-        {activeTab === 'charts' && renderSizeCharts()}
-        {activeTab === 'measurements' && renderMeasurements()}
-      </ScrollView>
+      {activeTab === 'recommendations' && renderRecommendations()}
+      {activeTab === 'charts' && renderSizeCharts()}
+      {activeTab === 'measurements' && (
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {renderMeasurements()}
+        </ScrollView>
+      )}
 
       {/* Custom Category Modal */}
       {renderCustomCategoryModal()}
@@ -2229,6 +2374,20 @@ const styles = StyleSheet.create({
     color: Colors.text.muted,
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  // Pagination styles
+  flatListContent: {
+    paddingBottom: 20,
+  },
+  loadMoreContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: Colors.text.secondary,
   },
 });
 

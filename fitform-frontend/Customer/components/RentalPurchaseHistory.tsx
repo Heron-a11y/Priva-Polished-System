@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -207,13 +207,14 @@ const Dropdown: React.FC<DropdownProps> = ({ label, value, options, onSelect, pl
 export default function RentalPurchaseHistory() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMorePages, setHasMorePages] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [originalRentals, setOriginalRentals] = useState<RentalOrder[]>([]);
-  const [originalPurchases, setOriginalPurchases] = useState<PurchaseOrder[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const { user } = useAuth();
@@ -235,42 +236,66 @@ export default function RentalPurchaseHistory() {
 
   useEffect(() => {
     if (user) {
-      fetchHistory();
+      fetchHistory(1, true);
       // Refresh catalog data to ensure we have the latest items
       refreshCatalog();
     }
   }, [user, refreshCatalog]);
 
   useEffect(() => {
-    filterHistory();
-  }, [searchQuery, statusFilter, typeFilter, originalRentals, originalPurchases]);
+    // Reset to page 1 when filters change
+    fetchHistory(1, true);
+  }, [searchQuery, statusFilter, typeFilter]);
 
-  const fetchHistory = async (isRefresh = false) => {
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
+  const fetchHistory = useCallback(async (page = 1, reset = false) => {
+    if (reset) {
       setLoading(true);
+      setCurrentPage(1);
+      setHasMorePages(true);
+    } else {
+      setLoadingMore(true);
     }
     
     try {
-      console.log('🔄 Fetching rental purchase history...');
+      console.log('🔄 Fetching rental purchase history...', { page, reset });
       
       // Check if user is authenticated first
       if (!user) {
         console.log('⚠️ User not authenticated, skipping fetch');
-        setOriginalRentals([]);
-        setOriginalPurchases([]);
         setHistory([]);
         return;
       }
       
-      // Fetch unified rental and purchase history
-      const historyRes = await apiService.getRentalPurchaseHistory();
+      // Build API params with filters
+      const params: any = {
+        page: page.toString(),
+        per_page: '10'
+      };
+      
+      // Add filters
+      const filters: any = {};
+      if (statusFilter !== 'all') {
+        filters.status = statusFilter;
+      }
+      if (typeFilter !== 'all') {
+        filters.order_type = typeFilter;
+      }
+      if (Object.keys(filters).length > 0) {
+        params.filters = filters;
+      }
+      
+      // Add search
+      if (searchQuery.trim()) {
+        params.search = searchQuery.trim();
+      }
+      
+      // Fetch unified rental and purchase history with pagination
+      const historyRes = await apiService.getRentalPurchaseHistory(params);
 
       console.log('📥 History response:', historyRes);
 
       // Handle different response structures
-      let allHistory = [];
+      let allHistory: any[] = [];
       if (historyRes && historyRes.success !== false) {
         allHistory = Array.isArray(historyRes.data) ? historyRes.data : [];
         console.log('✅ History loaded successfully, items:', allHistory.length);
@@ -279,14 +304,53 @@ export default function RentalPurchaseHistory() {
         allHistory = [];
       }
 
-      // Separate rentals and purchases for filtering
-      const rentals = allHistory.filter(item => item.order_type === 'rental');
-      const purchases = allHistory.filter(item => item.order_type === 'purchase');
+      // Transform to HistoryItem format
+      const transformedHistory: HistoryItem[] = allHistory.map((item: any) => {
+        // Define allowed statuses for each type
+        const allowedRentalStatuses = ['cancelled', 'declined', 'returned'];
+        const allowedPurchaseStatuses = ['cancelled', 'declined', 'picked_up'];
+        
+        if (item.order_type === 'rental' && !allowedRentalStatuses.includes(item.status)) {
+          return null;
+        }
+        if (item.order_type === 'purchase' && !allowedPurchaseStatuses.includes(item.status)) {
+          return null;
+        }
+        
+        return {
+          id: item.id,
+          type: item.order_type === 'rental' ? 'rental' as const : 'purchase' as const,
+          item_name: item.item_name || 'Custom Garment',
+          status: item.status,
+          date: item.order_date || item.created_at,
+          amount: item.quotation_amount || item.quotation_price || 0,
+          clothing_type: item.clothing_type || 'Custom',
+          notes: item.notes,
+          penalty_status: item.penalty_status,
+          total_penalties: item.total_penalties,
+          image_url: item.image_url
+        };
+      }).filter((item: HistoryItem | null) => item !== null) as HistoryItem[];
 
-      console.log('📊 Separated data - Rentals:', rentals.length, 'Purchases:', purchases.length);
-
-      setOriginalRentals(rentals);
-      setOriginalPurchases(purchases);
+      // Deduplicate and update history
+      if (reset) {
+        setHistory(transformedHistory);
+      } else {
+        setHistory(prev => {
+          const existingIds = new Set(prev.map(h => `${h.type}-${h.id}`));
+          const uniqueNew = transformedHistory.filter(h => !existingIds.has(`${h.type}-${h.id}`));
+          return [...prev, ...uniqueNew];
+        });
+      }
+      
+      // Update pagination state
+      const pagination = historyRes?.pagination;
+      if (pagination) {
+        setHasMorePages(pagination.current_page < pagination.last_page);
+        setCurrentPage(page);
+      } else {
+        setHasMorePages(false);
+      }
     } catch (error) {
       console.error('❌ Error fetching history:', error);
       
@@ -301,97 +365,26 @@ export default function RentalPurchaseHistory() {
         Alert.alert('Error', 'Failed to fetch history data. Please try again.');
       }
       
-      setHistory([]); // Clear history on error
-      setOriginalRentals([]);
-      setOriginalPurchases([]);
+      if (reset) {
+        setHistory([]);
+      }
     } finally {
       setLoading(false);
+      setLoadingMore(false);
       setRefreshing(false);
     }
-  };
+  }, [user, statusFilter, typeFilter, searchQuery]);
 
-  const onRefresh = () => {
-    fetchHistory(true);
-  };
-
-  const filterHistory = () => {
-    // Define allowed statuses for each type
-    const allowedRentalStatuses = ['cancelled', 'declined', 'returned'];
-    const allowedPurchaseStatuses = ['cancelled', 'declined', 'picked_up'];
-
-    // Filter rentals to only show allowed statuses
-    let filteredRentals = originalRentals
-      .filter(rental => allowedRentalStatuses.includes(rental.status))
-      .map(rental => {
-        return {
-          id: rental.id,
-          type: 'rental' as const,
-          item_name: rental.item_name,
-          status: rental.status,
-          date: rental.created_at || rental.rental_date,
-          amount: rental.quotation_amount ? Number(rental.quotation_amount) : 0,
-          clothing_type: rental.clothing_type,
-          notes: rental.notes,
-          penalty_status: rental.penalty_status,
-          total_penalties: rental.total_penalties,
-          image_url: rental.image_url
-        };
-      });
-
-    // Filter purchases to only show allowed statuses
-    let filteredPurchases = originalPurchases
-      .filter(purchase => allowedPurchaseStatuses.includes(purchase.status))
-      .map(purchase => {
-        return {
-          id: purchase.id,
-          type: 'purchase' as const,
-          item_name: purchase.item_name || 'Custom Garment',
-          status: purchase.status,
-          date: purchase.created_at || purchase.purchase_date || new Date().toISOString(),
-          amount: (purchase.quotation_amount || purchase.quotation_price) ? Number(purchase.quotation_amount || purchase.quotation_price) : 0,
-          clothing_type: purchase.clothing_type || 'Custom',
-          notes: purchase.notes,
-          image_url: purchase.image_url
-        };
-      });
-
-    // Apply type filter
-    if (typeFilter !== 'all') {
-      if (typeFilter === 'rental') {
-        filteredPurchases = [];
-      } else {
-        filteredRentals = [];
-      }
+  const loadMore = useCallback(() => {
+    if (!loadingMore && hasMorePages) {
+      fetchHistory(currentPage + 1, false);
     }
+  }, [loadingMore, hasMorePages, currentPage, fetchHistory]);
 
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      filteredRentals = filteredRentals.filter(item => item.status === statusFilter);
-      filteredPurchases = filteredPurchases.filter(item => item.status === statusFilter);
-    }
-
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filteredRentals = filteredRentals.filter(item =>
-        item.item_name.toLowerCase().includes(query) ||
-        item.clothing_type.toLowerCase().includes(query) ||
-        (item.notes && item.notes.toLowerCase().includes(query))
-      );
-      filteredPurchases = filteredPurchases.filter(item =>
-        item.item_name.toLowerCase().includes(query) ||
-        item.clothing_type.toLowerCase().includes(query) ||
-        (item.notes && item.notes.toLowerCase().includes(query))
-      );
-    }
-
-    // Combine and sort by date (newest first)
-    const combined = [...filteredRentals, ...filteredPurchases].sort((a, b) =>
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-
-    setHistory(combined);
-  };
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchHistory(1, true).finally(() => setRefreshing(false));
+  }, [fetchHistory]);
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -548,7 +541,7 @@ export default function RentalPurchaseHistory() {
       console.log('Generating receipt for:', item);
       
       // Generate the receipt URL directly (same pattern as other components)
-      const baseUrl = apiService.getCurrentURL() || 'http://192.168.1.56:8000/api';
+      const baseUrl = apiService.getCurrentURL() || 'http://192.168.1.54:8000/api';
       const receiptUrl = item.type === 'rental' 
         ? `${baseUrl}/rentals/${item.id}/receipt`
         : `${baseUrl}/purchases/${item.id}/receipt`;
@@ -824,7 +817,11 @@ export default function RentalPurchaseHistory() {
     );
   };
 
-  if (loading) {
+  const renderItem = useCallback(({ item }: { item: HistoryItem }) => {
+    return renderHistoryItem({ item });
+  }, []);
+
+  if (loading && history.length === 0) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#014D40" />
@@ -834,14 +831,20 @@ export default function RentalPurchaseHistory() {
   }
 
   return (
-    <KeyboardAvoidingWrapper style={styles.container}>
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-      bounces={true}
-      overScrollMode="never"
-      contentContainerStyle={styles.scrollContainer}
-    >
-      {/* Header */}
+    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
+      <View style={styles.listWrapper}>
+        <FlatList
+          data={history}
+          renderItem={renderItem}
+          keyExtractor={(item) => `${item.type}-${item.id}`}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#014D40']} />
+          }
+          ListHeaderComponent={
+            <>
+              {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View style={styles.titleContainer}>
@@ -857,21 +860,6 @@ export default function RentalPurchaseHistory() {
               </View>
             </View>
           </View>
-          <TouchableOpacity
-            style={[
-              styles.refreshButton,
-              loading && styles.refreshButtonDisabled
-            ]}
-            onPress={() => fetchHistory()}
-            disabled={loading}
-            activeOpacity={0.7}
-          >
-            <Ionicons 
-              name={loading ? "sync" : "refresh"} 
-              size={20} 
-              color={loading ? '#a3a3a3' : '#014D40'} 
-            />
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -957,32 +945,38 @@ export default function RentalPurchaseHistory() {
 
       </View>
 
-      {/* History List */}
-      <View style={styles.historyContainer}>
-        {history.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="time-outline" size={80} color="#D1D5DB" />
-            <Text style={styles.emptyStateTitle}>No History Found</Text>
-            <Text style={styles.emptyStateText}>
-              {searchQuery || statusFilter !== 'all' || typeFilter !== 'all'
-                ? 'Try adjusting your filters or search terms'
-                : 'You haven\'t made any orders or rentals yet'}
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.historyListContainer}>
-            {history.map((item) => (
-              <View key={`${item.type}-${item.id}`}>
-                {renderHistoryItem({ item })}
+            </>
+          }
+          ListEmptyComponent={
+            !loading ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="time-outline" size={80} color="#D1D5DB" />
+                <Text style={styles.emptyStateTitle}>No History Found</Text>
+                <Text style={styles.emptyStateText}>
+                  {searchQuery || statusFilter !== 'all' || typeFilter !== 'all'
+                    ? 'Try adjusting your filters or search terms'
+                    : 'You haven\'t made any orders or rentals yet'}
+                </Text>
               </View>
-            ))}
-          </View>
-        )}
+            ) : null
+          }
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.loadMoreContainer}>
+                <ActivityIndicator size="small" color="#014D40" />
+                <Text style={styles.loadMoreText}>Loading more history...</Text>
+              </View>
+            ) : (
+              <View style={styles.bottomSpacing} />
+            )
+          }
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+        />
       </View>
 
       {/* Details Modal */}
       {renderDetailsModal()}
-    </ScrollView>
     </KeyboardAvoidingWrapper>
   );
 }
@@ -994,8 +988,10 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 1,
   },
-  scrollContainer: {
-    flexGrow: 1,
+  listWrapper: {
+    flex: 1,
+  },
+  listContainer: {
     paddingBottom: 20,
   },
   loadingContainer: {
@@ -1673,5 +1669,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
+  },
+  loadMoreContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
+  },
+  bottomSpacing: {
+    height: 20,
   },
 });

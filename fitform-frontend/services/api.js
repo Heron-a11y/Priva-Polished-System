@@ -20,12 +20,12 @@ class ApiService {
             const testResult = await this.testConnection();
             if (!testResult.success) {
                 console.log('⚠️ Network test failed, trying fallback');
-                this.baseURL = 'http://192.168.1.56:8000/api';
+                this.baseURL = 'http://192.168.1.54:8000/api';
                 console.log('🌐 ApiService using fallback URL:', this.baseURL);
             }
         } catch (error) {
             console.log('⚠️ Failed to get network config, using fallback');
-            this.baseURL = 'http://192.168.1.56:8000/api';
+            this.baseURL = 'http://192.168.1.54:8000/api';
             console.log('🌐 ApiService using fallback URL:', this.baseURL);
         }
     }
@@ -837,16 +837,21 @@ class ApiService {
     }
 
     // Sizing System Methods
-    async getSizeRecommendations() {
-        return this.request('/sizing/recommendations');
+    async getSizeRecommendations(page = 1, perPage = 10) {
+        const params = new URLSearchParams();
+        params.append('page', page.toString());
+        params.append('per_page', perPage.toString());
+        return this.request(`/sizing/recommendations?${params}`);
     }
 
-    async getSizeCharts(category, gender) {
+    async getSizeCharts(category, gender, page = 1, perPage = 10) {
         let url = '/sizing/charts';
         const params = new URLSearchParams();
         
         if (category && category !== 'all') params.append('category', category);
         if (gender && gender !== 'all') params.append('gender', gender);
+        params.append('page', page.toString());
+        params.append('per_page', perPage.toString());
         
         if (params.toString()) {
             url += '?' + params.toString();
@@ -869,15 +874,20 @@ class ApiService {
             const url = queryParams ? `/measurement-history?${queryParams}` : '/measurement-history';
             const response = await this.request(url);
             console.log('✅ Measurement history loaded');
-            return { success: true, data: response.data || response };
+            // Preserve both data and pagination from backend response
+            return { 
+                success: true, 
+                data: response.data || response,
+                pagination: response.pagination || null
+            };
         } catch (error) {
             // Handle 404 errors gracefully (no measurements found)
             if (error.message.includes('No measurements found') || error.message.includes('404')) {
                 console.log('ℹ️ No measurement history found');
-                return { success: false, data: [] };
+                return { success: false, data: [], pagination: null };
             }
             console.log('❌ Error loading measurement history:', error.message);
-            return { success: false, data: [] };
+            return { success: false, data: [], pagination: null };
         }
     }
 

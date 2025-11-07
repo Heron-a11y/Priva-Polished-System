@@ -247,10 +247,10 @@ export default function CustomerDashboardScreen() {
       console.log('🔍 Debug: Appointments response structure:', appointmentsResponse);
       console.log('🔍 Debug: First appointment:', appointments[0]);
       
-      // Load rental and order data for stats
+      // Load rental and order data for stats (limit to first page for performance)
       const [rentalResponse, orderResponse] = await Promise.all([
-        apiService.getRentalPurchaseHistory(),
-        apiService.getRentalPurchaseHistory() // This gets both rentals and purchases
+        apiService.getRentalPurchaseHistory({ page: '1', per_page: '10' }),
+        apiService.getRentalPurchaseHistory({ page: '1', per_page: '10' }) // This gets both rentals and purchases
       ]);
       
       const rentals = Array.isArray(rentalResponse?.data) ? rentalResponse.data : [];
@@ -323,12 +323,15 @@ export default function CustomerDashboardScreen() {
 
   const loadRecentOrders = async () => {
     try {
-      const response = await apiService.getRentalPurchaseHistory();
+      // Fetch only first page with 5 items for dashboard
+      const response = await apiService.getRentalPurchaseHistory({
+        page: '1',
+        per_page: '5'
+      });
       const orders = Array.isArray(response?.data) ? response.data : [];
       
-      // Get recent orders (last 5)
+      // Map to recent orders format (already sorted by backend)
       const recent = orders
-        .sort((a, b) => new Date(b.order_date || b.created_at).getTime() - new Date(a.order_date || a.created_at).getTime())
         .slice(0, 5)
         .map(order => ({
           id: order.id,
@@ -336,7 +339,7 @@ export default function CustomerDashboardScreen() {
           item_name: order.item_name || 'Unknown Item',
           order_date: order.order_date || order.created_at,
           status: order.status || 'pending',
-          total_amount: order.quotation_amount || order.total_amount || 0
+          total_amount: order.quotation_amount || order.quotation_price || order.total_amount || 0
         }));
       
       console.log('🛍️ Recent orders loaded:', recent.length);

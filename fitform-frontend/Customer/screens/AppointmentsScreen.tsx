@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,9 @@ import {
   Alert,
   Dimensions,
   Image,
+  FlatList,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -59,6 +62,10 @@ const AppointmentsScreen = () => {
   const [fieldErrors, setFieldErrors] = useState<{ serviceType?: string }>({});
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMorePages, setHasMorePages] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Adopt admin scroll-on-error utility
   const { scrollToElement: scrollToErrorElement } = useScrollOnError({
@@ -272,14 +279,114 @@ const AppointmentsScreen = () => {
     };
   };
 
+  // Render appointment card for FlatList
+  const renderAppointmentCard = useCallback(({ item: appointment }: { item: Appointment }) => {
+    const dateInfo = formatDate(appointment.appointment_date);
+    
+    return (
+      <TouchableOpacity 
+        style={styles.appointmentCard}
+        onPress={() => {
+          setSelectedAppointmentDetails(appointment);
+          setShowAppointmentDetails(true);
+        }}
+        activeOpacity={0.7}
+      >
+        <View style={styles.cardHeader}>
+          <View style={styles.customerInfo}>
+            {user?.profile_image ? (
+              <Image 
+                source={{ 
+                  uri: getLocalImageUrl(user.profile_image),
+                  cache: 'force-cache'
+                }} 
+                style={styles.customerProfileImage}
+                resizeMode="cover"
+                onError={(error) => console.log('❌ Profile image error:', error)}
+              />
+            ) : (
+              <Ionicons name="person-circle" size={20} color="#014D40" />
+            )}
+            <Text style={styles.customerName}>
+              {user?.name || 'Your Appointment'}
+            </Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[appointment.status as keyof typeof STATUS_COLORS] }]}>
+            <Ionicons name={getStatusIcon(appointment.status)} size={16} color="#fff" />
+            <Text style={styles.statusText}>{appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.cardContent}>
+          <View style={styles.infoRow}>
+            <Ionicons name="calendar-outline" size={18} color="#666" />
+            <Text style={styles.infoText}>{dateInfo.fullDate}</Text>
+            <Text style={styles.timeText}>{dateInfo.time}</Text>
+          </View>
+          
+          <View style={styles.infoRow}>
+            <Ionicons name="briefcase-outline" size={18} color="#666" />
+            <Text style={styles.infoText}>{appointment.service_type}</Text>
+          </View>
+          
+          {appointment.notes && (
+            <View style={styles.infoRow}>
+              <Ionicons name="document-text-outline" size={18} color="#666" />
+              <Text style={styles.infoText} numberOfLines={2}>{appointment.notes}</Text>
+            </View>
+          )}
+        </View>
+        
+        <View style={styles.cardActions}>
+          {/* Transaction Action Buttons */}
+          <View style={styles.transactionActions}>
+            {/* Cancel Button - Show for all statuses except completed/cancelled - LEFT SIDE */}
+            {!['completed', 'cancelled'].includes(appointment.status) && (
+              <TouchableOpacity 
+                style={[
+                  styles.cancelButton,
+                  !['pending', 'confirmed'].includes(appointment.status) && styles.singleButton
+                ]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleCancelAppointment(appointment);
+                }}
+              >
+                <Ionicons name="close-circle-outline" size={16} color="#dc2626" />
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Edit Button - Show for pending and confirmed statuses - RIGHT SIDE */}
+            {['pending', 'confirmed'].includes(appointment.status) && (
+              <TouchableOpacity 
+                style={[
+                  styles.editButton,
+                  !['completed', 'cancelled'].includes(appointment.status) ? null : styles.singleButton
+                ]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleEditAppointment(appointment);
+                }}
+              >
+                <Ionicons name="create-outline" size={16} color="#014D40" />
+                <Text style={styles.editButtonText}>Edit</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  }, [user, handleCancelAppointment, handleEditAppointment]);
+
   useEffect(() => {
     // Only fetch data if user is authenticated
     if (user) {
-      fetchAppointments();
+      fetchAppointments(1, true);
       fetchBookedDates();
       fetchDailyCapacity(currentViewDate);
     }
-  }, [user]);
+  }, [user, fetchAppointments]);
 
   useEffect(() => {
     // Refetch daily capacity when currentViewDate changes
@@ -296,10 +403,17 @@ const AppointmentsScreen = () => {
     }
   }, [appointments]);
 
-  const fetchAppointments = async () => {
-    try {
+  const fetchAppointments = useCallback(async (page = 1, reset = false) => {
+    if (reset) {
       setLoading(true);
-      console.log('🔄 Fetching appointments for user:', user?.id);
+      setCurrentPage(1);
+      setHasMorePages(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
+    try {
+      console.log('🔄 Fetching appointments for user:', user?.id, 'Page:', page);
       
       // Check if user is authenticated before making the request
       if (!user) {
@@ -308,24 +422,59 @@ const AppointmentsScreen = () => {
         return;
       }
       
-      const response = await apiService.getAppointments();
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('per_page', '10');
+      
+      const response = await apiService.get(`/appointments?${params}`);
       console.log('📅 Raw appointments response:', response);
       
-      let appointmentsData = [];
-      if (Array.isArray(response)) {
-        appointmentsData = response;
-        console.log('📅 Set appointments (array):', response);
-      } else if (response && response.data) {
-        appointmentsData = response.data;
-        console.log('📅 Set appointments (data):', response.data);
+      if (response && response.success) {
+        const newAppointments = (response.data || []).map((item: any) => ({
+          id: item.id,
+          appointment_date: item.appointment_date,
+          service_type: item.service_type,
+          status: item.status,
+          notes: item.notes,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+        }));
+        
+        // Debug: Log pagination info
+        console.log(`[Appointments] Page ${page}, Received ${newAppointments.length} appointments, Has more: ${response.pagination?.has_more_pages}, Total: ${response.pagination?.total}`);
+        
+        if (reset) {
+          setAppointments(newAppointments);
+        } else {
+          // Deduplicate appointments by id to prevent duplicates
+          setAppointments(prev => {
+            const existingIds = new Set(prev.map(apt => apt.id));
+            const uniqueNewAppointments = newAppointments.filter(apt => !existingIds.has(apt.id));
+            return [...prev, ...uniqueNewAppointments];
+          });
+        }
+        
+        setHasMorePages(response.pagination?.has_more_pages || false);
+        setCurrentPage(page);
       } else {
-        appointmentsData = [];
-        console.log('📅 Set appointments (empty)');
+        // Handle legacy response format (array or data property)
+        let appointmentsData = [];
+        if (Array.isArray(response)) {
+          appointmentsData = response;
+        } else if (response && response.data) {
+          appointmentsData = response.data;
+        }
+        
+        if (reset) {
+          setAppointments(appointmentsData);
+        } else {
+          setAppointments(prev => {
+            const existingIds = new Set(prev.map(apt => apt.id));
+            const uniqueNewAppointments = appointmentsData.filter((apt: Appointment) => !existingIds.has(apt.id));
+            return [...prev, ...uniqueNewAppointments];
+          });
+        }
       }
-      
-      // Include all appointments including cancelled ones
-      console.log('📅 Total appointments count:', appointmentsData.length);
-      setAppointments(appointmentsData);
       
     } catch (error) {
       console.error('❌ Error fetching appointments:', error);
@@ -333,17 +482,29 @@ const AppointmentsScreen = () => {
       // Handle specific error cases
       if (error instanceof Error && (error.message?.includes('401') || error.message?.includes('Unauthorized'))) {
         console.log('🔐 Authentication required - user may need to login again');
-        // Don't clear appointments array, just log the error
-        // The user will be redirected to login if needed
       } else if (error instanceof Error && error.message?.includes('Network error')) {
         console.log('🌐 Network error - check backend server connection');
       }
       
-      setAppointments([]);
+      if (reset) {
+        setAppointments([]);
+      }
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  };
+  }, [user]);
+  
+  const loadMore = useCallback(() => {
+    if (!loadingMore && hasMorePages) {
+      fetchAppointments(currentPage + 1, false);
+    }
+  }, [loadingMore, hasMorePages, currentPage, fetchAppointments]);
+  
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchAppointments(1, true).finally(() => setRefreshing(false));
+  }, [fetchAppointments]);
 
   // Time picker functions
   const handleTimeChange = (event: any, selectedDate?: Date) => {
@@ -583,7 +744,7 @@ const AppointmentsScreen = () => {
     // Perform validation in background without blocking UI
     Promise.all([
       fetchDailyCapacity(selectedDateStr),
-      fetchAppointments()
+      fetchAppointments(1, true)
     ]).then(() => {
       // Validation completed, no need to do anything else
       // The modal is already open and user can proceed
@@ -979,7 +1140,7 @@ const AppointmentsScreen = () => {
   const handleCancel = async (id: number) => {
     try {
       await apiService.deleteAppointment(id);
-      fetchAppointments();
+      fetchAppointments(1, true);
       fetchDailyCapacity(); // Refresh daily capacity
       Alert.alert('Success', 'Appointment cancelled.');
     } catch (error) {
@@ -1002,7 +1163,7 @@ const AppointmentsScreen = () => {
       
       console.log('✅ All appointments deleted successfully');
       Alert.alert('Success', 'All appointments have been deleted.');
-      fetchAppointments(); // Refresh the appointments list
+      fetchAppointments(1, true); // Refresh the appointments list
       setShowDeleteModal(false);
       setSelectedDeleteOption(null);
     } catch (error: any) {
@@ -1038,7 +1199,7 @@ const AppointmentsScreen = () => {
       
       console.log('✅ Cancelled appointments deleted successfully');
       Alert.alert('Success', `${cancelledAppointmentIds.length} cancelled appointment(s) have been deleted.`);
-      fetchAppointments(); // Refresh the appointments list
+      fetchAppointments(1, true); // Refresh the appointments list
       setShowDeleteModal(false);
       setSelectedDeleteOption(null);
     } catch (error: any) {
@@ -1137,7 +1298,7 @@ const AppointmentsScreen = () => {
         appointment_date: rescheduleDateTime,
       });
       setRescheduleModalVisible(false);
-      fetchAppointments();
+      fetchAppointments(1, true);
       fetchDailyCapacity(); // Refresh daily capacity
       Alert.alert('Success', 'Appointment rescheduled!');
     } catch (error: any) {
@@ -1175,7 +1336,7 @@ const AppointmentsScreen = () => {
               console.log('✅ Appointment cancelled successfully');
               
               Alert.alert('Success', 'Appointment has been cancelled successfully.');
-              fetchAppointments(); // Refresh the appointments list
+              fetchAppointments(1, true); // Refresh the appointments list
             } catch (error: any) {
               console.error('❌ Error cancelling appointment:', error);
               console.error('Error details:', {
@@ -1368,239 +1529,170 @@ const AppointmentsScreen = () => {
           <Ionicons name="calendar" size={24} color="#014D40" style={styles.headerIcon} />
           <Text style={styles.title}>Appointment Calendar</Text>
         </View>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={handleAddAppointment}
-        >
-          <Ionicons name="add" size={24} color="#fff" />
-        </TouchableOpacity>
       </View>
 
-      {/* Scrollable Content */}
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {/* Calendar Container */}
-        <View style={styles.calendarContainer}>
-          <Calendar
-            onDayPress={handleDateSelect}
-            markedDates={getMarkedDates()}
-            minDate={(() => {
-              const now = new Date();
-              return now.getFullYear() + '-' + 
-                String(now.getMonth() + 1).padStart(2, '0') + '-' + 
-                String(now.getDate()).padStart(2, '0');
-            })()}
-            theme={{
-              backgroundColor: '#fff',
-              calendarBackground: '#fff',
-              textSectionTitleColor: '#014D40',
-              selectedDayBackgroundColor: '#014D40',
-              selectedDayTextColor: '#fff',
-              todayTextColor: '#014D40',
-              dayTextColor: '#333',
-              textDisabledColor: '#d9e1e8',
-              dotColor: '#014D40',
-              selectedDotColor: '#fff',
-              arrowColor: '#014D40',
-              monthTextColor: '#014D40',
-              indicatorColor: '#014D40',
-              textDayFontFamily: 'System',
-              textDayHeaderFontFamily: 'System',
-              textDayFontWeight: '300',
-              textMonthFontWeight: 'bold',
-              textDayHeaderFontWeight: '600',
-              textDayFontSize: 16,
-              textMonthFontSize: 18,
-              textDayHeaderFontSize: 14,
-            }}
-          />
+      {/* Appointments List with Pagination */}
+      {loading && appointments.length === 0 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Loading appointments...</Text>
         </View>
-        
-        {/* Calendar Legend */}
-        <View style={styles.legendContainer}>
-          <Text style={styles.legendTitle}>Appointment Status</Text>
-          <View style={styles.legendItems}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
-              <Text style={styles.legendText}>Confirmed</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
-              <Text style={styles.legendText}>Pending</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#F44336' }]} />
-              <Text style={styles.legendText}>Cancelled</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#ccc' }]} />
-              <Text style={styles.legendText}>Booked</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#d9e1e8' }]} />
-              <Text style={styles.legendText}>Past Dates</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#007AFF' }]} />
-              <Text style={styles.legendText}>Today</Text>
-            </View>
-          </View>
-          
-          {/* Policy Button */}
-          <TouchableOpacity
-            style={styles.policyButtonContainer}
-            onPress={() => setShowPolicyModal(true)}
-          >
-            <Ionicons name="information-circle" size={20} color="#014D40" />
-            <Text style={styles.policyButtonText}>View Appointment Policy</Text>
-            <Ionicons name="chevron-forward" size={16} color="#014D40" />
-          </TouchableOpacity>
-          
-          {/* Business Hours Info */}
-          <View style={styles.businessHoursInfo}>
-            <Text style={styles.businessHoursTitle}>Business Hours</Text>
-            <Text style={styles.businessHoursText}>10:00 AM - 7:00 PM</Text>
-          </View>
-
-        </View>
-
-        {/* Appointments List */}
-        <View style={styles.appointmentsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Your Appointments</Text>
-            <View style={styles.headerActions}>
-              {/* Delete Button */}
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => setShowDeleteModal(true)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="trash-outline" size={16} color="#dc2626" />
-                <Text style={styles.deleteButtonText}>Delete</Text>
-                <Ionicons name="chevron-down" size={12} color="#dc2626" />
-              </TouchableOpacity>
-              {/* Collapsible Sort Button */}
-              <CollapsibleSortButton
-                sortOption={sortOption}
-                sortDirection={sortDirection}
-                onSortChange={handleSortChange}
-                sortOptions={sortOptions}
-                style={styles.sortButtonContainer}
-              />
-            </View>
-          </View>
-          {appointments.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="calendar-outline" size={48} color="#ccc" />
-              <Text style={styles.emptyText}>No appointments found</Text>
-              <Text style={styles.emptySubtext}>Tap the + button to schedule your first appointment</Text>
-            </View>
-          ) : (
-            sortedAppointments.map((appointment) => {
-              const dateInfo = formatDate(appointment.appointment_date);
-              
-              return (
-                <TouchableOpacity 
-                  key={appointment.id} 
-                  style={styles.appointmentCard}
-                  onPress={() => {
-                    setSelectedAppointmentDetails(appointment);
-                    setShowAppointmentDetails(true);
+      ) : (
+        <FlatList
+          data={sortedAppointments}
+          renderItem={renderAppointmentCard}
+          keyExtractor={(item) => item.id.toString()}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListHeaderComponent={
+            <>
+              {/* Calendar Container */}
+              <View style={styles.calendarContainer}>
+                <Calendar
+                  onDayPress={handleDateSelect}
+                  markedDates={getMarkedDates()}
+                  minDate={(() => {
+                    const now = new Date();
+                    return now.getFullYear() + '-' + 
+                      String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                      String(now.getDate()).padStart(2, '0');
+                  })()}
+                  theme={{
+                    backgroundColor: '#fff',
+                    calendarBackground: '#fff',
+                    textSectionTitleColor: '#014D40',
+                    selectedDayBackgroundColor: '#014D40',
+                    selectedDayTextColor: '#fff',
+                    todayTextColor: '#014D40',
+                    dayTextColor: '#333',
+                    textDisabledColor: '#d9e1e8',
+                    dotColor: '#014D40',
+                    selectedDotColor: '#fff',
+                    arrowColor: '#014D40',
+                    monthTextColor: '#014D40',
+                    indicatorColor: '#014D40',
+                    textDayFontFamily: 'System',
+                    textDayHeaderFontFamily: 'System',
+                    textDayFontWeight: '300',
+                    textMonthFontWeight: 'bold',
+                    textDayHeaderFontWeight: '600',
+                    textDayFontSize: 16,
+                    textMonthFontSize: 18,
+                    textDayHeaderFontSize: 14,
                   }}
-                  activeOpacity={0.7}
+                />
+              </View>
+              
+              {/* Calendar Legend */}
+              <View style={styles.legendContainer}>
+                <Text style={styles.legendTitle}>Appointment Status</Text>
+                <View style={styles.legendItems}>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
+                    <Text style={styles.legendText}>Confirmed</Text>
+                  </View>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
+                    <Text style={styles.legendText}>Pending</Text>
+                  </View>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: '#F44336' }]} />
+                    <Text style={styles.legendText}>Cancelled</Text>
+                  </View>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: '#ccc' }]} />
+                    <Text style={styles.legendText}>Booked</Text>
+                  </View>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: '#d9e1e8' }]} />
+                    <Text style={styles.legendText}>Past Dates</Text>
+                  </View>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: '#007AFF' }]} />
+                    <Text style={styles.legendText}>Today</Text>
+                  </View>
+                </View>
+                
+                {/* Policy Button */}
+                <TouchableOpacity
+                  style={styles.policyButtonContainer}
+                  onPress={() => setShowPolicyModal(true)}
                 >
-                  <View style={styles.cardHeader}>
-                    <View style={styles.customerInfo}>
-                      {user?.profile_image ? (
-                        <Image 
-                          source={{ 
-                            uri: getLocalImageUrl(user.profile_image),
-                            cache: 'force-cache'
-                          }} 
-                          style={styles.customerProfileImage}
-                          resizeMode="cover"
-                          onError={(error) => console.log('❌ Profile image error:', error)}
-                        />
-                      ) : (
-                        <Ionicons name="person-circle" size={20} color="#014D40" />
-                      )}
-                      <Text style={styles.customerName}>
-                        {user?.name || 'Your Appointment'}
-                      </Text>
-                    </View>
-                    <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[appointment.status as keyof typeof STATUS_COLORS] }]}>
-                      <Ionicons name={getStatusIcon(appointment.status)} size={16} color="#fff" />
-                      <Text style={styles.statusText}>{appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}</Text>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.cardContent}>
-                    <View style={styles.infoRow}>
-                      <Ionicons name="calendar-outline" size={18} color="#666" />
-                      <Text style={styles.infoText}>{dateInfo.fullDate}</Text>
-                      <Text style={styles.timeText}>{dateInfo.time}</Text>
-                    </View>
-                    
-                    <View style={styles.infoRow}>
-                      <Ionicons name="briefcase-outline" size={18} color="#666" />
-                      <Text style={styles.infoText}>{appointment.service_type}</Text>
-                    </View>
-                    
-                    {appointment.notes && (
-                      <View style={styles.infoRow}>
-                        <Ionicons name="document-text-outline" size={18} color="#666" />
-                        <Text style={styles.infoText} numberOfLines={2}>{appointment.notes}</Text>
-                      </View>
-                    )}
-                  </View>
-                  
-                  <View style={styles.cardActions}>
-                    {/* Transaction Action Buttons */}
-                    <View style={styles.transactionActions}>
-                      {/* Cancel Button - Show for all statuses except completed/cancelled - LEFT SIDE */}
-                      {!['completed', 'cancelled'].includes(appointment.status) && (
-                        <TouchableOpacity 
-                          style={[
-                            styles.cancelButton,
-                            !['pending', 'confirmed'].includes(appointment.status) && styles.singleButton
-                          ]}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleCancelAppointment(appointment);
-                          }}
-                        >
-                          <Ionicons name="close-circle-outline" size={16} color="#dc2626" />
-                          <Text style={styles.cancelButtonText}>Cancel</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {/* Edit Button - Show for pending and confirmed statuses - RIGHT SIDE */}
-                      {['pending', 'confirmed'].includes(appointment.status) && (
-                        <TouchableOpacity 
-                          style={[
-                            styles.editButton,
-                            !['completed', 'cancelled'].includes(appointment.status) ? null : styles.singleButton
-                          ]}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleEditAppointment(appointment);
-                          }}
-                        >
-                          <Ionicons name="create-outline" size={16} color="#014D40" />
-                          <Text style={styles.editButtonText}>Edit</Text>
-                        </TouchableOpacity>
-                      )}
-
-                    </View>
-                  </View>
+                  <Ionicons name="information-circle" size={20} color="#014D40" />
+                  <Text style={styles.policyButtonText}>View Appointment Policy</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#014D40" />
                 </TouchableOpacity>
-              );
-            })
-          )}
-        </View>
+                
+                {/* Business Hours Info */}
+                <View style={styles.businessHoursInfo}>
+                  <Text style={styles.businessHoursTitle}>Business Hours</Text>
+                  <Text style={styles.businessHoursText}>10:00 AM - 7:00 PM</Text>
+                </View>
+              </View>
 
-        {/* Bottom Spacing */}
-        <View style={styles.bottomSpacing} />
-      </ScrollView>
+              {/* Appointments List Header */}
+              <View style={styles.appointmentsSection}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Your Appointments</Text>
+                  <View style={styles.headerActions}>
+                    {/* Delete Button */}
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => setShowDeleteModal(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#dc2626" />
+                      <Text style={styles.deleteButtonText}>Delete</Text>
+                      <Ionicons name="chevron-down" size={12} color="#dc2626" />
+                    </TouchableOpacity>
+                    {/* Collapsible Sort Button */}
+                    <CollapsibleSortButton
+                      sortOption={sortOption}
+                      sortDirection={sortDirection}
+                      onSortChange={handleSortChange}
+                      sortOptions={sortOptions}
+                      style={styles.sortButtonContainer}
+                    />
+                  </View>
+                </View>
+              </View>
+            </>
+          }
+          ListEmptyComponent={
+            !loading ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="calendar-outline" size={48} color="#ccc" />
+                <Text style={styles.emptyText}>No appointments found</Text>
+                <Text style={styles.emptySubtext}>Tap the + button to schedule your first appointment</Text>
+              </View>
+            ) : null
+          }
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.loadMoreContainer}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.loadMoreText}>Loading more appointments...</Text>
+              </View>
+            ) : (
+              <View style={styles.bottomSpacing} />
+            )
+          }
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={handleAddAppointment}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="add" size={28} color="#fff" />
+      </TouchableOpacity>
 
       {/* Create Appointment Modal */}
       <Modal
@@ -2399,6 +2491,23 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#014D40',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    zIndex: 1000,
+  },
   scrollContainer: {
     flex: 1,
   },
@@ -2665,6 +2774,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 20,
+    marginHorizontal: 16,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -3626,6 +3736,31 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     marginRight: 0,
     marginLeft: 0,
+  },
+  // Pagination styles
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: Colors.text.secondary,
+  },
+  loadMoreContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: Colors.text.secondary,
+  },
+  listContainer: {
+    paddingBottom: 20,
   },
 });
 

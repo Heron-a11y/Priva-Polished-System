@@ -13,6 +13,30 @@ use Illuminate\Support\Facades\Storage;
 class ProfileController extends Controller
 {
     /**
+     * Get the base URL for storage files
+     */
+    private function getStorageBaseUrl(): string
+    {
+        // Try to get from request first
+        $host = request()->getHost();
+        $scheme = request()->getScheme();
+        $port = request()->getPort();
+        
+        // Check if host is a valid IP address (192.168.x.x format)
+        if (preg_match('/^192\.168\.\d+\.\d+$/', $host)) {
+            return $scheme . '://' . $host . ($port ? ':' . $port : '');
+        }
+        
+        // If host is localhost, 127.0.0.1, or not a valid IP, use the configured IP
+        if ($host === 'localhost' || $host === '127.0.0.1' || !filter_var($host, FILTER_VALIDATE_IP)) {
+            return 'http://192.168.1.54:8000';
+        }
+        
+        // Use the request host if it's a valid IP or domain
+        return $scheme . '://' . $host . ($port ? ':' . $port : '');
+    }
+
+    /**
      * Get user profile
      */
     public function show(Request $request): JsonResponse
@@ -28,7 +52,7 @@ class ProfileController extends Controller
                     'email' => $user->email,
                     'role' => $user->role,
                     'profile_image' => $user->profile_image && Storage::disk('public')->exists($user->profile_image) 
-                        ? Storage::disk('public')->url($user->profile_image) 
+                        ? $this->getStorageBaseUrl() . '/storage/' . $user->profile_image
                         : null,
                     'phone' => $user->phone,
                     'address' => $user->address,
@@ -122,7 +146,7 @@ class ProfileController extends Controller
                     'email' => $user->email,
                     'role' => $user->role,
                     'profile_image' => $user->profile_image && Storage::disk('public')->exists($user->profile_image) 
-                        ? Storage::disk('public')->url($user->profile_image) 
+                        ? $this->getStorageBaseUrl() . '/storage/' . $user->profile_image
                         : null,
                     'phone' => $user->phone,
                     'address' => $user->address,
@@ -195,7 +219,7 @@ class ProfileController extends Controller
                         'email' => $user->email,
                         'role' => $user->role,
                         'profile_image' => $user->profile_image && Storage::disk('public')->exists($user->profile_image) 
-                        ? Storage::disk('public')->url($user->profile_image) 
+                        ? $this->getStorageBaseUrl() . '/storage/' . $user->profile_image
                         : null,
                         'phone' => $user->phone,
                         'address' => $user->address,

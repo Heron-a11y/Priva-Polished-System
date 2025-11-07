@@ -39,7 +39,7 @@ class AppointmentController extends PaginatedController
         }
     }
     /**
-     * Get appointments for authenticated user
+     * Get appointments for authenticated user with pagination
      */
     public function index(Request $request)
     {
@@ -56,33 +56,36 @@ class AppointmentController extends PaginatedController
             }
             
             // Get appointments for the authenticated user only
-            $appointments = Appointment::where('user_id', $user->id)
-                ->orderBy('appointment_date', 'desc')
-                ->get();
+            $query = Appointment::where('user_id', $user->id);
             
-            // Format appointments to include separate date and time fields
-            $formattedAppointments = $appointments->map(function ($appointment) {
-                $appointmentDate = $appointment->appointment_date;
-                $date = $appointmentDate->format('Y-m-d');
-                $time = $appointmentDate->format('H:i');
-                
-                return [
-                    'id' => $appointment->id,
-                    'appointment_date' => $appointmentDate->format('Y-m-d H:i:s'),
-                    'appointment_time' => $time,
-                    'service_type' => $appointment->service_type,
-                    'status' => $appointment->status,
-                    'notes' => $appointment->notes,
-                    'created_at' => $appointment->created_at,
-                    'updated_at' => $appointment->updated_at,
-                ];
-            });
+            // Configure pagination options
+            $options = [
+                'search_fields' => ['service_type', 'notes'],
+                'filter_fields' => ['status'],
+                'sort_fields' => ['created_at', 'appointment_date', 'status', 'service_type'],
+                'default_per_page' => 10,
+                'max_per_page' => 100,
+                'transform' => function ($appointment) {
+                    $appointmentDate = $appointment->appointment_date;
+                    $date = $appointmentDate->format('Y-m-d');
+                    $time = $appointmentDate->format('H:i');
+                    
+                    return [
+                        'id' => $appointment->id,
+                        'appointment_date' => $appointmentDate->format('Y-m-d H:i:s'),
+                        'appointment_time' => $time,
+                        'service_type' => $appointment->service_type,
+                        'status' => $appointment->status,
+                        'notes' => $appointment->notes,
+                        'created_at' => $appointment->created_at,
+                        'updated_at' => $appointment->updated_at,
+                    ];
+                }
+            ];
             
-            return response()->json([
-                'success' => true,
-                'data' => $formattedAppointments,
-                'message' => 'Appointments retrieved successfully'
-            ]);
+            $result = $this->paginate($query, $request, $options);
+            
+            return $result;
             
         } catch (\Exception $e) {
             return response()->json([

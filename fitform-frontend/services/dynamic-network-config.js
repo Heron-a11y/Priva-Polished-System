@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 class DynamicNetworkConfig {
     constructor() {
         this.currentIP = null;
-        this.fallbackIPs = ['192.168.1.56', '192.168.1.59', '192.168.1.100', '192.168.0.1', '10.0.0.1'];
+        this.fallbackIPs = ['192.168.1.54', '192.168.1.56', '192.168.1.59', '192.168.1.100', '192.168.0.1', '10.0.0.1'];
         this.initializeNetwork();
     }
 
@@ -59,7 +59,7 @@ class DynamicNetworkConfig {
         // This is a simplified approach - in a real app you'd want more sophisticated detection
         // For now, we'll cycle through common local network ranges
         const commonRanges = [
-            '192.168.1.56', '192.168.1.59', '192.168.1.100', '192.168.1.105',
+            '192.168.1.54', '192.168.1.56', '192.168.1.59', '192.168.1.100', '192.168.1.105',
             '192.168.0.1', '192.168.0.100',
             '10.0.0.1', '10.0.0.100',
             '172.16.0.1'

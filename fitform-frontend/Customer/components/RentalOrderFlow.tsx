@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Text, TextInput, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, FlatList, ScrollView, Dimensions, Modal, Platform, Animated, LayoutAnimation, UIManager, Image } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, FlatList, ScrollView, Dimensions, Modal, Platform, Animated, LayoutAnimation, UIManager, Image, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
@@ -92,6 +92,9 @@ export default function RentalOrderFlow() {
   const [orders, setOrders] = useState<RentalOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMorePages, setHasMorePages] = useState(true);
   const [showNewRentalModal, setShowNewRentalModal] = useState(false);
   const [formData, setFormData] = useState<RentalForm>({
     rentalType: '',
@@ -256,7 +259,7 @@ export default function RentalOrderFlow() {
         Alert.alert('Success', 'Rental has been cancelled successfully.');
       }
       
-      fetchRentalOrders(); // Refresh the orders list
+      fetchRentalOrders(1, true); // Refresh the orders list
     } catch (error: any) {
       console.error('Error cancelling rental:', error);
       console.error('Error details:', {
@@ -277,6 +280,50 @@ export default function RentalOrderFlow() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDeleteOrder = async (order: any) => {
+    // Check if order can be deleted (only pending or declined orders)
+    if (!['pending', 'declined'].includes(order.status)) {
+      Alert.alert(
+        'Cannot Delete',
+        'Only pending or declined orders can be deleted. Orders that are in progress or completed cannot be deleted.',
+        [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Delete Order',
+      `Are you sure you want to permanently delete order #${order.id}? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await apiService.deleteRental(order.id);
+              
+              Alert.alert('Success', 'Order has been permanently deleted.');
+              
+              // Refresh the orders list
+              fetchRentalOrders(1, true);
+            } catch (error: any) {
+              console.error('Error deleting order:', error);
+              const errorMessage = error.response?.data?.error || error.message || 'Failed to delete order';
+              Alert.alert('Error', errorMessage);
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleEditOrder = (order: any) => {
@@ -322,13 +369,13 @@ export default function RentalOrderFlow() {
 
 
   useEffect(() => {
-    fetchRentalOrders();
+    fetchRentalOrders(1, true);
   }, [fetchRentalOrders]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchRentalOrders(false);
-  }, []);
+    fetchRentalOrders(1, true).finally(() => setRefreshing(false));
+  }, [fetchRentalOrders]);
 
   // Memoize filtered orders to avoid re-filtering on every render
   const filteredOrders = useMemo(() => 
@@ -371,10 +418,17 @@ export default function RentalOrderFlow() {
     }
   }, [user]);
 
-  const fetchRentalOrders = useCallback(async (showLoading = true) => {
-    if (showLoading) setLoading(true);
+  const fetchRentalOrders = useCallback(async (page = 1, reset = false) => {
+    if (reset) {
+      setLoading(true);
+      setCurrentPage(1);
+      setHasMorePages(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
     try {
-      console.log('🔄 Fetching rental orders...');
+      console.log('🔄 Fetching rental orders... Page:', page);
       
       // Check if user is authenticated first
       if (!user) {
@@ -383,39 +437,111 @@ export default function RentalOrderFlow() {
         return;
       }
       
-      const response = await apiService.getRentals();
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('per_page', '10');
+      
+      const response = await apiService.get(`/rentals?${params}`);
       console.log('📥 Rental orders response:', response);
       
-      // Handle different response structures
-      let rentalOrders = [];
-      if (response && response.success !== false) {
-        rentalOrders = Array.isArray(response.data) ? response.data : (Array.isArray(response) ? response : []);
-        console.log('✅ Rental orders loaded successfully, count:', rentalOrders.length);
+      if (response && response.success) {
+        const newOrders = (response.data || []).map((item: any) => ({
+          id: item.id,
+          user_id: item.user_id,
+          item_name: item.item_name,
+          rental_date: item.rental_date,
+          return_date: item.return_date,
+          status: item.status,
+          clothing_type: item.clothing_type,
+          measurements: item.measurements,
+          notes: item.notes,
+          customer_name: item.customer_name,
+          customer_email: item.customer_email,
+          quotation_amount: item.quotation_amount,
+          quotation_notes: item.quotation_notes,
+          quotation_status: item.quotation_status,
+          quotation_sent_at: item.quotation_sent_at,
+          quotation_responded_at: item.quotation_responded_at,
+          counter_offer_amount: item.counter_offer_amount,
+          counter_offer_notes: item.counter_offer_notes,
+          counter_offer_status: item.counter_offer_status,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+          penalty_breakdown: item.penalty_breakdown,
+          total_penalties: item.total_penalties,
+          penalty_status: item.penalty_status,
+          penalty_notes: item.penalty_notes,
+          penalty_calculated_at: item.penalty_calculated_at,
+        }));
+        
+        // Filter out cancelled orders
+        const filteredNewOrders = newOrders.filter((order: RentalOrder) => 
+          order.status !== 'cancelled'
+        );
+        
+        // Debug: Log pagination info
+        console.log(`[RentalOrders] Page ${page}, Received ${filteredNewOrders.length} orders, Has more: ${response.pagination?.has_more_pages}, Total: ${response.pagination?.total}`);
+        
+        if (reset) {
+          setOrders(filteredNewOrders);
+        } else {
+          // Deduplicate orders by id to prevent duplicates
+          setOrders(prev => {
+            const existingIds = new Set(prev.map(order => order.id));
+            const uniqueNewOrders = filteredNewOrders.filter(order => !existingIds.has(order.id));
+            return [...prev, ...uniqueNewOrders];
+          });
+        }
+        
+        setHasMorePages(response.pagination?.has_more_pages || false);
+        setCurrentPage(page);
       } else {
-        console.log('⚠️ No rental orders or API error:', response?.message);
-        rentalOrders = [];
+        // Handle legacy response format (array or data property)
+        let rentalOrders = [];
+        if (Array.isArray(response)) {
+          rentalOrders = response;
+        } else if (response && response.data) {
+          rentalOrders = Array.isArray(response.data) ? response.data : [];
+        }
+        
+        // Filter out cancelled orders
+        const filteredOrders = rentalOrders.filter((order: RentalOrder) => 
+          order.status !== 'cancelled'
+        );
+        
+        if (reset) {
+          setOrders(filteredOrders);
+        } else {
+          setOrders(prev => {
+            const existingIds = new Set(prev.map(order => order.id));
+            const uniqueNewOrders = filteredOrders.filter((order: RentalOrder) => !existingIds.has(order.id));
+            return [...prev, ...uniqueNewOrders];
+          });
+        }
       }
-      
-      // Filter out cancelled orders (backend already filters by user_id)
-      const filteredOrders = rentalOrders.filter((order: RentalOrder) => 
-        order.status !== 'cancelled'
-      );
-      setOrders(filteredOrders);
     } catch (error) {
       console.error('❌ Error fetching rental orders:', error);
       
       // Handle authentication errors
       if (error.message?.includes('401') || error.message?.includes('Unauthenticated')) {
         console.log('🔐 Authentication required - user needs to log in');
-        setOrders([]);
-      } else {
+      }
+      
+      if (reset) {
         setOrders([]);
       }
     } finally {
-      if (showLoading) setLoading(false);
+      setLoading(false);
+      setLoadingMore(false);
       setRefreshing(false);
     }
   }, [user]);
+  
+  const loadMore = useCallback(() => {
+    if (!loadingMore && hasMorePages) {
+      fetchRentalOrders(currentPage + 1, false);
+    }
+  }, [loadingMore, hasMorePages, currentPage, fetchRentalOrders]);
 
   // Load latest measurements for the user
   const loadLatestMeasurements = async () => {
@@ -954,10 +1080,20 @@ export default function RentalOrderFlow() {
           contentContainerStyle={styles.ordersList}
           refreshing={refreshing}
           onRefresh={onRefresh}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
           removeClippedSubviews={true}
           maxToRenderPerBatch={10}
           windowSize={10}
           initialNumToRender={5}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.loadMoreContainer}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.loadMoreText}>Loading more orders...</Text>
+              </View>
+            ) : null
+          }
           getItemLayout={(data, index) => ({
             length: 200, // Approximate height of each item
             offset: 200 * index,
@@ -3950,5 +4086,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
+  },
+  // Pagination styles
+  loadMoreContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: Colors.text.secondary,
   },
 });

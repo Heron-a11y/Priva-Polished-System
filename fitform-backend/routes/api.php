@@ -97,6 +97,7 @@ Route::middleware([CorsMiddleware::class])->group(function () {
     Route::get('/admin/appointments/stats', [\App\Http\Controllers\AppointmentController::class, 'getAppointmentStats']);
     
     // Admin Dashboard Statistics Routes
+    Route::get('/admin/orders', [\App\Http\Controllers\OrderController::class, 'index']);
     Route::get('/admin/orders/stats', [\App\Http\Controllers\OrderController::class, 'getStats']);
     Route::get('/admin/catalog/stats', [\App\Http\Controllers\CatalogController::class, 'getStats']);
     Route::get('/admin/measurement-history/stats', [\App\Http\Controllers\MeasurementHistoryController::class, 'adminStats']);
@@ -293,4 +294,17 @@ Route::get('/receipts/purchase/{id}', [\App\Http\Controllers\ReceiptController::
 
 // Additional routes to match frontend expectations
 Route::get('/rentals/{id}/receipt', [\App\Http\Controllers\ReceiptController::class, 'generateRentalReceipt']);
-Route::get('/purchases/{id}/receipt', [\App\Http\Controllers\ReceiptController::class, 'generatePurchaseReceipt']); 
+Route::get('/purchases/{id}/receipt', [\App\Http\Controllers\ReceiptController::class, 'generatePurchaseReceipt']);
+
+// Public storage route (outside middleware for direct file access)
+Route::get('/storage/{path}', function ($path) {
+    $file = \Illuminate\Support\Facades\Storage::disk('public')->get($path);
+    $mimeType = \Illuminate\Support\Facades\Storage::disk('public')->mimeType($path);
+    
+    return response($file, 200)
+        ->header('Content-Type', $mimeType)
+        ->header('Cache-Control', 'public, max-age=31536000')
+        ->header('Access-Control-Allow-Origin', '*')
+        ->header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        ->header('Access-Control-Allow-Headers', 'Content-Type');
+})->where('path', '.*'); 

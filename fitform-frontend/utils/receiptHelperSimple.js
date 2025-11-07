@@ -17,7 +17,7 @@ class ReceiptHelperSimple {
             console.log('🧾 Generating rental receipt for ID:', rentalId);
             
             // Get the base URL from the API service
-            const baseURL = apiService.baseURL || 'http://192.168.1.56:8000/api';
+            const baseURL = apiService.baseURL || 'http://192.168.1.54:8000/api';
             
             // Get authentication token from API service
             const token = await apiService.getToken();
@@ -78,7 +78,7 @@ class ReceiptHelperSimple {
             console.log('🧾 Generating purchase receipt for ID:', purchaseId);
             
             // Get the base URL from the API service
-            const baseURL = apiService.baseURL || 'http://192.168.1.56:8000/api';
+            const baseURL = apiService.baseURL || 'http://192.168.1.54:8000/api';
             
             // Get authentication token from API service
             const token = await apiService.getToken();

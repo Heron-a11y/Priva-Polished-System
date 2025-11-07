@@ -24,15 +24,20 @@ class SizingController extends PaginatedController
             ], 401);
         }
         
-        $recommendations = SizeRecommendation::where('user_id', $user->id)
+        $query = SizeRecommendation::where('user_id', $user->id)
             ->with('sizingStandard')
-            ->orderBy('last_updated', 'desc')
-            ->get();
+            ->orderBy('last_updated', 'desc');
 
-        return response()->json([
-            'success' => true,
-            'data' => $recommendations
-        ]);
+        // Configure pagination options
+        $options = [
+            'search_fields' => ['recommended_size'],
+            'filter_fields' => [],
+            'sort_fields' => ['last_updated', 'recommended_size', 'confidence_score'],
+            'default_per_page' => 10,
+            'max_per_page' => 50,
+        ];
+
+        return $this->paginate($query, $request, $options);
     }
 
     /**
@@ -72,28 +77,19 @@ class SizingController extends PaginatedController
             \Log::info('Added gender filter:', ['gender' => $request->gender]);
         }
 
-        $standards = $query->get();
-        
-        \Log::info('Final query result:', [
-            'total_count' => $standards->count(),
-            'standards' => $standards->map(function($s) { 
-                return ['id' => $s->id, 'name' => $s->name, 'category' => $s->category, 'gender' => $s->gender]; 
-            })->toArray()
-        ]);
+        // Order by category and gender for consistent results
+        $query->orderBy('category')->orderBy('gender')->orderBy('name');
 
-        // Log all active standards for debugging
-        $allActiveStandards = SizingStandard::where('is_active', true)->get();
-        \Log::info('All active standards in database:', [
-            'total' => $allActiveStandards->count(),
-            'standards' => $allActiveStandards->map(function($s) { 
-                return ['id' => $s->id, 'name' => $s->name, 'category' => $s->category, 'gender' => $s->gender]; 
-            })->toArray()
-        ]);
+        // Configure pagination options
+        $options = [
+            'search_fields' => ['name', 'category', 'gender'],
+            'filter_fields' => ['category', 'gender', 'is_active'],
+            'sort_fields' => ['name', 'category', 'gender', 'created_at', 'updated_at'],
+            'default_per_page' => 10,
+            'max_per_page' => 50,
+        ];
 
-        return response()->json([
-            'success' => true,
-            'data' => $standards
-        ]);
+        return $this->paginate($query, $request, $options);
     }
 
     /**

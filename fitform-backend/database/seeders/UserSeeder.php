@@ -13,27 +13,33 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
-        // Create admin user
-        User::create([
-            'name' => 'Admin User',
-            'email' => 'admin@fitform.com',
-            'password' => Hash::make('password123'),
-            'role' => 'admin',
-        ]);
+        // Create admin user if it doesn't exist
+        User::firstOrCreate(
+            ['email' => 'admin@fitform.com'],
+            [
+                'name' => 'Admin User',
+                'password' => Hash::make('password123'),
+                'role' => 'admin',
+            ]
+        );
 
-        // Create sample customer users
-        User::create([
-            'name' => 'John Customer',
-            'email' => 'customer@fitform.com',
-            'password' => Hash::make('password123'),
-            'role' => 'customer',
-        ]);
+        // Create sample customer users if they don't exist
+        User::firstOrCreate(
+            ['email' => 'customer@fitform.com'],
+            [
+                'name' => 'John Customer',
+                'password' => Hash::make('password123'),
+                'role' => 'customer',
+            ]
+        );
 
-        User::create([
-            'name' => 'Jane Customer',
-            'email' => 'jane@fitform.com',
-            'password' => Hash::make('password123'),
-            'role' => 'customer',
-        ]);
+        User::firstOrCreate(
+            ['email' => 'jane@fitform.com'],
+            [
+                'name' => 'Jane Customer',
+                'password' => Hash::make('password123'),
+                'role' => 'customer',
+            ]
+        );
     }
 } 

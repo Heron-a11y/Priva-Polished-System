@@ -22,7 +22,7 @@ class ARMeasurementService {
   private baseURL: string;
 
   constructor() {
-    this.baseURL = 'http://192.168.1.56:8000/api';
+    this.baseURL = 'http://192.168.1.54:8000/api';
   }
 
   /**

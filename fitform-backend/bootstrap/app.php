@@ -18,6 +18,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
         ]);
+        
+        // Exclude storage routes from CSRF verification
+        $middleware->validateCsrfTokens(except: [
+            'storage/*',
+            'api/storage/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

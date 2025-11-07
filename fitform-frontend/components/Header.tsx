@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, TouchableOpacity, StyleSheet, Modal, Text, Pressable, Alert, FlatList, StatusBar, Platform, SafeAreaView, Image } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, TouchableOpacity, StyleSheet, Modal, Text, Pressable, Alert, FlatList, StatusBar, Platform, SafeAreaView, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
@@ -16,6 +16,9 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
   const [notifVisible, setNotifVisible] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [loadingNotif, setLoadingNotif] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMorePages, setHasMorePages] = useState(true);
   const router = useRouter();
   const { logout, user, isLoading } = useAuth();
   const { triggerOrderReview } = useNotificationContext();
@@ -24,33 +27,72 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
   console.log('🔍 Header - User data:', user);
   console.log('🔍 Header - Profile image:', user?.profile_image);
 
-  const fetchNotifications = async () => {
-    setLoadingNotif(true);
+  const fetchNotifications = useCallback(async (page = 1, reset = false) => {
+    if (reset) {
+      setLoadingNotif(true);
+      setCurrentPage(1);
+      setHasMorePages(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
     try {
-      const res = await apiService.request('/notifications');
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('per_page', '10');
+      
+      const res = await apiService.request(`/notifications?${params.toString()}`);
+      
       let notifArr = [];
-      if (res && Array.isArray(res.data)) {
+      let pagination = null;
+      
+      // Handle different response structures
+      if (res && res.data && Array.isArray(res.data)) {
         notifArr = res.data;
-      } else if (Array.isArray(res)) {
-        notifArr = res;
+        pagination = res.pagination;
       } else if (res && Array.isArray(res.data?.data)) {
         notifArr = res.data.data;
+        pagination = res.data.pagination;
+      } else if (res && Array.isArray(res)) {
+        notifArr = res;
       } else if (res && Array.isArray(res.data?.notifications)) {
         notifArr = res.data.notifications;
       }
-      setNotifications(notifArr || []);
+      
+      // Deduplicate notifications
+      if (reset) {
+        setNotifications(notifArr || []);
+      } else {
+        setNotifications(prev => {
+          const existingIds = new Set(prev.map(n => n.id));
+          const uniqueNew = (notifArr || []).filter(n => !existingIds.has(n.id));
+          return [...prev, ...uniqueNew];
+        });
+      }
+      
+      // Update pagination state
+      if (pagination) {
+        setHasMorePages(pagination.current_page < pagination.last_page);
+        setCurrentPage(page);
+      } else {
+        setHasMorePages(false);
+      }
     } catch (err) {
-      setNotifications([]);
+      console.error('Error fetching notifications:', err);
+      if (reset) {
+        setNotifications([]);
+      }
     } finally {
       setLoadingNotif(false);
+      setLoadingMore(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (!isLoading && user) {
-      fetchNotifications();
+      fetchNotifications(1, true);
     }
-  }, [isLoading, user]);
+  }, [isLoading, user, fetchNotifications]);
 
   const handleProfile = () => {
     setModalVisible(false);
@@ -89,8 +131,14 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
 
   const handleNotifPress = async () => {
     setNotifVisible(true);
-    await fetchNotifications();
+    await fetchNotifications(1, true);
   };
+  
+  const loadMoreNotifications = useCallback(() => {
+    if (!loadingMore && hasMorePages && notifVisible) {
+      fetchNotifications(currentPage + 1, false);
+    }
+  }, [loadingMore, hasMorePages, currentPage, notifVisible, fetchNotifications]);
 
   const handleNotifClose = () => setNotifVisible(false);
 
@@ -174,7 +222,7 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
                     onPress={async () => {
                       try {
                         await apiService.request('/notifications/mark-read', { method: 'POST' });
-                        await fetchNotifications();
+                        await fetchNotifications(1, true);
                       } catch (error) {
                         console.error('Error marking all notifications as read:', error);
                       }
@@ -194,6 +242,16 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
               <FlatList
                 data={notifications}
                 keyExtractor={item => item.id.toString()}
+                onEndReached={loadMoreNotifications}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={
+                  loadingMore ? (
+                    <View style={styles.loadMoreContainer}>
+                      <ActivityIndicator size="small" color="#014D40" />
+                      <Text style={styles.loadMoreText}>Loading more...</Text>
+                    </View>
+                  ) : null
+                }
                 renderItem={({ item }) => (
                   <TouchableOpacity
                     onPress={async () => {
@@ -472,6 +530,16 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 2,
     borderColor: '#fff',
+  },
+  loadMoreContainer: {
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreText: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#666',
   },
 });
 

@@ -19,6 +19,9 @@ class DatabaseSeeder extends Seeder
             AdminUserSeeder::class,
             NotificationSeeder::class,
             SizingStandardSeeder::class,
+            CustomerSeeder::class,
+            MeasurementHistorySeeder::class,
+            AdminMeasurementHistorySeeder::class,
         ]);
     }
 }

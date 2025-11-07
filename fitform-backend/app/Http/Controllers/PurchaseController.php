@@ -80,7 +80,7 @@ class PurchaseController extends PaginatedController
             'search_fields' => ['item_name', 'customer_name', 'customer_email', 'clothing_type'],
             'filter_fields' => ['status', 'clothing_type', 'user_id'],
             'sort_fields' => ['created_at', 'purchase_date', 'status', 'item_name'],
-            'default_per_page' => 15,
+            'default_per_page' => 10,
             'max_per_page' => 50,
             'transform' => function ($purchase) {
                 $purchase->customer_name = $purchase->user ? $purchase->user->name : null;
