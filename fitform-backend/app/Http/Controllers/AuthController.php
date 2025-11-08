@@ -140,7 +140,7 @@ class AuthController extends Controller
                     'email' => $user->email,
                     'role' => $user->role,
                     'profile_image' => $user->profile_image && \Illuminate\Support\Facades\Storage::disk('public')->exists($user->profile_image) 
-                        ? $this->getStorageBaseUrl() . '/storage/' . $user->profile_image 
+                        ? $this->getStorageBaseUrl() . '/api/storage/' . $user->profile_image 
                         : null,
                     'phone' => $user->phone,
                     'address' => $user->address,
@@ -186,7 +186,7 @@ class AuthController extends Controller
                     'email' => $user->email,
                     'role' => $user->role,
                     'profile_image' => $user->profile_image && \Illuminate\Support\Facades\Storage::disk('public')->exists($user->profile_image) 
-                        ? $this->getStorageBaseUrl() . '/storage/' . $user->profile_image 
+                        ? $this->getStorageBaseUrl() . '/api/storage/' . $user->profile_image 
                         : null,
                     'phone' => $user->phone,
                     'address' => $user->address,

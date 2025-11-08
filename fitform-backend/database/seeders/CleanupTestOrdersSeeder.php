@@ -5,44 +5,70 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\Rental;
 use App\Models\Purchase;
-use App\Models\User;
+use App\Models\RentalPurchaseHistory;
+use App\Models\Notification;
+use Illuminate\Support\Facades\DB;
 
 class CleanupTestOrdersSeeder extends Seeder
 {
     /**
      * Run the database seeds.
+     * Removes all test sample orders from rentals and purchases tables
      */
     public function run(): void
     {
-        $this->command->info('Cleaning up test orders for Prince Nuguid...');
+        $this->command->info('🧹 Starting cleanup of test sample orders...');
         
-        // Find the user "Prince Nuguid"
-        $user = User::where('name', 'LIKE', '%Prince Nuguid%')
-            ->orWhere('name', 'LIKE', '%Nuguid%')
-            ->first();
+        // Count before deletion
+        $rentalCount = Rental::withTrashed()->count();
+        $purchaseCount = Purchase::withTrashed()->count();
+        $historyCount = RentalPurchaseHistory::count();
         
-        if (!$user) {
-            $this->command->warn('User "Prince Nuguid" not found. Nothing to clean up.');
-            return;
-        }
+        $this->command->info("📊 Current counts:");
+        $this->command->info("   - Rentals: {$rentalCount}");
+        $this->command->info("   - Purchases: {$purchaseCount}");
+        $this->command->info("   - History records: {$historyCount}");
         
-        $this->command->info('Found user: ' . $user->name . ' (ID: ' . $user->id . ')');
+        // Delete all rentals (including soft deleted)
+        $this->command->info('🗑️  Deleting all rental orders...');
+        $deletedRentals = Rental::withTrashed()->forceDelete();
+        $this->command->info("   ✅ Deleted all rental orders");
         
-        // Count orders before deletion
-        $rentalCount = Rental::where('user_id', $user->id)->whereNull('deleted_at')->count();
-        $purchaseCount = Purchase::where('user_id', $user->id)->whereNull('deleted_at')->count();
+        // Delete all purchases (including soft deleted)
+        $this->command->info('🗑️  Deleting all purchase orders...');
+        $deletedPurchases = Purchase::withTrashed()->forceDelete();
+        $this->command->info("   ✅ Deleted all purchase orders");
         
-        $this->command->info("Found {$rentalCount} rental orders and {$purchaseCount} purchase orders.");
+        // Delete all rental/purchase history records
+        $this->command->info('🗑️  Deleting all rental/purchase history records...');
+        $deletedHistory = RentalPurchaseHistory::query()->delete();
+        $this->command->info("   ✅ Deleted {$deletedHistory} history records");
         
-        // Delete rental orders (soft delete)
-        $deletedRentals = Rental::where('user_id', $user->id)->whereNull('deleted_at')->delete();
-        $this->command->info("Deleted {$deletedRentals} rental orders.");
+        // Delete related notifications
+        $this->command->info('🗑️  Deleting order-related notifications...');
+        $deletedNotifications = Notification::whereNotNull('order_id')
+            ->where(function($query) {
+                $query->where('order_type', 'Rental')
+                      ->orWhere('order_type', 'Purchase');
+            })
+            ->delete();
+        $this->command->info("   ✅ Deleted {$deletedNotifications} order-related notifications");
         
-        // Delete purchase orders (soft delete)
-        $deletedPurchases = Purchase::where('user_id', $user->id)->whereNull('deleted_at')->delete();
-        $this->command->info("Deleted {$deletedPurchases} purchase orders.");
+        // Count after deletion
+        $rentalCountAfter = Rental::withTrashed()->count();
+        $purchaseCountAfter = Purchase::withTrashed()->count();
+        $historyCountAfter = RentalPurchaseHistory::count();
         
-        $this->command->info('Successfully cleaned up test orders for ' . $user->name);
+        $this->command->info("📊 Final counts:");
+        $this->command->info("   - Rentals: {$rentalCountAfter}");
+        $this->command->info("   - Purchases: {$purchaseCountAfter}");
+        $this->command->info("   - History records: {$historyCountAfter}");
+        
+        $this->command->info('✅ Cleanup completed successfully!');
+        $this->command->info("   - Removed {$rentalCount} rental orders");
+        $this->command->info("   - Removed {$purchaseCount} purchase orders");
+        $this->command->info("   - Removed {$historyCount} history records");
+        $this->command->info("   - Removed {$deletedNotifications} notifications");
     }
 }
 

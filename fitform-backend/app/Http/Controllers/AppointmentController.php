@@ -66,20 +66,20 @@ class AppointmentController extends PaginatedController
                 'default_per_page' => 10,
                 'max_per_page' => 100,
                 'transform' => function ($appointment) {
-                    $appointmentDate = $appointment->appointment_date;
-                    $date = $appointmentDate->format('Y-m-d');
-                    $time = $appointmentDate->format('H:i');
-                    
-                    return [
-                        'id' => $appointment->id,
-                        'appointment_date' => $appointmentDate->format('Y-m-d H:i:s'),
-                        'appointment_time' => $time,
-                        'service_type' => $appointment->service_type,
-                        'status' => $appointment->status,
-                        'notes' => $appointment->notes,
-                        'created_at' => $appointment->created_at,
-                        'updated_at' => $appointment->updated_at,
-                    ];
+                $appointmentDate = $appointment->appointment_date;
+                $date = $appointmentDate->format('Y-m-d');
+                $time = $appointmentDate->format('H:i');
+                
+                return [
+                    'id' => $appointment->id,
+                    'appointment_date' => $appointmentDate->format('Y-m-d H:i:s'),
+                    'appointment_time' => $time,
+                    'service_type' => $appointment->service_type,
+                    'status' => $appointment->status,
+                    'notes' => $appointment->notes,
+                    'created_at' => $appointment->created_at,
+                    'updated_at' => $appointment->updated_at,
+                ];
                 }
             ];
             
@@ -112,27 +112,27 @@ class AppointmentController extends PaginatedController
                 'default_per_page' => 10,
                 'max_per_page' => 100,
                 'transform' => function ($appointment) {
-                    $appointmentDate = $appointment->appointment_date;
-                    $date = $appointmentDate->format('Y-m-d');
-                    $time = $appointmentDate->format('H:i');
-                    
-                    return [
-                        'id' => $appointment->id,
-                        'appointment_date' => $appointmentDate->format('Y-m-d H:i:s'),
-                        'appointment_time' => $time,
-                        'service_type' => $appointment->service_type,
-                        'status' => $appointment->status,
-                        'notes' => $appointment->notes,
-                        'customer_name' => $appointment->user->name ?? 'N/A',
-                        'customer_email' => $appointment->user->email ?? 'N/A',
+                $appointmentDate = $appointment->appointment_date;
+                $date = $appointmentDate->format('Y-m-d');
+                $time = $appointmentDate->format('H:i');
+                
+                return [
+                    'id' => $appointment->id,
+                    'appointment_date' => $appointmentDate->format('Y-m-d H:i:s'),
+                    'appointment_time' => $time,
+                    'service_type' => $appointment->service_type,
+                    'status' => $appointment->status,
+                    'notes' => $appointment->notes,
+                    'customer_name' => $appointment->user->name ?? 'N/A',
+                    'customer_email' => $appointment->user->email ?? 'N/A',
                         'customer_profile_image' => $appointment->user->profile_image 
                             ? (\Illuminate\Support\Facades\Storage::disk('public')->exists($appointment->user->profile_image) 
                                 ? request()->getSchemeAndHttpHost() . '/storage/' . $appointment->user->profile_image
                                 : null)
                             : null,
-                        'created_at' => $appointment->created_at,
-                        'updated_at' => $appointment->updated_at,
-                    ];
+                    'created_at' => $appointment->created_at,
+                    'updated_at' => $appointment->updated_at,
+                ];
                 }
             ];
             

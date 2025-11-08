@@ -52,7 +52,7 @@ class ProfileController extends Controller
                     'email' => $user->email,
                     'role' => $user->role,
                     'profile_image' => $user->profile_image && Storage::disk('public')->exists($user->profile_image) 
-                        ? $this->getStorageBaseUrl() . '/storage/' . $user->profile_image
+                        ? $this->getStorageBaseUrl() . '/api/storage/' . $user->profile_image
                         : null,
                     'phone' => $user->phone,
                     'address' => $user->address,
@@ -146,7 +146,7 @@ class ProfileController extends Controller
                     'email' => $user->email,
                     'role' => $user->role,
                     'profile_image' => $user->profile_image && Storage::disk('public')->exists($user->profile_image) 
-                        ? $this->getStorageBaseUrl() . '/storage/' . $user->profile_image
+                        ? $this->getStorageBaseUrl() . '/api/storage/' . $user->profile_image
                         : null,
                     'phone' => $user->phone,
                     'address' => $user->address,
@@ -219,7 +219,7 @@ class ProfileController extends Controller
                         'email' => $user->email,
                         'role' => $user->role,
                         'profile_image' => $user->profile_image && Storage::disk('public')->exists($user->profile_image) 
-                        ? $this->getStorageBaseUrl() . '/storage/' . $user->profile_image
+                        ? $this->getStorageBaseUrl() . '/api/storage/' . $user->profile_image
                         : null,
                         'phone' => $user->phone,
                         'address' => $user->address,

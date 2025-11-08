@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image, Dimensions, Alert, ScrollView } from 'react-native';
 import { Link, usePathname, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,9 +28,15 @@ interface AdminSidebarProps {
 const AdminSidebar: React.FC<AdminSidebarProps> = ({ open, setOpen }) => {
   const pathname = usePathname();
   const router = useRouter();
+  const [imageError, setImageError] = useState(false);
   const { logout, user } = useAuth();
   const isSidebarOpen = typeof open === 'boolean' ? open : !isMobile;
   const handleSetOpen = setOpen || (() => {});
+
+  // Reset image error when user or profile image changes
+  useEffect(() => {
+    setImageError(false);
+  }, [user?.profile_image]);
 
   if (!isSidebarOpen && isMobile) {
     return null;
@@ -71,15 +77,23 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ open, setOpen }) => {
             {user ? (
               <>
                 <View style={styles.logoWrapper}>
-                  {user.profile_image ? (
+                  {user.profile_image && !imageError ? (
                     <Image 
                       source={{ 
                         uri: getLocalImageUrl(user.profile_image),
-                        cache: 'force-cache'
+                        cache: 'reload'
                       }} 
                       style={styles.logoImage}
                       resizeMode="cover"
-                      onError={(error) => console.log('❌ Profile image error:', error)}
+                      onError={(error) => {
+                        console.log('❌ Admin Mobile Sidebar Profile image error:', error);
+                        console.log('🔍 Attempted URL:', getLocalImageUrl(user.profile_image));
+                        setImageError(true);
+                      }}
+                      onLoad={() => {
+                        console.log('✅ Admin Mobile Sidebar Profile image loaded:', getLocalImageUrl(user.profile_image));
+                        setImageError(false);
+                      }}
                     />
                   ) : (
                     <View style={styles.defaultProfileContainer}>
@@ -147,15 +161,23 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ open, setOpen }) => {
         {user ? (
           <>
             <View style={styles.logoWrapper}>
-              {user.profile_image ? (
+              {user.profile_image && !imageError ? (
                 <Image 
                   source={{ 
                     uri: getLocalImageUrl(user.profile_image),
-                    cache: 'force-cache'
+                    cache: 'reload'
                   }} 
                   style={styles.logoImage}
                   resizeMode="cover"
-                  onError={(error) => console.log('❌ Profile image error:', error)}
+                  onError={(error) => {
+                    console.log('❌ Admin Sidebar Profile image error:', error);
+                    console.log('🔍 Attempted URL:', getLocalImageUrl(user.profile_image));
+                    setImageError(true);
+                  }}
+                  onLoad={() => {
+                    console.log('✅ Admin Sidebar Profile image loaded:', getLocalImageUrl(user.profile_image));
+                    setImageError(false);
+                  }}
                 />
               ) : (
                 <View style={styles.defaultProfileContainer}>
@@ -223,8 +245,8 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   header: {
-    paddingTop: 90,
-    paddingBottom: 20,
+    paddingTop: 92,
+    paddingBottom: 24,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
@@ -238,22 +260,22 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   logoWrapper: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     borderWidth: 2,
     borderColor: '#FFD700',
     overflow: 'hidden',
-    marginBottom: 10,
+    marginBottom: 12,
     backgroundColor: '#014D40',
     alignItems: 'center',
     justifyContent: 'center',
   },
   logoImage: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
-    resizeMode: 'contain',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    resizeMode: 'cover',
   },
   brand: {
     fontSize: 22,
@@ -324,14 +346,15 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   defaultProfileContainer: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     borderWidth: 2,
     borderColor: '#FFD700',
     backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 12,
   },
 });
 

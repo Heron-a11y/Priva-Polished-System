@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import RentalOrderFlow from '../../Customer/components/RentalOrderFlow';
 import PurchaseOrderFlow from '../../Customer/components/PurchaseOrderFlow';
 import { Colors } from '../../constants/Colors';
+import KeyboardAvoidingWrapper from '../../components/KeyboardAvoidingWrapper';
 
 const { width, height } = Dimensions.get('window');
 
@@ -21,7 +22,7 @@ export default function CustomerOrders() {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
       {/* Compact Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Orders</Text>
@@ -56,7 +57,7 @@ export default function CustomerOrders() {
           <PurchaseOrderFlow />
         )}
       </View>
-    </View>
+    </KeyboardAvoidingWrapper>
   );
 }
 

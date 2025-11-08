@@ -21,17 +21,17 @@ class PurchaseRequest extends BaseValidationRequest
                 'min:2'
             ],
             'clothing_type' => [
-                'required',
+                'nullable',
                 'string',
-                Rule::in(['dress', 'suit', 'shirt', 'pants', 'skirt', 'jacket', 'coat', 'other'])
+                'max:100'
             ],
             'size' => [
-                'required',
+                'nullable',
                 'string',
                 'max:10'
             ],
             'color' => [
-                'required',
+                'nullable',
                 'string',
                 'max:50'
             ],
@@ -46,19 +46,19 @@ class PurchaseRequest extends BaseValidationRequest
                 'after_or_equal:today'
             ],
             'price' => [
-                'required',
+                'nullable',
                 'numeric',
                 'min:0',
                 'max:10000'
             ],
             'quantity' => [
-                'required',
+                'nullable',
                 'integer',
                 'min:1',
                 'max:10'
             ],
             'total_amount' => [
-                'required',
+                'nullable',
                 'numeric',
                 'min:0',
                 'max:100000'
@@ -77,6 +77,12 @@ class PurchaseRequest extends BaseValidationRequest
                 'nullable',
                 'array'
             ],
+            'measurements.height' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                'max:300'
+            ],
             'measurements.chest' => [
                 'nullable',
                 'numeric',
@@ -90,6 +96,42 @@ class PurchaseRequest extends BaseValidationRequest
                 'max:200'
             ],
             'measurements.hips' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                'max:200'
+            ],
+            'measurements.shoulders' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                'max:200'
+            ],
+            'measurements.inseam' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                'max:200'
+            ],
+            'measurements.armLength' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                'max:200'
+            ],
+            'measurements.arm_length' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                'max:200'
+            ],
+            'measurements.neck' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                'max:200'
+            ],
+            'measurements.thigh' => [
                 'nullable',
                 'numeric',
                 'min:0',
@@ -113,33 +155,33 @@ class PurchaseRequest extends BaseValidationRequest
                 'max:255'
             ],
             'customer_phone' => [
-                'required',
+                'nullable',
                 'string',
                 'regex:/^[\+]?[1-9][\d]{0,15}$/',
                 'max:20'
             ],
             'customer_address' => [
-                'required',
+                'nullable',
                 'string',
                 'max:500'
             ],
             'customer_city' => [
-                'required',
+                'nullable',
                 'string',
                 'max:100'
             ],
             'customer_state' => [
-                'required',
+                'nullable',
                 'string',
                 'max:100'
             ],
             'customer_zip_code' => [
-                'required',
+                'nullable',
                 'string',
                 'max:20'
             ],
             'customer_country' => [
-                'required',
+                'nullable',
                 'string',
                 'max:100'
             ],
@@ -190,7 +232,7 @@ class PurchaseRequest extends BaseValidationRequest
                 'max:100'
             ],
             'payment_method' => [
-                'required',
+                'nullable',
                 'string',
                 Rule::in(['credit_card', 'debit_card', 'paypal', 'bank_transfer', 'cash'])
             ],

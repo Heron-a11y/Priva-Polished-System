@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Platform, Image, Alert, ScrollView } from 'react-native';
 import { Link, usePathname, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,10 +16,16 @@ interface CustomerSidebarProps {
 const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
   const pathname = usePathname();
   const router = useRouter();
+  const [imageError, setImageError] = useState(false);
   const { logout, user } = useAuth();
   const isSidebarOpen = typeof open === 'boolean' ? open : !isMobile;
   const handleSetOpen = setOpen || (() => {});
   const [historyOpen, setHistoryOpen] = useState(false);
+
+  // Reset image error when user or profile image changes
+  useEffect(() => {
+    setImageError(false);
+  }, [user?.profile_image]);
 
   const handleLogout = async () => {
     Alert.alert(
@@ -68,15 +74,23 @@ const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
             </TouchableOpacity>
             {user ? (
               <>
-                {user.profile_image ? (
+                {user.profile_image && !imageError ? (
                   <Image 
                     source={{ 
                       uri: getLocalImageUrl(user.profile_image),
-                      cache: 'force-cache'
+                      cache: 'reload'
                     }} 
                     style={styles.logoImage}
                     resizeMode="cover"
-                    onError={(error) => console.log('❌ Profile image error:', error)}
+                    onError={(error) => {
+                      console.log('❌ Customer Mobile Sidebar Profile image error:', error);
+                      console.log('🔍 Attempted URL:', getLocalImageUrl(user.profile_image));
+                      setImageError(true);
+                    }}
+                    onLoad={() => {
+                      console.log('✅ Customer Mobile Sidebar Profile image loaded:', getLocalImageUrl(user.profile_image));
+                      setImageError(false);
+                    }}
                   />
                 ) : (
                   <View style={styles.defaultProfileContainer}>
@@ -211,15 +225,23 @@ const CustomerSidebar: React.FC<CustomerSidebarProps> = ({ open, setOpen }) => {
       <View style={styles.logoArea}>
         {user ? (
           <>
-            {user.profile_image ? (
+            {user.profile_image && !imageError ? (
               <Image 
                 source={{ 
                   uri: getLocalImageUrl(user.profile_image),
-                  cache: 'force-cache'
+                  cache: 'reload'
                 }} 
                 style={styles.logoImage}
                 resizeMode="cover"
-                onError={(error) => console.log('❌ Profile image error:', error)}
+                onError={(error) => {
+                  console.log('❌ Customer Sidebar Profile image error:', error);
+                  console.log('🔍 Attempted URL:', getLocalImageUrl(user.profile_image));
+                  setImageError(true);
+                }}
+                onLoad={() => {
+                  console.log('✅ Customer Sidebar Profile image loaded:', getLocalImageUrl(user.profile_image));
+                  setImageError(false);
+                }}
               />
             ) : (
               <View style={styles.defaultProfileContainer}>

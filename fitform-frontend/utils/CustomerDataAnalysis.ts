@@ -139,47 +139,38 @@ export class CustomerDataAnalyzer {
    * Generate comprehensive customer insights
    */
   generateInsights(): CustomerInsights {
-    const totalOrders = this.orders.length;
+    // Filter out cancelled and declined orders from calculations
+    // This matches the filtering logic in RentalPurchaseHistory
+    const validOrders = this.orders.filter(order => {
+      const status = (order.status || '').toLowerCase();
+      return status !== 'cancelled' && status !== 'declined';
+    });
+    
+    const totalOrders = validOrders.length;
     
     // Helper function to extract amount from order
+    // This matches the exact logic used in RentalPurchaseHistory.tsx
     const extractAmount = (order: any): number => {
       // Use the same logic as RentalPurchaseHistory for consistency
-      if (order.order_type === 'rental') {
-        // For rentals: use quotation_amount
-        return order.quotation_amount ? Number(order.quotation_amount) : 0;
-      } else if (order.order_type === 'purchase') {
-        // For purchases: use quotation_amount OR quotation_price
-        return (order.quotation_amount || order.quotation_price) ? 
-          Number(order.quotation_amount || order.quotation_price) : 0;
-      } else {
-        // Fallback to the original logic for other types
-        const possibleAmounts = [
-          order.amount,
-          order.quotation_amount,
-          order.total_amount,
-          order.price,
-          order.cost,
-          order.value
-        ];
-        
-        for (const amount of possibleAmounts) {
-          if (amount !== null && amount !== undefined && amount !== '') {
-            const numericAmount = typeof amount === 'string' ? Number(amount) : amount;
-            if (!isNaN(numericAmount) && numericAmount > 0) {
-              return numericAmount;
-            }
-          }
-        }
+      // RentalPurchaseHistory uses: item.quotation_amount || item.quotation_price || 0
+      const amount = order.quotation_amount || order.quotation_price || order.amount || 0;
+      
+      // Convert to number and handle edge cases
+      if (amount === null || amount === undefined || amount === '') {
+        return 0;
       }
       
-      return 0;
+      const numericAmount = typeof amount === 'string' ? Number(amount) : amount;
+      return isNaN(numericAmount) ? 0 : numericAmount;
     };
     
-    const totalSpent = this.orders.reduce((sum, order) => {
+    // Calculate total spent only from valid (non-cancelled, non-declined) orders
+    const totalSpent = validOrders.reduce((sum, order) => {
       const amount = extractAmount(order);
       console.log('🔍 Debug: Order amount calculation:', {
         orderId: order.id,
         orderType: order.order_type,
+        orderStatus: order.status,
         originalAmount: order.amount,
         quotationAmount: order.quotation_amount,
         quotationPrice: order.quotation_price,
@@ -191,18 +182,21 @@ export class CustomerDataAnalyzer {
     }, 0);
     
     console.log('🔍 Debug: Total spent calculation result:', totalSpent);
-    console.log('🔍 Debug: Total orders processed:', this.orders.length);
+    console.log('🔍 Debug: Total orders processed (all):', this.orders.length);
+    console.log('🔍 Debug: Valid orders (excluding cancelled/declined):', validOrders.length);
     console.log('🔍 Debug: Orders breakdown:', {
-      rentals: this.orders.filter(o => o.order_type === 'rental').length,
-      purchases: this.orders.filter(o => o.order_type === 'purchase').length,
-      other: this.orders.filter(o => !['rental', 'purchase'].includes(o.order_type)).length
+      rentals: validOrders.filter(o => o.order_type === 'rental').length,
+      purchases: validOrders.filter(o => o.order_type === 'purchase').length,
+      other: validOrders.filter(o => !['rental', 'purchase'].includes(o.order_type)).length,
+      cancelled: this.orders.filter(o => (o.status || '').toLowerCase() === 'cancelled').length,
+      declined: this.orders.filter(o => (o.status || '').toLowerCase() === 'declined').length
     });
     
     const averageOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
 
-    // Analyze clothing type preferences
+    // Analyze clothing type preferences (using valid orders only)
     const clothingTypeCounts: {[key: string]: number} = {};
-    this.orders.forEach(order => {
+    validOrders.forEach(order => {
       clothingTypeCounts[order.clothing_type] = (clothingTypeCounts[order.clothing_type] || 0) + 1;
     });
     
@@ -215,9 +209,9 @@ export class CustomerDataAnalyzer {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    // Analyze rental vs purchase ratio
-    const rentals = this.orders.filter(order => order.type === 'rental' || order.order_type === 'rental').length;
-    const purchases = this.orders.filter(order => order.type === 'purchase' || order.order_type === 'purchase').length;
+    // Analyze rental vs purchase ratio (using valid orders only)
+    const rentals = validOrders.filter(order => order.type === 'rental' || order.order_type === 'rental').length;
+    const purchases = validOrders.filter(order => order.type === 'purchase' || order.order_type === 'purchase').length;
     const rentalVsPurchaseRatio = totalOrders > 0 ? rentals / totalOrders : 0;
 
     // Analyze measurement trends
@@ -725,7 +719,12 @@ export class CustomerDataAnalyzer {
    * Analyze rental-specific insights
    */
   private analyzeRentalInsights() {
-    const rentals = this.orders.filter(order => order.type === 'rental' || order.order_type === 'rental');
+    // Filter out cancelled and declined orders
+    const rentals = this.orders.filter(order => {
+      const status = (order.status || '').toLowerCase();
+      return (order.type === 'rental' || order.order_type === 'rental') &&
+             status !== 'cancelled' && status !== 'declined';
+    });
     
     if (rentals.length === 0) {
       return {
@@ -769,7 +768,12 @@ export class CustomerDataAnalyzer {
    * Analyze purchase-specific insights
    */
   private analyzePurchaseInsights() {
-    const purchases = this.orders.filter(order => order.type === 'purchase' || order.order_type === 'purchase');
+    // Filter out cancelled and declined orders
+    const purchases = this.orders.filter(order => {
+      const status = (order.status || '').toLowerCase();
+      return (order.type === 'purchase' || order.order_type === 'purchase') &&
+             status !== 'cancelled' && status !== 'declined';
+    });
     
     if (purchases.length === 0) {
       return {
@@ -892,6 +896,28 @@ export class CustomerDataAnalyzer {
       };
     }
 
+    // Filter out cancelled and declined orders (matching generateInsights logic)
+    const validOrders = this.orders.filter(order => {
+      const status = (order.status || '').toLowerCase();
+      return status !== 'cancelled' && status !== 'declined';
+    });
+
+    // Helper function to extract amount from order (matching generateInsights logic)
+    // This matches the exact logic used in RentalPurchaseHistory.tsx
+    const extractAmount = (order: any): number => {
+      // Use the same logic as RentalPurchaseHistory for consistency
+      // RentalPurchaseHistory uses: item.quotation_amount || item.quotation_price || 0
+      const amount = order.quotation_amount || order.quotation_price || order.amount || 0;
+      
+      // Convert to number and handle edge cases
+      if (amount === null || amount === undefined || amount === '') {
+        return 0;
+      }
+      
+      const numericAmount = typeof amount === 'string' ? Number(amount) : amount;
+      return isNaN(numericAmount) ? 0 : numericAmount;
+    };
+
     // Analyze preferred order days
     const dayCounts: {[key: string]: number} = {};
     this.orders.forEach(order => {
@@ -911,38 +937,27 @@ export class CustomerDataAnalyzer {
       .sort((a, b) => b.count - a.count);
 
     // Analyze seasonal spending
+    // Use validOrders (excluding cancelled/declined) and the same extractAmount function
+    // to match the total spent calculation logic
     const monthlySpending: {[key: string]: number} = {};
-    this.orders.forEach(order => {
+    validOrders.forEach(order => {
       const orderDateStr = order.date || order.created_at || order.order_date;
       if (orderDateStr) {
         const orderDate = new Date(orderDateStr);
         if (!isNaN(orderDate.getTime())) { // Check if date is valid
           const month = orderDate.toLocaleDateString('en-US', { month: 'long' });
           
-          // Use robust amount extraction
-          const possibleAmounts = [
-            order.amount,
-            order.quotation_amount,
-            order.total_amount,
-            order.price,
-            order.cost,
-            order.value
-          ];
-          
-          let amount = 0;
-          for (const amt of possibleAmounts) {
-            if (amt !== null && amt !== undefined && amt !== '') {
-              const numericAmount = typeof amt === 'string' ? Number(amt) : amt;
-              if (!isNaN(numericAmount) && numericAmount > 0) {
-                amount = numericAmount;
-                break;
-              }
-            }
-          }
+          // Use the same extractAmount function for consistency with total spent
+          const amount = extractAmount(order);
           
           monthlySpending[month] = (monthlySpending[month] || 0) + amount;
           console.log('🔍 Debug: Seasonal spending calculation:', {
             month,
+            orderId: order.id,
+            orderType: order.order_type || order.type,
+            orderStatus: order.status,
+            quotationAmount: order.quotation_amount,
+            quotationPrice: order.quotation_price,
             amount,
             runningTotal: monthlySpending[month]
           });
@@ -951,7 +966,8 @@ export class CustomerDataAnalyzer {
     });
     
     console.log('🔍 Debug: Monthly spending result:', monthlySpending);
-    
+    console.log('🔍 Debug: Seasonal spending - using validOrders count:', validOrders.length);
+    console.log('🔍 Debug: Seasonal spending - total orders count:', this.orders.length);
 
     const seasonalSpending = Object.entries(monthlySpending)
       .map(([month, amount]) => ({ month, amount }))

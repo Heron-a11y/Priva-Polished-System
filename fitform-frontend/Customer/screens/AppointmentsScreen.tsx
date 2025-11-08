@@ -53,10 +53,16 @@ interface Appointment {
 
 const AppointmentsScreen = () => {
   const { user } = useAuth();
+  const [imageError, setImageError] = useState(false);
   const scheduleScrollRef = useRef<ScrollView>(null);
   const serviceTypeSectionRef = useRef<View>(null);
   const timeSectionRef = useRef<View>(null);
   const scrollContentRef = useRef<View>(null);
+
+  // Reset image error when user or profile image changes
+  useEffect(() => {
+    setImageError(false);
+  }, [user?.profile_image]);
   const [serviceTypeSectionY, setServiceTypeSectionY] = useState(0);
   const [timeSectionY, setTimeSectionY] = useState(0);
   const [fieldErrors, setFieldErrors] = useState<{ serviceType?: string }>({});
@@ -294,15 +300,23 @@ const AppointmentsScreen = () => {
       >
         <View style={styles.cardHeader}>
           <View style={styles.customerInfo}>
-            {user?.profile_image ? (
+            {user?.profile_image && !imageError ? (
               <Image 
                 source={{ 
                   uri: getLocalImageUrl(user.profile_image),
-                  cache: 'force-cache'
+                  cache: 'reload'
                 }} 
                 style={styles.customerProfileImage}
                 resizeMode="cover"
-                onError={(error) => console.log('❌ Profile image error:', error)}
+                onError={(error) => {
+                  console.log('❌ Appointments Card Profile image error:', error);
+                  console.log('🔍 Attempted URL:', getLocalImageUrl(user.profile_image));
+                  setImageError(true);
+                }}
+                onLoad={() => {
+                  console.log('✅ Appointments Card Profile image loaded:', getLocalImageUrl(user.profile_image));
+                  setImageError(false);
+                }}
               />
             ) : (
               <Ionicons name="person-circle" size={20} color="#014D40" />
@@ -458,15 +472,15 @@ const AppointmentsScreen = () => {
         setCurrentPage(page);
       } else {
         // Handle legacy response format (array or data property)
-        let appointmentsData = [];
-        if (Array.isArray(response)) {
-          appointmentsData = response;
-        } else if (response && response.data) {
-          appointmentsData = response.data;
-        }
-        
+      let appointmentsData = [];
+      if (Array.isArray(response)) {
+        appointmentsData = response;
+      } else if (response && response.data) {
+        appointmentsData = response.data;
+      }
+      
         if (reset) {
-          setAppointments(appointmentsData);
+      setAppointments(appointmentsData);
         } else {
           setAppointments(prev => {
             const existingIds = new Set(prev.map(apt => apt.id));
@@ -487,7 +501,7 @@ const AppointmentsScreen = () => {
       }
       
       if (reset) {
-        setAppointments([]);
+      setAppointments([]);
       }
     } finally {
       setLoading(false);
@@ -1549,125 +1563,125 @@ const AppointmentsScreen = () => {
           }
           ListHeaderComponent={
             <>
-              {/* Calendar Container */}
-              <View style={styles.calendarContainer}>
-                <Calendar
-                  onDayPress={handleDateSelect}
-                  markedDates={getMarkedDates()}
-                  minDate={(() => {
-                    const now = new Date();
-                    return now.getFullYear() + '-' + 
-                      String(now.getMonth() + 1).padStart(2, '0') + '-' + 
-                      String(now.getDate()).padStart(2, '0');
-                  })()}
-                  theme={{
-                    backgroundColor: '#fff',
-                    calendarBackground: '#fff',
-                    textSectionTitleColor: '#014D40',
-                    selectedDayBackgroundColor: '#014D40',
-                    selectedDayTextColor: '#fff',
-                    todayTextColor: '#014D40',
-                    dayTextColor: '#333',
-                    textDisabledColor: '#d9e1e8',
-                    dotColor: '#014D40',
-                    selectedDotColor: '#fff',
-                    arrowColor: '#014D40',
-                    monthTextColor: '#014D40',
-                    indicatorColor: '#014D40',
-                    textDayFontFamily: 'System',
-                    textDayHeaderFontFamily: 'System',
-                    textDayFontWeight: '300',
-                    textMonthFontWeight: 'bold',
-                    textDayHeaderFontWeight: '600',
-                    textDayFontSize: 16,
-                    textMonthFontSize: 18,
-                    textDayHeaderFontSize: 14,
-                  }}
-                />
-              </View>
-              
-              {/* Calendar Legend */}
-              <View style={styles.legendContainer}>
-                <Text style={styles.legendTitle}>Appointment Status</Text>
-                <View style={styles.legendItems}>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
-                    <Text style={styles.legendText}>Confirmed</Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
-                    <Text style={styles.legendText}>Pending</Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#F44336' }]} />
-                    <Text style={styles.legendText}>Cancelled</Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#ccc' }]} />
-                    <Text style={styles.legendText}>Booked</Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#d9e1e8' }]} />
-                    <Text style={styles.legendText}>Past Dates</Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#007AFF' }]} />
-                    <Text style={styles.legendText}>Today</Text>
-                  </View>
-                </View>
-                
-                {/* Policy Button */}
-                <TouchableOpacity
-                  style={styles.policyButtonContainer}
-                  onPress={() => setShowPolicyModal(true)}
-                >
-                  <Ionicons name="information-circle" size={20} color="#014D40" />
-                  <Text style={styles.policyButtonText}>View Appointment Policy</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#014D40" />
-                </TouchableOpacity>
-                
-                {/* Business Hours Info */}
-                <View style={styles.businessHoursInfo}>
-                  <Text style={styles.businessHoursTitle}>Business Hours</Text>
-                  <Text style={styles.businessHoursText}>10:00 AM - 7:00 PM</Text>
-                </View>
-              </View>
+        {/* Calendar Container */}
+        <View style={styles.calendarContainer}>
+          <Calendar
+            onDayPress={handleDateSelect}
+            markedDates={getMarkedDates()}
+            minDate={(() => {
+              const now = new Date();
+              return now.getFullYear() + '-' + 
+                String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                String(now.getDate()).padStart(2, '0');
+            })()}
+            theme={{
+              backgroundColor: '#fff',
+              calendarBackground: '#fff',
+              textSectionTitleColor: '#014D40',
+              selectedDayBackgroundColor: '#014D40',
+              selectedDayTextColor: '#fff',
+              todayTextColor: '#014D40',
+              dayTextColor: '#333',
+              textDisabledColor: '#d9e1e8',
+              dotColor: '#014D40',
+              selectedDotColor: '#fff',
+              arrowColor: '#014D40',
+              monthTextColor: '#014D40',
+              indicatorColor: '#014D40',
+              textDayFontFamily: 'System',
+              textDayHeaderFontFamily: 'System',
+              textDayFontWeight: '300',
+              textMonthFontWeight: 'bold',
+              textDayHeaderFontWeight: '600',
+              textDayFontSize: 16,
+              textMonthFontSize: 18,
+              textDayHeaderFontSize: 14,
+            }}
+          />
+        </View>
+        
+        {/* Calendar Legend */}
+        <View style={styles.legendContainer}>
+          <Text style={styles.legendTitle}>Appointment Status</Text>
+          <View style={styles.legendItems}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
+              <Text style={styles.legendText}>Confirmed</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
+              <Text style={styles.legendText}>Pending</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#F44336' }]} />
+              <Text style={styles.legendText}>Cancelled</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#ccc' }]} />
+              <Text style={styles.legendText}>Booked</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#d9e1e8' }]} />
+              <Text style={styles.legendText}>Past Dates</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#007AFF' }]} />
+              <Text style={styles.legendText}>Today</Text>
+            </View>
+          </View>
+          
+          {/* Policy Button */}
+          <TouchableOpacity
+            style={styles.policyButtonContainer}
+            onPress={() => setShowPolicyModal(true)}
+          >
+            <Ionicons name="information-circle" size={20} color="#014D40" />
+            <Text style={styles.policyButtonText}>View Appointment Policy</Text>
+            <Ionicons name="chevron-forward" size={16} color="#014D40" />
+          </TouchableOpacity>
+          
+          {/* Business Hours Info */}
+          <View style={styles.businessHoursInfo}>
+            <Text style={styles.businessHoursTitle}>Business Hours</Text>
+            <Text style={styles.businessHoursText}>10:00 AM - 7:00 PM</Text>
+          </View>
+        </View>
 
               {/* Appointments List Header */}
-              <View style={styles.appointmentsSection}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Your Appointments</Text>
-                  <View style={styles.headerActions}>
-                    {/* Delete Button */}
-                    <TouchableOpacity
-                      style={styles.deleteButton}
-                      onPress={() => setShowDeleteModal(true)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="trash-outline" size={16} color="#dc2626" />
-                      <Text style={styles.deleteButtonText}>Delete</Text>
-                      <Ionicons name="chevron-down" size={12} color="#dc2626" />
-                    </TouchableOpacity>
-                    {/* Collapsible Sort Button */}
-                    <CollapsibleSortButton
-                      sortOption={sortOption}
-                      sortDirection={sortDirection}
-                      onSortChange={handleSortChange}
-                      sortOptions={sortOptions}
-                      style={styles.sortButtonContainer}
-                    />
-                  </View>
-                </View>
+        <View style={styles.appointmentsSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Your Appointments</Text>
+            <View style={styles.headerActions}>
+              {/* Delete Button */}
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => setShowDeleteModal(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="trash-outline" size={16} color="#dc2626" />
+                <Text style={styles.deleteButtonText}>Delete</Text>
+                <Ionicons name="chevron-down" size={12} color="#dc2626" />
+              </TouchableOpacity>
+              {/* Collapsible Sort Button */}
+              <CollapsibleSortButton
+                sortOption={sortOption}
+                sortDirection={sortDirection}
+                onSortChange={handleSortChange}
+                sortOptions={sortOptions}
+                style={styles.sortButtonContainer}
+              />
+            </View>
+          </View>
               </View>
             </>
           }
           ListEmptyComponent={
             !loading ? (
-              <View style={styles.emptyState}>
-                <Ionicons name="calendar-outline" size={48} color="#ccc" />
-                <Text style={styles.emptyText}>No appointments found</Text>
-                <Text style={styles.emptySubtext}>Tap the + button to schedule your first appointment</Text>
-              </View>
+            <View style={styles.emptyState}>
+              <Ionicons name="calendar-outline" size={48} color="#ccc" />
+              <Text style={styles.emptyText}>No appointments found</Text>
+              <Text style={styles.emptySubtext}>Tap the + button to schedule your first appointment</Text>
+            </View>
             ) : null
           }
           ListFooterComponent={
@@ -1675,7 +1689,7 @@ const AppointmentsScreen = () => {
               <View style={styles.loadMoreContainer}>
                 <ActivityIndicator size="small" color={Colors.primary} />
                 <Text style={styles.loadMoreText}>Loading more appointments...</Text>
-              </View>
+                    </View>
             ) : (
               <View style={styles.bottomSpacing} />
             )
@@ -1683,16 +1697,16 @@ const AppointmentsScreen = () => {
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
         />
-      )}
+                    )}
 
       {/* Floating Action Button */}
-      <TouchableOpacity
+                        <TouchableOpacity 
         style={styles.fab}
         onPress={handleAddAppointment}
         activeOpacity={0.8}
-      >
+                        >
         <Ionicons name="add" size={28} color="#fff" />
-      </TouchableOpacity>
+                        </TouchableOpacity>
 
       {/* Create Appointment Modal */}
       <Modal

@@ -1316,8 +1316,18 @@ export default function CatalogManagementScreen() {
     );
   }
 
+  const handleScroll = (event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const paddingToBottom = 20;
+    const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+    
+    if (isCloseToBottom && hasMorePages && !loadingMore) {
+      loadMore();
+    }
+  };
+
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
       <View style={styles.header}>
         <View style={styles.titleContainer}>
           <Ionicons name="shirt" size={28} color="#014D40" style={styles.titleIcon} />
@@ -1464,7 +1474,7 @@ export default function CatalogManagementScreen() {
       <TouchableOpacity style={styles.fab} onPress={handleAddItem}>
         <Ionicons name="add" size={28} color="#fff" />
       </TouchableOpacity>
-    </View>
+    </KeyboardAvoidingWrapper>
   );
 }
 

@@ -59,20 +59,120 @@ export default function InsightsScreen() {
         return;
       }
       
-      // Load order history for insights
-      const historyResponse = await apiService.getRentalPurchaseHistory();
-      console.log('🔍 Debug: History API response:', historyResponse);
-      const orders = Array.isArray(historyResponse?.data) ? historyResponse.data : [];
+      // Load order history for insights - fetch all pages to get complete data
+      // Use a large per_page to get all orders in one request, or fetch all pages
+      let allOrders: any[] = [];
+      let currentPage = 1;
+      let hasMorePages = true;
+      
+      while (hasMorePages) {
+        const historyResponse = await apiService.getRentalPurchaseHistory({
+          page: currentPage.toString(),
+          per_page: '100' // Large page size to minimize requests
+        });
+        console.log(`🔍 Debug: History API response (page ${currentPage}):`, historyResponse);
+        
+        if (historyResponse && historyResponse.success !== false) {
+          const pageOrders = Array.isArray(historyResponse?.data) ? historyResponse.data : [];
+          allOrders = [...allOrders, ...pageOrders];
+          
+          // Check if there are more pages
+          hasMorePages = historyResponse.pagination?.has_more_pages || false;
+          currentPage++;
+          
+          // Safety limit to prevent infinite loops
+          if (currentPage > 100) {
+            console.warn('⚠️ Reached maximum page limit (100), stopping pagination');
+            break;
+          }
+        } else {
+          hasMorePages = false;
+        }
+      }
+      
+      console.log(`✅ Fetched ${allOrders.length} total orders across ${currentPage - 1} page(s)`);
+      
+      // Filter out cancelled and declined orders to match RentalPurchaseHistory logic
+      // The backend returns cancelled/declined orders for history, but we exclude them from insights
+      // Also apply the same status filtering as RentalPurchaseHistory:
+      // - For rentals: only include "returned" (exclude cancelled, declined)
+      // - For purchases: only include "picked_up" (exclude cancelled, declined)
+      // This matches the exact logic used in RentalPurchaseHistory.tsx for Total Spent calculation
+      const orders = allOrders.filter(order => {
+        const status = (order.status || '').toLowerCase();
+        // Handle both order_type and type fields (for compatibility)
+        const orderType = (order.order_type || order.type || '').toLowerCase();
+        
+        // Exclude cancelled and declined orders (matching RentalPurchaseHistory Total Spent logic)
+        if (status === 'cancelled' || status === 'declined') {
+          return false;
+        }
+        
+        // For rentals: only include "returned" status
+        if (orderType === 'rental') {
+          return status === 'returned';
+        }
+        
+        // For purchases: only include "picked_up" status
+        if (orderType === 'purchase') {
+          return status === 'picked_up';
+        }
+        
+        // If order_type is not set, try to infer from other fields or exclude
+        // This should not happen if backend is working correctly, but handle gracefully
+        return false; // Exclude orders without clear type
+      });
+      
+      // Deduplicate orders by order_id (if available) or by id
+      const deduplicatedOrders = orders.reduce((acc: any[], order: any) => {
+        const uniqueKey = order.order_id 
+          ? `${order.order_type || order.type || 'unknown'}-order-${order.order_id}` 
+          : `${order.order_type || order.type || 'unknown'}-${order.id}`;
+        
+        const existingIndex = acc.findIndex((o: any) => {
+          const existingKey = o.order_id 
+            ? `${o.order_type || o.type || 'unknown'}-order-${o.order_id}` 
+            : `${o.order_type || o.type || 'unknown'}-${o.id}`;
+          return existingKey === uniqueKey;
+        });
+        
+        if (existingIndex === -1) {
+          acc.push(order);
+        } else {
+          // If duplicate found, keep the one with the most recent date or higher id
+          const existing = acc[existingIndex];
+          const existingDate = new Date(existing.order_date || existing.date || existing.created_at || 0);
+          const newDate = new Date(order.order_date || order.date || order.created_at || 0);
+          if (newDate > existingDate || order.id > existing.id) {
+            acc[existingIndex] = order;
+          }
+        }
+        
+        return acc;
+      }, []);
+      
+      console.log(`✅ Filtered to ${deduplicatedOrders.length} valid orders (excluding cancelled/declined and applying status filter)`);
+      console.log('🔍 Debug: Orders breakdown:', {
+        totalFetched: allOrders.length,
+        afterStatusFilter: orders.length,
+        afterDeduplication: deduplicatedOrders.length,
+        cancelled: allOrders.filter(o => (o.status || '').toLowerCase() === 'cancelled').length,
+        declined: allOrders.filter(o => (o.status || '').toLowerCase() === 'declined').length,
+        returned: deduplicatedOrders.filter(o => (o.status || '').toLowerCase() === 'returned').length,
+        picked_up: deduplicatedOrders.filter(o => (o.status || '').toLowerCase() === 'picked_up').length,
+        rentals: deduplicatedOrders.filter(o => (o.order_type || o.type || '').toLowerCase() === 'rental').length,
+        purchases: deduplicatedOrders.filter(o => (o.order_type || o.type || '').toLowerCase() === 'purchase').length
+      });
       
       // Debug: Check if we have any orders
-      if (orders.length === 0) {
-        console.log('⚠️ Warning: No orders found in API response');
-        console.log('🔍 Debug: Full API response:', historyResponse);
-        console.log('🔍 Debug: Response success:', historyResponse?.success);
-        console.log('🔍 Debug: Response data type:', typeof historyResponse?.data);
+      if (deduplicatedOrders.length === 0) {
+        console.log('⚠️ Warning: No valid orders found after filtering');
+        console.log('🔍 Debug: Total orders fetched:', allOrders.length);
+        console.log('🔍 Debug: Cancelled orders:', allOrders.filter(o => (o.status || '').toLowerCase() === 'cancelled').length);
+        console.log('🔍 Debug: Declined orders:', allOrders.filter(o => (o.status || '').toLowerCase() === 'declined').length);
       } else {
-        console.log('✅ Found orders:', orders.length);
-        console.log('🔍 Debug: First order:', orders[0]);
+        console.log('✅ Found valid orders:', deduplicatedOrders.length);
+        console.log('🔍 Debug: First order:', deduplicatedOrders[0]);
       }
       
       // Load measurement history
@@ -88,14 +188,14 @@ export default function InsightsScreen() {
       console.log('🔍 Debug: Profile data:', profile);
 
       // Debug: Log the data structure
-      console.log('🔍 Debug: Orders data:', orders.slice(0, 2));
-      console.log('🔍 Debug: Orders length:', orders.length);
-      console.log('🔍 Debug: First order amount field:', orders[0]?.amount);
-      console.log('🔍 Debug: First order quotation_amount field:', orders[0]?.quotation_amount);
-      console.log('🔍 Debug: First order total_amount field:', orders[0]?.total_amount);
+      console.log('🔍 Debug: Orders data:', deduplicatedOrders.slice(0, 2));
+      console.log('🔍 Debug: Orders length:', deduplicatedOrders.length);
+      console.log('🔍 Debug: First order amount field:', deduplicatedOrders[0]?.amount);
+      console.log('🔍 Debug: First order quotation_amount field:', deduplicatedOrders[0]?.quotation_amount);
+      console.log('🔍 Debug: First order total_amount field:', deduplicatedOrders[0]?.total_amount);
       
-      // Use the analyzer
-      const analyzer = new CustomerDataAnalyzer(orders, measurements, profile);
+      // Use the analyzer with deduplicated orders
+      const analyzer = new CustomerDataAnalyzer(deduplicatedOrders, measurements, profile);
       const insightsData = analyzer.generateInsights();
       
       // Debug: Log the insights data

@@ -63,6 +63,7 @@ export default function EnhancedProfileScreen() {
     new_password: '',
     confirm_password: '',
   });
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -73,7 +74,10 @@ export default function EnhancedProfileScreen() {
       setLoading(true);
       const response = await apiService.getProfile();
       if (response.success) {
+        console.log('🔍 Profile loaded:', response.data.user);
+        console.log('🔍 Profile image URL:', response.data.user.profile_image);
         setProfile(response.data.user);
+        setImageError(false); // Reset error state when profile loads
       }
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -135,10 +139,12 @@ export default function EnhancedProfileScreen() {
           const response = await apiService.uploadProfileImage(asset.uri);
           if (response.success) {
             // Update with server response (includes proper image URL)
+            console.log('🔍 Upload response profile_image:', response.data.user.profile_image);
             setProfile(prev => ({ 
               ...prev, 
               profile_image: response.data.user.profile_image 
             }));
+            setImageError(false); // Reset error state on successful upload
             // Refresh user data in AuthContext to update header
             await refreshUser();
             Alert.alert('Success', 'Profile image updated successfully');
@@ -495,14 +501,30 @@ export default function EnhancedProfileScreen() {
       {/* Profile Image Section */}
       <View style={styles.imageSection}>
         <TouchableOpacity onPress={handleImagePicker} style={styles.imageContainer}>
-          <Image
-            source={
-              profile.profile_image
-                ? { uri: getLocalImageUrl(profile.profile_image) }
-                : require('../../assets/images/priva-logo.jpg')
-            }
-            style={styles.profileImage}
-          />
+          {profile.profile_image && !imageError ? (
+            <Image
+              source={{ 
+                uri: getLocalImageUrl(profile.profile_image) + (profile.profile_image.includes('?') ? '&' : '?') + 't=' + Date.now(),
+                cache: 'reload'
+              }}
+              style={styles.profileImage}
+              onError={(error) => {
+                console.log('❌ Profile image load error:', error);
+                console.log('🔍 Attempted URL:', getLocalImageUrl(profile.profile_image));
+                console.log('🔍 Profile image value:', profile.profile_image);
+                setImageError(true);
+              }}
+              onLoad={() => {
+                console.log('✅ Profile image loaded successfully:', getLocalImageUrl(profile.profile_image));
+                setImageError(false);
+              }}
+            />
+          ) : (
+            <Image
+              source={require('../../assets/images/priva-logo.jpg')}
+              style={styles.profileImage}
+            />
+          )}
           <View style={styles.imageOverlay}>
             <Ionicons name="camera" size={24} color="white" />
           </View>

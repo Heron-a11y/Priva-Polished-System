@@ -13,6 +13,30 @@ use Illuminate\Support\Facades\Log;
 class CatalogController extends PaginatedController
 {
     /**
+     * Get the base URL for storage files
+     */
+    private function getStorageBaseUrl(): string
+    {
+        // Try to get from request first
+        $host = request()->getHost();
+        $scheme = request()->getScheme();
+        $port = request()->getPort();
+        
+        // Check if host is a valid IP address (192.168.x.x format)
+        if (preg_match('/^192\.168\.\d+\.\d+$/', $host)) {
+            return $scheme . '://' . $host . ($port ? ':' . $port : '');
+        }
+        
+        // If host is localhost, 127.0.0.1, or not a valid IP, use the configured IP
+        if ($host === 'localhost' || $host === '127.0.0.1' || !filter_var($host, FILTER_VALIDATE_IP)) {
+            return 'http://192.168.1.54:8000';
+        }
+        
+        // Use the request host if it's a valid IP or domain
+        return $scheme . '://' . $host . ($port ? ':' . $port : '');
+    }
+
+    /**
      * Create notification for catalog events
      */
     private function createCatalogNotification($userId, $senderRole, $message, $catalogItemId = null)
@@ -87,7 +111,8 @@ class CatalogController extends PaginatedController
                 'transform' => function ($item) {
                     // Ensure image URL is properly formatted
                     if ($item->image_path) {
-                        $item->image_url = request()->getSchemeAndHttpHost() . '/storage/' . $item->image_path;
+                        $baseUrl = $this->getStorageBaseUrl();
+                        $item->image_url = $baseUrl . '/api/storage/' . $item->image_path;
                     }
                     return $item;
                 }

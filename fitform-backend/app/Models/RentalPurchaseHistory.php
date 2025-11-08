@@ -13,6 +13,7 @@ class RentalPurchaseHistory extends Model
 
     protected $fillable = [
         'user_id',
+        'order_id', // Link to rentals or purchases table
         'order_type', // 'rental' or 'purchase'
         'item_name',
         'order_subtype', // rental_type or purchase_type

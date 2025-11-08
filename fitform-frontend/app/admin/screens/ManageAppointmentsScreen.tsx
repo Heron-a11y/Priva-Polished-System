@@ -13,7 +13,9 @@ import {
   RefreshControl,
   Modal,
   Image,
-  Animated
+  Animated,
+  Platform,
+  Keyboard
 } from 'react-native';
 import apiService from '../../../services/api';
 import { Ionicons } from '@expo/vector-icons';
@@ -94,10 +96,52 @@ const ManageAppointmentsScreen = () => {
   
   // Animation for refresh icon
   const refreshAnimation = useRef(new Animated.Value(0)).current;
+  
+  // Ref for FlatList to scroll to search bar when focused
+  const flatListRef = useRef<FlatList>(null);
+  // Ref for search container to measure its position
+  const searchContainerRef = useRef<View>(null);
+  const [searchBarY, setSearchBarY] = useState(0);
 
   useEffect(() => {
     fetchData(1, true);
   }, [statusFilter, search]);
+
+  // Handle keyboard show to scroll search bar into view
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        // When keyboard appears, measure search bar and scroll to show it
+        if (searchContainerRef.current) {
+          searchContainerRef.current.measureInWindow((x, y, width, height) => {
+            const keyboardHeight = e.endCoordinates.height;
+            const screenHeight = Dimensions.get('window').height;
+            const availableHeight = screenHeight - keyboardHeight;
+            
+            // If search bar would be below available height, scroll to show it
+            if (y + height > availableHeight - 20) {
+              // Calculate approximate scroll offset
+              // The search bar is in ListHeaderComponent, so we need to scroll
+              // to position it above the keyboard
+              const scrollOffset = Math.max(0, y - 100);
+              
+              setTimeout(() => {
+                flatListRef.current?.scrollToOffset({ 
+                  offset: scrollOffset, 
+                  animated: true 
+                });
+              }, 100);
+            }
+          });
+        }
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+    };
+  }, []);
 
   // Update toggle animation when setting changes
   useEffect(() => {
@@ -739,7 +783,11 @@ const ManageAppointmentsScreen = () => {
   }
 
   return (
-    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
+    <KeyboardAvoidingWrapper 
+      style={styles.container} 
+      scrollEnabled={false}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
+    >
       {/* Content */}
       {loading && appointments.length === 0 ? (
         <View style={styles.emptyState}>
@@ -758,6 +806,7 @@ const ManageAppointmentsScreen = () => {
         </View>
       ) : (
         <FlatList
+          ref={flatListRef}
           data={getGroupedAppointmentsData()}
           renderItem={({ item }) => {
             if (item.type === 'header') {
@@ -778,6 +827,9 @@ const ManageAppointmentsScreen = () => {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          contentInsetAdjustmentBehavior="automatic"
           ListHeaderComponent={
             <>
               <View style={styles.header}>
@@ -863,7 +915,10 @@ const ManageAppointmentsScreen = () => {
               {/* Filters and Search */}
               <View style={styles.filtersContainer}>
                 {/* Search Input - Moved to top */}
-                <View style={styles.searchContainer}>
+                <View 
+                  ref={searchContainerRef}
+                  style={styles.searchContainer}
+                >
                   <Ionicons 
                     name="search" 
                     size={18} 
@@ -876,6 +931,11 @@ const ManageAppointmentsScreen = () => {
                     placeholderTextColor="#999"
                     value={search}
                     onChangeText={setSearch}
+                    returnKeyType="search"
+                    blurOnSubmit={true}
+                    keyboardType="default"
+                    autoCapitalize="none"
+                    autoCorrect={false}
                   />
                 </View>
                 
@@ -983,7 +1043,8 @@ const ManageAppointmentsScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <KeyboardAvoidingWrapper style={{ flex: 1 }}>
+              <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
               <View style={styles.orderDetailCard}>
                 <View style={styles.orderDetailHeader}>
                   <Text style={styles.orderDetailTitle}>
@@ -1061,7 +1122,8 @@ const ManageAppointmentsScreen = () => {
                     </View>
                   )}
               </View>
-            </ScrollView>
+              </ScrollView>
+            </KeyboardAvoidingWrapper>
 
             <View style={styles.modalFooter}>
               {selectedAppointment.status === 'pending' && (

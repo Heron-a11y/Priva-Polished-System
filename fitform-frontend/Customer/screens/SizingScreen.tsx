@@ -1580,7 +1580,14 @@ export default function SizingScreen() {
       {activeTab === 'recommendations' && renderRecommendations()}
       {activeTab === 'charts' && renderSizeCharts()}
       {activeTab === 'measurements' && (
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.content} 
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 20 }}
+          nestedScrollEnabled={true}
+        >
           {renderMeasurements()}
         </ScrollView>
       )}

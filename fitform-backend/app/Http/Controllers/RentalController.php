@@ -14,11 +14,24 @@ class RentalController extends PaginatedController
      */
     private function updateRentalHistory($rental)
     {
-        $historyEntry = RentalPurchaseHistory::where('user_id', $rental->user_id)
+        // First try to find by order_id (most reliable)
+        $historyEntry = RentalPurchaseHistory::where('order_id', $rental->id)
             ->where('order_type', 'rental')
-            ->where('item_name', $rental->item_name)
-            ->where('order_date', $rental->rental_date)
             ->first();
+            
+        // If not found by order_id, try the old method for backward compatibility
+        if (!$historyEntry) {
+            $historyEntry = RentalPurchaseHistory::where('user_id', $rental->user_id)
+                ->where('order_type', 'rental')
+                ->where('item_name', $rental->item_name)
+                ->where('order_date', $rental->rental_date)
+                ->first();
+                
+            // If found by old method, update the order_id for future reference
+            if ($historyEntry) {
+                $historyEntry->update(['order_id' => $rental->id]);
+            }
+        }
             
         if ($historyEntry) {
             $historyEntry->update([
@@ -129,6 +142,7 @@ class RentalController extends PaginatedController
         // Automatically create history entry
         \App\Models\RentalPurchaseHistory::create([
             'user_id' => $rental->user_id,
+            'order_id' => $rental->id, // Link to the rental record
             'order_type' => 'rental',
             'item_name' => $rental->item_name,
             'order_subtype' => 'rental', // Default value since rental_type doesn't exist

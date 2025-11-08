@@ -13,6 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        // Storage route is now registered in RouteServiceProvider before middleware groups
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([

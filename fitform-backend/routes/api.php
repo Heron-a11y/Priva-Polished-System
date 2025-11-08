@@ -20,6 +20,9 @@ use App\Http\Middleware\CorsMiddleware;
 |
 */
 
+// Storage route is now registered in RouteServiceProvider to ensure it's truly public
+// Removed duplicate route from here to avoid conflicts
+
 // Test endpoint for debugging
 Route::get('/test', function () {
     return response()->json([
@@ -295,16 +298,3 @@ Route::get('/receipts/purchase/{id}', [\App\Http\Controllers\ReceiptController::
 // Additional routes to match frontend expectations
 Route::get('/rentals/{id}/receipt', [\App\Http\Controllers\ReceiptController::class, 'generateRentalReceipt']);
 Route::get('/purchases/{id}/receipt', [\App\Http\Controllers\ReceiptController::class, 'generatePurchaseReceipt']);
-
-// Public storage route (outside middleware for direct file access)
-Route::get('/storage/{path}', function ($path) {
-    $file = \Illuminate\Support\Facades\Storage::disk('public')->get($path);
-    $mimeType = \Illuminate\Support\Facades\Storage::disk('public')->mimeType($path);
-    
-    return response($file, 200)
-        ->header('Content-Type', $mimeType)
-        ->header('Cache-Control', 'public, max-age=31536000')
-        ->header('Access-Control-Allow-Origin', '*')
-        ->header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-        ->header('Access-Control-Allow-Headers', 'Content-Type');
-})->where('path', '.*'); 

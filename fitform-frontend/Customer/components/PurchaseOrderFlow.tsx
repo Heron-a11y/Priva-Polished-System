@@ -91,6 +91,21 @@ interface PurchaseOrder {
   customer_email?: string;
   purchase_date?: string;
   item_name?: string;
+  clothing_type?: string;
+  notes?: string;
+  measurements?: {
+    height?: number;
+    chest?: number;
+    waist?: number;
+    hips?: number;
+    shoulders?: number;
+    inseam?: number;
+    armLength?: number;
+    arm_length?: number;
+    neck?: number;
+    thigh?: number;
+    [key: string]: any; // Allow other measurement fields
+  };
 }
 interface Errors {
   [key: string]: string;
@@ -810,7 +825,7 @@ export default function PurchaseOrderFlow() {
   };
 
   return (
-    <KeyboardAvoidingWrapper style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
       {/* Header with New Purchase Button */}
       <View style={styles.sectionHeader}>
         <View>
@@ -1570,8 +1585,9 @@ export default function PurchaseOrderFlow() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-            {/* Step 0: Clothing Type Selection */}
+          <KeyboardAvoidingWrapper style={{ flex: 1 }}>
+            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+              {/* Step 0: Clothing Type Selection */}
       {step === 0 && (
               <View style={styles.formSection}>
           <Text style={styles.label}>What type of clothes do you want to purchase?</Text>
@@ -1946,7 +1962,8 @@ export default function PurchaseOrderFlow() {
         </View>
       )}
 
-          </ScrollView>
+            </ScrollView>
+          </KeyboardAvoidingWrapper>
         </View>
       </Modal>
 
@@ -2058,20 +2075,100 @@ export default function PurchaseOrderFlow() {
                     <View style={styles.measurementsTitleContainer}>
                       <Text style={styles.measurementsTitle}>Measurements</Text>
                     </View>
-                    {Object.entries(selectedOrder.measurements)
-                      .filter(([key]) => key !== 'thigh') // Remove thigh measurement
-                      .map(([key, value]) => (
-                      <View key={key} style={styles.orderDetailItem}>
-                        <Text style={styles.orderDetailLabel}>
-                          {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}:
-                        </Text>
-                        <Text style={styles.orderDetailValue}>
-                          {value} cm
-                        </Text>
-                      </View>
-                    ))}
+                    {/* Use the same approach as RentalOrderFlow - display all measurements using Object.entries */}
+                    {/* But maintain order from COMPLETE_MEASUREMENT_FIELDS */}
+                    {(() => {
+                      const measurements = selectedOrder.measurements || {};
+                      const measurementEntries = Object.entries(measurements).filter(([key]) => key !== 'thigh');
+                      
+                      // Create a map of field keys to labels for proper labeling
+                      const fieldLabelMap: { [key: string]: string } = {
+                        'height': 'Height',
+                        'chest': 'Chest',
+                        'waist': 'Waist',
+                        'hips': 'Hips',
+                        'shoulders': 'Shoulders',
+                        'shoulder_width': 'Shoulders',
+                        'shoulderWidth': 'Shoulders',
+                        'inseam': 'Inseam',
+                        'armLength': 'Arm Length',
+                        'arm_length': 'Arm Length',
+                        'neck': 'Neck',
+                      };
+                      
+                      // Sort entries to match COMPLETE_MEASUREMENT_FIELDS order
+                      const orderedEntries = COMPLETE_MEASUREMENT_FIELDS.map(({ key, label }) => {
+                        // Find matching entry (try exact match and variations)
+                        const variations: { [key: string]: string[] } = {
+                          'height': ['height', 'Height', 'HEIGHT'],
+                          'chest': ['chest', 'Chest', 'CHEST'],
+                          'waist': ['waist', 'Waist', 'WAIST'],
+                          'hips': ['hips', 'Hips', 'HIPS'],
+                          'shoulders': ['shoulders', 'shoulder_width', 'shoulderWidth', 'Shoulders', 'SHOULDERS'],
+                          'inseam': ['inseam', 'Inseam', 'INSEAM'],
+                          'armLength': ['armLength', 'arm_length', 'armlength', 'ArmLength', 'ARM_LENGTH'],
+                          'neck': ['neck', 'Neck', 'NECK'],
+                        };
+                        
+                        const fieldVariations = variations[key] || [key];
+                        for (const variation of fieldVariations) {
+                          const entry = measurementEntries.find(([entryKey]) => 
+                            entryKey.toLowerCase() === variation.toLowerCase()
+                          );
+                          if (entry) {
+                            return { key: entry[0], value: entry[1], label };
+                          }
+                        }
+                        return null;
+                      }).filter((entry): entry is { key: string; value: any; label: string } => entry !== null);
+                      
+                      // Add any remaining entries that weren't in COMPLETE_MEASUREMENT_FIELDS
+                      const remainingEntries = measurementEntries.filter(([entryKey]) => 
+                        !orderedEntries.some(entry => entry.key.toLowerCase() === entryKey.toLowerCase())
+                      );
+                      
+                      return [...orderedEntries, ...remainingEntries.map(([key, value]) => ({
+                        key,
+                        value,
+                        label: fieldLabelMap[key] || key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')
+                      }))].map(({ key, value, label }) => (
+                        <View key={key} style={styles.orderDetailItem}>
+                          <Text style={styles.orderDetailLabel}>{label}:</Text>
+                          <Text style={styles.orderDetailValue}>
+                            {value !== undefined && value !== null ? `${value} cm` : 'Not provided'}
+                          </Text>
+                        </View>
+                      ));
+                    })()}
                   </>
                 )}
+
+                {/* Penalty Information - Only Cancellation Fee for Purchase Orders */}
+                {(() => {
+                  const isCancelled = selectedOrder.status === 'cancelled';
+                  const wasConfirmed = selectedOrder.quotation_status === 'accepted' || 
+                                      selectedOrder.status === 'confirmed' || 
+                                      selectedOrder.status === 'quotation_accepted';
+                  const hasCancellationFee = isCancelled && wasConfirmed;
+                  
+                  if (!hasCancellationFee) return null;
+                  
+                  return (
+                    <View style={styles.penaltySection}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                        <Ionicons name="warning" size={20} color="#ff9800" />
+                        <Text style={styles.penaltySectionTitle}>Penalty Information</Text>
+                      </View>
+                      
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Cancellation Fee:</Text>
+                        <Text style={[styles.detailValue, styles.penaltyValue]}>
+                          ₱500
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })()}
               </View>
 
               {/* Generate Receipt Button - Only for picked_up status */}
@@ -3766,6 +3863,23 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
+  // Penalty Information Styles
+  penaltySection: {
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border.light,
+  },
+  penaltySectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginLeft: 8,
+  },
+  penaltyValue: {
+    fontWeight: '600',
+    color: Colors.error,
+  },
   // Purchase Agreement Styles
   agreementSection: {
     backgroundColor: Colors.background.card,

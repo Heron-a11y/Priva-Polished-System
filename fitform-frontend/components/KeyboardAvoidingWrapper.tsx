@@ -14,6 +14,7 @@ interface KeyboardAvoidingWrapperProps {
   scrollEnabled?: boolean;
   keyboardVerticalOffset?: number;
   behavior?: 'height' | 'position' | 'padding';
+  onScroll?: (event: any) => void;
 }
 
 const KeyboardAvoidingWrapper: React.FC<KeyboardAvoidingWrapperProps> = ({
@@ -22,6 +23,7 @@ const KeyboardAvoidingWrapper: React.FC<KeyboardAvoidingWrapperProps> = ({
   scrollEnabled = true,
   keyboardVerticalOffset = Platform.OS === 'ios' ? 0 : 20,
   behavior = Platform.OS === 'ios' ? 'padding' : 'height',
+  onScroll,
 }) => {
   const content = scrollEnabled ? (
     <ScrollView
@@ -30,6 +32,8 @@ const KeyboardAvoidingWrapper: React.FC<KeyboardAvoidingWrapperProps> = ({
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       bounces={false}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
     >
       {children}
     </ScrollView>

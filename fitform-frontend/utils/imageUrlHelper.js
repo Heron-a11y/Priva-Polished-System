@@ -21,7 +21,14 @@ class ImageUrlHelper {
       return null;
     }
 
-    // If it's already a local URL, return as is
+    // Convert /storage/ URLs to /api/storage/ for backward compatibility
+    // This handles old URLs that might still be in the database or cached
+    if (imageUrl.includes('/storage/') && !imageUrl.includes('/api/storage/')) {
+      imageUrl = imageUrl.replace('/storage/', '/api/storage/');
+      console.log('🔄 Converted storage URL:', imageUrl);
+    }
+
+    // If it's already a local URL, return as is (after conversion)
     if (imageUrl.includes('192.168.1.54') || imageUrl.includes('192.168.1.56') || imageUrl.includes('192.168.1.105') || imageUrl.includes('localhost') || imageUrl.includes('192.168.1.108')) {
       return imageUrl;
     }
@@ -41,9 +48,10 @@ class ImageUrlHelper {
       return imageUrl;
     }
 
-    // For Laravel storage paths, prepend /storage/ and base URL
+    // For Laravel storage paths, prepend /api/storage/ and base URL
     if (imageUrl.startsWith('profiles/') || imageUrl.startsWith('catalog/') || imageUrl.startsWith('storage/')) {
-      return `${this.getBaseUrl()}/storage/${imageUrl.replace('storage/', '')}`;
+      const cleanPath = imageUrl.replace('storage/', '');
+      return `${this.getBaseUrl()}/api/storage/${cleanPath}`;
     }
 
     // Default: prepend base URL

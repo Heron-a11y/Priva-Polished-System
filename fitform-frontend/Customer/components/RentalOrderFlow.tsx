@@ -1053,7 +1053,7 @@ export default function RentalOrderFlow() {
   };
 
   return (
-    <KeyboardAvoidingWrapper style={styles.container}>
+    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
       {/* Header with New Rental Button */}
       <View style={styles.sectionHeader}>
         <View>
@@ -1134,8 +1134,9 @@ export default function RentalOrderFlow() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-            {/* Rental Type Selection */}
+          <KeyboardAvoidingWrapper style={{ flex: 1 }}>
+            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+              {/* Rental Type Selection */}
             <View style={styles.formSection}>
               <Text style={styles.formSectionTitle}>Select Rental Type</Text>
               <DynamicClothingTypeCatalog
@@ -1388,7 +1389,8 @@ export default function RentalOrderFlow() {
                 <Text style={styles.errorText}>{errors.measurementMethod}</Text>
               </View>
             )}
-          </ScrollView>
+            </ScrollView>
+          </KeyboardAvoidingWrapper>
 
           {/* Modal Actions */}
           <View style={styles.modalActions}>
@@ -2065,11 +2067,11 @@ export default function RentalOrderFlow() {
 
           <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
             <View style={styles.orderDetailCard}>
-              <View style={styles.orderDetailHeader}>
+              <View style={[styles.orderDetailHeader, { alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }]}>
                 <View style={styles.agreementIconContainer}>
                   <Ionicons name="shield-checkmark" size={40} color={Colors.primary} />
                 </View>
-                <Text style={styles.orderDetailTitle}>Rental Agreement & Terms</Text>
+                <Text style={[styles.orderDetailTitle, { textAlign: 'center', marginRight: 0 }]}>Rental Agreement</Text>
                 <Text style={styles.agreementSubtitle}>
                   Please read and understand the following terms before proceeding
                 </Text>

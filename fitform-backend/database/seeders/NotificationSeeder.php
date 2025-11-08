@@ -16,28 +16,28 @@ class NotificationSeeder extends Seeder
         
         if ($admin) {
             \App\Models\Notification::firstOrCreate(
-                [
+            [
                     'user_id' => $admin->id,
-                    'message' => 'Welcome admin! You have a new rental order.',
+                'message' => 'Welcome admin! You have a new rental order.',
                 ],
                 [
-                    'read' => false,
-                    'created_at' => Carbon::now(),
-                    'updated_at' => Carbon::now(),
+                'read' => false,
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
                 ]
             );
         }
         
         if ($customer) {
             \App\Models\Notification::firstOrCreate(
-                [
+            [
                     'user_id' => $customer->id,
-                    'message' => 'Your quotation has been approved.',
+                'message' => 'Your quotation has been approved.',
                 ],
                 [
-                    'read' => false,
-                    'created_at' => Carbon::now(),
-                    'updated_at' => Carbon::now(),
+                'read' => false,
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
                 ]
             );
         }

@@ -438,6 +438,51 @@ class PurchaseController extends PaginatedController
         $data['user_id'] = $request->user()->id;
         $data['customer_name'] = $request->user()->name;
         $data['status'] = 'pending';
+        
+        // Ensure all measurements are stored properly
+        // This prevents missing measurements when displaying order details
+        if (isset($data['measurements']) && is_array($data['measurements'])) {
+            // Get the raw measurements from the request to ensure we have all fields
+            $rawMeasurements = $request->input('measurements', []);
+            
+            // Start with validated measurements, then merge with raw to ensure all fields are included
+            // This ensures fields like height, shoulders, inseam, armLength, neck are preserved
+            $allMeasurements = array_merge($rawMeasurements, $data['measurements']);
+            
+            // Normalize field names - convert arm_length to armLength for consistency
+            if (isset($allMeasurements['arm_length']) && !isset($allMeasurements['armLength'])) {
+                $allMeasurements['armLength'] = $allMeasurements['arm_length'];
+            }
+            
+            // Ensure all expected measurement fields exist
+            $expectedFields = ['height', 'chest', 'waist', 'hips', 'shoulders', 'inseam', 'armLength', 'neck', 'thigh'];
+            foreach ($expectedFields as $field) {
+                // If field doesn't exist, check for variations or set to 0
+                if (!isset($allMeasurements[$field])) {
+                    // Check for snake_case variation (only for armLength)
+                    if ($field === 'armLength' && isset($allMeasurements['arm_length'])) {
+                        $allMeasurements[$field] = $allMeasurements['arm_length'];
+                    } else {
+                        // Set to 0 if not provided (but only if it was actually sent)
+                        // Don't add fields that weren't in the request
+                        if (isset($rawMeasurements[$field]) || array_key_exists($field, $rawMeasurements)) {
+                            $allMeasurements[$field] = $rawMeasurements[$field] ?? 0;
+                        }
+                    }
+                }
+            }
+            
+            // Store the normalized measurements
+            $data['measurements'] = $allMeasurements;
+            
+            // Log measurements for debugging
+            \Log::info('Purchase measurements being stored', [
+                'validated_measurements' => $data['measurements'],
+                'raw_measurements' => $rawMeasurements,
+                'final_measurements' => $allMeasurements
+            ]);
+        }
+        
         $purchase = Purchase::create($data);
         
         // Get customer information for notifications

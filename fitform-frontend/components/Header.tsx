@@ -19,6 +19,7 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMorePages, setHasMorePages] = useState(true);
+  const [imageError, setImageError] = useState(false);
   const router = useRouter();
   const { logout, user, isLoading } = useAuth();
   const { triggerOrderReview } = useNotificationContext();
@@ -93,6 +94,11 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
       fetchNotifications(1, true);
     }
   }, [isLoading, user, fetchNotifications]);
+
+  // Reset image error when user or profile image changes
+  useEffect(() => {
+    setImageError(false);
+  }, [user?.profile_image]);
 
   const handleProfile = () => {
     setModalVisible(false);
@@ -178,20 +184,23 @@ const Header: React.FC<HeaderProps> = ({ onHamburgerPress }) => {
             onPress={toggleModal}
             activeOpacity={0.7}
           >
-            {user?.profile_image ? (
+            {user?.profile_image && !imageError ? (
               <Image 
                 source={{ 
                   uri: getLocalImageUrl(user.profile_image),
-                  cache: 'force-cache' // Force cache for persistence
+                  cache: 'reload'
                 }} 
                 style={styles.profileImage}
                 resizeMode="cover"
                 onError={(error) => {
-                  console.log('❌ Image load error:', error);
-                  console.log('🔄 Trying original URL:', user.profile_image);
-                  // Fallback to default icon on error
+                  console.log('❌ Header Profile image error:', error);
+                  console.log('🔍 Attempted URL:', getLocalImageUrl(user.profile_image));
+                  setImageError(true);
                 }}
-                onLoad={() => console.log('✅ Profile image loaded:', user.profile_image)}
+                onLoad={() => {
+                  console.log('✅ Header Profile image loaded:', getLocalImageUrl(user.profile_image));
+                  setImageError(false);
+                }}
               />
             ) : (
               <Ionicons name="person-circle-outline" size={28} color="#fff" />

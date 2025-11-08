@@ -17,9 +17,9 @@ class UserSeeder extends Seeder
         User::firstOrCreate(
             ['email' => 'admin@fitform.com'],
             [
-                'name' => 'Admin User',
-                'password' => Hash::make('password123'),
-                'role' => 'admin',
+            'name' => 'Admin User',
+            'password' => Hash::make('password123'),
+            'role' => 'admin',
             ]
         );
 
@@ -27,18 +27,18 @@ class UserSeeder extends Seeder
         User::firstOrCreate(
             ['email' => 'customer@fitform.com'],
             [
-                'name' => 'John Customer',
-                'password' => Hash::make('password123'),
-                'role' => 'customer',
+            'name' => 'John Customer',
+            'password' => Hash::make('password123'),
+            'role' => 'customer',
             ]
         );
 
         User::firstOrCreate(
             ['email' => 'jane@fitform.com'],
             [
-                'name' => 'Jane Customer',
-                'password' => Hash::make('password123'),
-                'role' => 'customer',
+            'name' => 'Jane Customer',
+            'password' => Hash::make('password123'),
+            'role' => 'customer',
             ]
         );
     }

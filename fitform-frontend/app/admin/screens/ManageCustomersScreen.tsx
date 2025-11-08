@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,9 +14,11 @@ import {
   Dimensions,
   Platform,
   Image,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import KeyboardAvoidingWrapper from '../../../components/KeyboardAvoidingWrapper';
+import { getLocalImageUrl } from '../../../utils/imageUrlHelper';
 // import DateTimePicker from '@react-native-community/datetimepicker';
 import apiService from '../../../services/api.js';
 
@@ -108,7 +110,12 @@ const ManageCustomersScreen = () => {
   // Date picker states
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [imageLoadErrors, setImageLoadErrors] = useState<{ [id: number]: boolean }>({});
+  const [imageRefreshKey, setImageRefreshKey] = useState(0);
 
+  // Refs for keyboard handling
+  const scrollViewRef = useRef<ScrollView>(null);
+  const searchContainerRef = useRef<View>(null);
 
   const fetchData = useCallback(async (page = 1, reset = false) => {
     if (reset) {
@@ -118,7 +125,7 @@ const ManageCustomersScreen = () => {
     } else {
       setLoadingMore(true);
     }
-    
+      
     try {
       const params = new URLSearchParams();
       params.append('page', page.toString());
@@ -131,7 +138,7 @@ const ManageCustomersScreen = () => {
       if (response.success) {
         // Debug: Log pagination info
         console.log(`[ManageCustomers] Page ${page}, Received ${(response.data || []).length} customers, Has more: ${response.pagination?.has_more_pages}, Total: ${response.pagination?.total}`);
-        
+          
         // Ensure all customer objects have the required properties with safe defaults
         const safeCustomers = (response.data || []).map((customer: any) => {
           return {
@@ -161,7 +168,7 @@ const ManageCustomersScreen = () => {
         });
         
         if (reset) {
-          setCustomers(safeCustomers);
+        setCustomers(safeCustomers);
         } else {
           setCustomers(prev => [...prev, ...safeCustomers]);
         }
@@ -171,7 +178,7 @@ const ManageCustomersScreen = () => {
         
         // Use stats from backend (already excludes super admin)
         if (reset) {
-          setStats(response.stats || null);
+        setStats(response.stats || null);
         }
       } else {
         throw new Error(response.message || 'Failed to fetch customers');
@@ -179,7 +186,7 @@ const ManageCustomersScreen = () => {
     } catch (error) {
       console.error('Error fetching customers:', error);
       if (reset) {
-        showNotification('Failed to fetch customers', 'error');
+      showNotification('Failed to fetch customers', 'error');
       }
     } finally {
       setLoading(false);
@@ -189,7 +196,42 @@ const ManageCustomersScreen = () => {
 
   useEffect(() => {
     fetchData(1, true);
-  }, [statusFilter, search]);
+  }, [fetchData]);
+
+  // Handle keyboard show to scroll search bar into view
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        // When keyboard appears, measure search bar and scroll to show it
+        if (searchContainerRef.current) {
+          searchContainerRef.current.measureInWindow((x, y, width, height) => {
+            const keyboardHeight = e.endCoordinates.height;
+            const screenHeight = Dimensions.get('window').height;
+            const availableHeight = screenHeight - keyboardHeight;
+            
+            // If search bar would be below available height, scroll to show it
+            if (y + height > availableHeight - 20) {
+              // Calculate approximate scroll offset
+              // Scroll to position the search bar above the keyboard
+              const scrollOffset = Math.max(0, y - 100);
+              
+              setTimeout(() => {
+                scrollViewRef.current?.scrollTo({ 
+                  y: scrollOffset, 
+                  animated: true 
+                });
+              }, 100);
+            }
+          });
+        }
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+    };
+  }, []);
 
   const loadMore = () => {
     if (!loadingMore && hasMorePages) {
@@ -577,22 +619,62 @@ const ManageCustomersScreen = () => {
            customer.email;
   };
 
+  // Enhanced image component with multiple fallback strategies
+  const renderProfileImage = (imageUrl: string, customerId: number) => {
+    const processedUrl = getLocalImageUrl(imageUrl);
+    const imageStyle = styles.customerProfileImage;
+    const fallbackStyle = styles.profileIconFallback;
+    const iconSize = 24;
+
+    // Check if image URL is valid
+    if (!imageUrl || imageUrl.trim() === '') {
+      return (
+        <View style={fallbackStyle}>
+          <Ionicons name="person-circle" size={iconSize} color="#014D40" />
+        </View>
+      );
+    }
+
+    return (
+      <Image 
+        key={`${customerId}-${imageRefreshKey}`}
+        source={{ 
+          uri: processedUrl,
+          cache: 'reload'
+        }} 
+        style={imageStyle}
+        resizeMode="cover"
+        onError={(error) => {
+          console.log('❌ Customer profile image error for customer:', customerId);
+          console.log('❌ Processed URL:', processedUrl);
+          setImageLoadErrors(prev => ({ ...prev, [customerId]: true }));
+        }}
+        onLoad={() => {
+          console.log('✅ Customer profile image loaded for customer:', customerId);
+          // Clear any previous error for this customer
+          setImageLoadErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors[customerId];
+            return newErrors;
+          });
+        }}
+      />
+    );
+  };
+
   const renderCustomerCard = ({ item: customer }: { item: Customer }) => {
     try {
       return (
         <View style={styles.customerCard}>
           <View style={styles.customerHeader}>
             <View style={styles.customerInfo}>
-              <View style={styles.customerAvatar}>
-                {customer.profile_image ? (
-                  <Image 
-                    source={{ uri: customer.profile_image }} 
-                    style={styles.avatarImage}
-                  />
-                ) : (
-                  <Ionicons name="person" size={24} color="#014D40" />
-                )}
-              </View>
+              {customer.profile_image && !imageLoadErrors[customer.id] ? (
+                renderProfileImage(customer.profile_image, customer.id)
+              ) : (
+                <View style={styles.profileIconFallback}>
+                  <Ionicons name="person-circle" size={24} color="#014D40" />
+                </View>
+              )}
               <View style={styles.customerDetails}>
                 <Text style={styles.customerName}>{String(customer.name || 'Unknown')}</Text>
                 <Text style={styles.customerEmail}>{String(customer.email || '')}</Text>
@@ -672,7 +754,17 @@ const ManageCustomersScreen = () => {
     }
   };
 
-  if (loading) {
+  const handleScroll = (event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const paddingToBottom = 20;
+    const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+    
+    if (isCloseToBottom && hasMorePages && !loadingMore) {
+      loadMore();
+    }
+  };
+
+  if (loading && customers.length === 0) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#014D40" />
@@ -682,7 +774,11 @@ const ManageCustomersScreen = () => {
   }
 
   return (
-    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
+    <KeyboardAvoidingWrapper 
+      style={styles.container} 
+      scrollEnabled={false}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
+    >
       {/* Notification */}
       {notification && (
         <View style={[styles.notification, notification.type === 'success' ? styles.successNotification : styles.errorNotification]}>
@@ -690,149 +786,164 @@ const ManageCustomersScreen = () => {
         </View>
       )}
 
-      <View style={styles.container}>
-        {/* Customer List with Infinite Scroll */}
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#014D40']} />
+        }
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.titleContainer}>
+            <Ionicons name="people" size={28} color="#014D40" />
+            <Text style={styles.title}>User Management</Text>
+          </View>
+        </View>
+
+        {/* Stats Cards */}
+        {stats && (
+          <View style={styles.statsContainer}>
+            <View style={styles.statsRow}>
+              <View style={styles.statCard}>
+                <View style={styles.statIconContainer}>
+                  <Ionicons name="people" size={24} color="#014D40" />
+                </View>
+                <Text style={styles.statValue}>{stats.total_customers}</Text>
+                <Text style={styles.statLabel}>Total Users</Text>
+              </View>
+              <View style={styles.statCard}>
+                <View style={[styles.statIconContainer, { backgroundColor: '#E8F5E8' }]}>
+                  <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                </View>
+                <Text style={styles.statValue}>{stats.active_customers}</Text>
+                <Text style={styles.statLabel}>Active</Text>
+              </View>
+              <View style={styles.statCard}>
+                <View style={[styles.statIconContainer, { backgroundColor: '#FFF3E0' }]}>
+                  <Ionicons name="pause-circle" size={24} color="#FFA000" />
+                </View>
+                <Text style={styles.statValue}>{stats.suspended_customers}</Text>
+                <Text style={styles.statLabel}>Suspended</Text>
+              </View>
+              <View style={styles.statCard}>
+                <View style={[styles.statIconContainer, { backgroundColor: '#FFEBEE' }]}>
+                  <Ionicons name="close-circle" size={24} color="#F44336" />
+                </View>
+                <Text style={styles.statValue}>{stats.banned_customers}</Text>
+                <Text style={styles.statLabel}>Banned</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Filters */}
+        <View style={styles.filtersContainer}>
+          <View style={styles.filtersRow}>
+            {/* Status Filter */}
+            <View style={styles.filterItem}>
+              <Text style={styles.filterLabel}>Status:</Text>
+              <TouchableOpacity 
+                style={styles.dropdownButton}
+                onPress={() => setShowStatusDropdown(!showStatusDropdown)}
+              >
+                <Text style={styles.dropdownButtonText}>
+                  {STATUS_OPTIONS.find(opt => opt.value === statusFilter)?.label || 'All'}
+                </Text>
+                <Ionicons 
+                  name={showStatusDropdown ? "chevron-up" : "chevron-down"} 
+                  size={18} 
+                  color="#014D40" 
+                />
+              </TouchableOpacity>
+              
+              {showStatusDropdown && (
+                <>
+                  <View style={styles.dropdownMenu}>
+                    {STATUS_OPTIONS.map((option) => (
+                      <TouchableOpacity
+                        key={option.value}
+                        style={styles.dropdownItem}
+                        onPress={() => {
+                          setStatusFilter(option.value);
+                          setShowStatusDropdown(false);
+                        }}
+                      >
+                        <Ionicons name={option.icon as any} size={16} color={option.color} />
+                        <Text style={styles.dropdownItemText}>{option.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.dropdownOverlay}
+                    onPress={() => setShowStatusDropdown(false)}
+                    activeOpacity={1}
+                  />
+                </>
+              )}
+            </View>
+
+            {/* Search */}
+            <View style={styles.searchItem}>
+              <Text style={styles.searchLabel}>Search:</Text>
+              <View 
+                ref={searchContainerRef}
+                style={styles.searchContainer}
+              >
+                <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search by name, email, or phone..."
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholderTextColor="#999"
+                  returnKeyType="search"
+                  blurOnSubmit={true}
+                  keyboardType="default"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Customer List */}
         {loading && customers.length === 0 ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#014D40" />
             <Text style={styles.loadingText}>Loading customers...</Text>
           </View>
+        ) : customers.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="people-outline" size={64} color="#ccc" />
+            <Text style={styles.emptyStateTitle}>No users found</Text>
+            <Text style={styles.emptyStateText}>
+              {search ? 'Try adjusting your search criteria' : 'No users match the current filters'}
+            </Text>
+          </View>
         ) : (
-          <FlatList
-            data={customers}
-            renderItem={renderCustomerCard}
-            keyExtractor={(item) => `customer-${item.id}`}
-            onEndReached={loadMore}
-            onEndReachedThreshold={0.5}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            ListHeaderComponent={
-              <>
-                {/* Header */}
-                <View style={styles.header}>
-                  <View style={styles.titleContainer}>
-                    <Ionicons name="people" size={28} color="#014D40" />
-                    <Text style={styles.title}>User Management</Text>
-                  </View>
-                </View>
-
-                {/* Stats Cards */}
-                {stats && (
-                  <View style={styles.statsContainer}>
-                    <View style={styles.statsRow}>
-                      <View style={styles.statCard}>
-                        <View style={styles.statIconContainer}>
-                          <Ionicons name="people" size={24} color="#014D40" />
-                        </View>
-                        <Text style={styles.statValue}>{stats.total_customers}</Text>
-                        <Text style={styles.statLabel}>Total Users</Text>
-                      </View>
-                      <View style={styles.statCard}>
-                        <View style={[styles.statIconContainer, { backgroundColor: '#E8F5E8' }]}>
-                          <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-                        </View>
-                        <Text style={styles.statValue}>{stats.active_customers}</Text>
-                        <Text style={styles.statLabel}>Active</Text>
-                      </View>
-                      <View style={styles.statCard}>
-                        <View style={[styles.statIconContainer, { backgroundColor: '#FFF3E0' }]}>
-                          <Ionicons name="pause-circle" size={24} color="#FFA000" />
-                        </View>
-                        <Text style={styles.statValue}>{stats.suspended_customers}</Text>
-                        <Text style={styles.statLabel}>Suspended</Text>
-                      </View>
-                      <View style={styles.statCard}>
-                        <View style={[styles.statIconContainer, { backgroundColor: '#FFEBEE' }]}>
-                          <Ionicons name="close-circle" size={24} color="#F44336" />
-                        </View>
-                        <Text style={styles.statValue}>{stats.banned_customers}</Text>
-                        <Text style={styles.statLabel}>Banned</Text>
-                      </View>
-                    </View>
-                  </View>
-                )}
-
-                {/* Filters */}
-                <View style={styles.filtersContainer}>
-                  <View style={styles.filtersRow}>
-                    {/* Status Filter */}
-                    <View style={styles.filterItem}>
-                      <Text style={styles.filterLabel}>Status:</Text>
-                      <TouchableOpacity 
-                        style={styles.dropdownButton}
-                        onPress={() => setShowStatusDropdown(!showStatusDropdown)}
-                      >
-                        <Text style={styles.dropdownButtonText}>
-                          {STATUS_OPTIONS.find(opt => opt.value === statusFilter)?.label || 'All'}
-                        </Text>
-                        <Ionicons 
-                          name={showStatusDropdown ? "chevron-up" : "chevron-down"} 
-                          size={18} 
-                          color="#014D40" 
-                        />
-                      </TouchableOpacity>
-                      
-                      {showStatusDropdown && (
-                        <View style={styles.dropdownMenu}>
-                          {STATUS_OPTIONS.map((option) => (
-                            <TouchableOpacity
-                              key={option.value}
-                              style={styles.dropdownItem}
-                              onPress={() => {
-                                setStatusFilter(option.value);
-                                setShowStatusDropdown(false);
-                              }}
-                            >
-                              <Ionicons name={option.icon as any} size={16} color={option.color} />
-                              <Text style={styles.dropdownItemText}>{option.label}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Search */}
-                    <View style={styles.searchItem}>
-                      <Text style={styles.searchLabel}>Search:</Text>
-                      <View style={styles.searchContainer}>
-                        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
-                        <TextInput
-                          style={styles.searchInput}
-                          placeholder="Search by name, email, or phone..."
-                          value={search}
-                          onChangeText={setSearch}
-                          placeholderTextColor="#999"
-                        />
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              </>
-            }
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Ionicons name="people-outline" size={64} color="#ccc" />
-                <Text style={styles.emptyStateTitle}>No users found</Text>
-                <Text style={styles.emptyStateText}>
-                  {search ? 'Try adjusting your search criteria' : 'No users match the current filters'}
-                </Text>
+          <View style={styles.customersContainer}>
+            {customers.map((customer) => (
+              <View key={`customer-${customer.id}`}>
+                {renderCustomerCard({ item: customer })}
               </View>
-            }
-            ListFooterComponent={
-              loadingMore ? (
-                <View style={styles.loadMoreContainer}>
-                  <ActivityIndicator size="small" color="#014D40" />
-                  <Text style={styles.loadMoreText}>Loading more customers...</Text>
-                </View>
-              ) : null
-            }
-            contentContainerStyle={styles.customersContainer}
-            showsVerticalScrollIndicator={false}
-            style={styles.container}
-          />
+            ))}
+            {loadingMore && (
+              <View style={styles.loadMoreContainer}>
+                <ActivityIndicator size="small" color="#014D40" />
+                <Text style={styles.loadMoreText}>Loading more customers...</Text>
+              </View>
+            )}
+          </View>
         )}
-      </View>
+      </ScrollView>
 
       {/* Customer Details Modal */}
       <Modal
@@ -1613,6 +1724,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1703,18 +1820,25 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e9ecef',
+    zIndex: 10000, // High z-index to ensure dropdowns appear above FlatList
+    elevation: 10000, // High elevation for Android
+    overflow: 'visible', // Allow dropdowns to overflow
   },
   filtersRow: {
     flexDirection: 'row',
     alignItems: 'flex-end', // Align to bottom to match heights
     gap: 16,
     flexWrap: 'wrap', // Allow wrapping on smaller screens
+    zIndex: 10000, // High z-index to appear above other elements
+    elevation: 10000, // High elevation for Android
   },
   filterItem: {
     position: 'relative',
     flexDirection: 'column',
     justifyContent: 'flex-end',
     minWidth: 140, // Ensure minimum width for dropdown
+    zIndex: 10000, // High z-index to appear above other elements
+    elevation: 10000, // High elevation for Android
   },
   filterLabel: {
     fontSize: 14,
@@ -1734,6 +1858,8 @@ const styles = StyleSheet.create({
     borderColor: '#e9ecef',
     minWidth: 120,
     height: 44, // Fixed height for consistency
+    zIndex: 10001, // High z-index to appear above other elements
+    elevation: 10001, // High elevation for Android
   },
   dropdownButtonText: {
     fontSize: 14,
@@ -1753,8 +1879,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
-    zIndex: 1000,
+    elevation: 10001, // Highest elevation for Android
+    zIndex: 10001, // Highest z-index for iOS/web
+  },
+  dropdownOverlay: {
+    position: 'absolute',
+    top: -1000,
+    left: -1000,
+    right: -1000,
+    bottom: -1000,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    zIndex: 10000, // Below dropdown menu but above other content
+    elevation: 10000, // Below dropdown menu but above other content
   },
   dropdownItem: {
     flexDirection: 'row',
@@ -1813,6 +1949,7 @@ const styles = StyleSheet.create({
     elevation: 2,
     borderWidth: 1,
     borderColor: '#e9ecef',
+    zIndex: 1, // Lower z-index so dropdowns appear above
   },
   customerHeader: {
     flexDirection: 'row',
@@ -1822,8 +1959,29 @@ const styles = StyleSheet.create({
   },
   customerInfo: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 8,
     flex: 1,
+  },
+  customerProfileImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#014D40',
+    backgroundColor: '#f8f9fa',
+    marginTop: 2,
+  },
+  profileIconFallback: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f8f9fa',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#014D40',
+    marginTop: 2,
   },
   customerAvatar: {
     width: 48,

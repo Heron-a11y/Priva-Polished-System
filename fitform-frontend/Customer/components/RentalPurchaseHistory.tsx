@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,9 @@ import {
   RefreshControl,
   Dimensions,
   Image,
-  Linking
+  Linking,
+  Platform,
+  Keyboard
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
@@ -103,6 +105,8 @@ interface HistoryItem {
   penalty_status?: string;
   total_penalties?: number;
   image_url?: string;
+  measurements?: any; // Include measurements for display in modal
+  order_id?: number | null; // Include order_id for better deduplication
 }
 
 interface DropdownProps {
@@ -151,7 +155,8 @@ const Dropdown: React.FC<DropdownProps> = ({ label, value, options, onSelect, pl
                 top: '100%',
                 left: 0,
                 right: 0,
-                zIndex: 99999999,
+                zIndex: 10001,
+                elevation: 10001,
               }
             ]}>
             <ScrollView 
@@ -220,6 +225,10 @@ export default function RentalPurchaseHistory() {
   const { user } = useAuth();
   const { catalogItems, getItemById, refreshCatalog } = useCatalogData();
 
+  // Refs for keyboard handling
+  const scrollViewRef = useRef<ScrollView>(null);
+  const searchContainerRef = useRef<View>(null);
+
   const statusOptions = [
     { value: 'all', label: 'All Status' },
     { value: 'cancelled', label: 'Cancelled' },
@@ -246,6 +255,41 @@ export default function RentalPurchaseHistory() {
     // Reset to page 1 when filters change
     fetchHistory(1, true);
   }, [searchQuery, statusFilter, typeFilter]);
+
+  // Handle keyboard show to scroll search bar into view
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        // When keyboard appears, measure search bar and scroll to show it
+        if (searchContainerRef.current) {
+          searchContainerRef.current.measureInWindow((x, y, width, height) => {
+            const keyboardHeight = e.endCoordinates.height;
+            const screenHeight = Dimensions.get('window').height;
+            const availableHeight = screenHeight - keyboardHeight;
+            
+            // If search bar would be below available height, scroll to show it
+            if (y + height > availableHeight - 20) {
+              // Calculate approximate scroll offset
+              // Scroll to position the search bar above the keyboard
+              const scrollOffset = Math.max(0, y - 100);
+              
+              setTimeout(() => {
+                scrollViewRef.current?.scrollTo({ 
+                  y: scrollOffset, 
+                  animated: true 
+                });
+              }, 100);
+            }
+          });
+        }
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+    };
+  }, []);
 
   const fetchHistory = useCallback(async (page = 1, reset = false) => {
     if (reset) {
@@ -306,17 +350,6 @@ export default function RentalPurchaseHistory() {
 
       // Transform to HistoryItem format
       const transformedHistory: HistoryItem[] = allHistory.map((item: any) => {
-        // Define allowed statuses for each type
-        const allowedRentalStatuses = ['cancelled', 'declined', 'returned'];
-        const allowedPurchaseStatuses = ['cancelled', 'declined', 'picked_up'];
-        
-        if (item.order_type === 'rental' && !allowedRentalStatuses.includes(item.status)) {
-          return null;
-        }
-        if (item.order_type === 'purchase' && !allowedPurchaseStatuses.includes(item.status)) {
-          return null;
-        }
-        
         return {
           id: item.id,
           type: item.order_type === 'rental' ? 'rental' as const : 'purchase' as const,
@@ -328,17 +361,60 @@ export default function RentalPurchaseHistory() {
           notes: item.notes,
           penalty_status: item.penalty_status,
           total_penalties: item.total_penalties,
-          image_url: item.image_url
+          image_url: item.image_url,
+          measurements: item.measurements || null, // Include measurements for modal display
+          order_id: item.order_id || null // Include order_id for better deduplication
         };
       }).filter((item: HistoryItem | null) => item !== null) as HistoryItem[];
 
-      // Deduplicate and update history
+      // Deduplicate within the transformed history itself first
+      // Use order_id if available, otherwise fall back to type-id combination
+      const seen = new Map<string, HistoryItem>();
+      const deduplicatedHistory: HistoryItem[] = [];
+      
+      for (const item of transformedHistory) {
+        // Create unique key: prefer order_id if available, otherwise use type-id
+        const uniqueKey = item.order_id 
+          ? `${item.type}-order-${item.order_id}` 
+          : `${item.type}-${item.id}`;
+        
+        // If we haven't seen this key, add it
+        if (!seen.has(uniqueKey)) {
+          seen.set(uniqueKey, item);
+          deduplicatedHistory.push(item);
+        } else {
+          // If duplicate found, keep the one with the most recent date or higher id
+          const existing = seen.get(uniqueKey)!;
+          if (new Date(item.date) > new Date(existing.date) || item.id > existing.id) {
+            const index = deduplicatedHistory.indexOf(existing);
+            if (index !== -1) {
+              deduplicatedHistory[index] = item;
+              seen.set(uniqueKey, item);
+            }
+          }
+        }
+      }
+
+      // Deduplicate against existing history and update
       if (reset) {
-        setHistory(transformedHistory);
+        setHistory(deduplicatedHistory);
       } else {
         setHistory(prev => {
-          const existingIds = new Set(prev.map(h => `${h.type}-${h.id}`));
-          const uniqueNew = transformedHistory.filter(h => !existingIds.has(`${h.type}-${h.id}`));
+          const existingKeys = new Set<string>();
+          prev.forEach(h => {
+            const key = (h as any).order_id 
+              ? `${h.type}-order-${(h as any).order_id}` 
+              : `${h.type}-${h.id}`;
+            existingKeys.add(key);
+          });
+          
+          const uniqueNew = deduplicatedHistory.filter(h => {
+            const key = h.order_id 
+              ? `${h.type}-order-${h.order_id}` 
+              : `${h.type}-${h.id}`;
+            return !existingKeys.has(key);
+          });
+          
           return [...prev, ...uniqueNew];
         });
       }
@@ -658,9 +734,8 @@ export default function RentalPurchaseHistory() {
   const renderDetailsModal = () => {
     if (!selectedItem) return null;
 
-    const originalItem = selectedItem.type === 'rental' 
-      ? originalRentals.find(r => r.id === selectedItem.id)
-      : originalPurchases.find(p => p.id === selectedItem.id);
+    // Get measurements from the selected item directly (they should be in the history data)
+    const originalItem = selectedItem;
 
     return (
       <Modal
@@ -780,7 +855,7 @@ export default function RentalPurchaseHistory() {
                               {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}:
                             </Text>
                             <Text style={styles.orderDetailValue}>
-                              {value} cm
+                              {String(value)} cm
                             </Text>
                           </View>
                         ))
@@ -817,10 +892,6 @@ export default function RentalPurchaseHistory() {
     );
   };
 
-  const renderItem = useCallback(({ item }: { item: HistoryItem }) => {
-    return renderHistoryItem({ item });
-  }, []);
-
   if (loading && history.length === 0) {
     return (
       <View style={styles.loadingContainer}>
@@ -830,150 +901,175 @@ export default function RentalPurchaseHistory() {
     );
   }
 
+  const handleScroll = (event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const paddingToBottom = 20;
+    const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+    
+    if (isCloseToBottom && hasMorePages && !loadingMore) {
+      loadMore();
+    }
+  };
+
   return (
     <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
-      <View style={styles.listWrapper}>
-        <FlatList
-          data={history}
-          renderItem={renderItem}
-          keyExtractor={(item) => `${item.type}-${item.id}`}
-          onEndReached={loadMore}
-          onEndReachedThreshold={0.5}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#014D40']} />
-          }
-          ListHeaderComponent={
-            <>
-              {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View style={styles.titleContainer}>
-            <View style={styles.titleRow}>
-              <View style={styles.titleIcon}>
-                <Ionicons name="time" size={24} color="#014D40" />
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#014D40']} />
+        }
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <View style={styles.titleContainer}>
+              <View style={styles.titleRow}>
+                <View style={styles.titleIcon}>
+                  <Ionicons name="time" size={24} color="#014D40" />
+                </View>
+                <View style={styles.titleTextContainer}>
+                  <Text style={styles.title}>Rental & Purchase History</Text>
+                  <Text style={styles.subtitle}>
+                    View all your past orders and rentals
+                  </Text>
+                </View>
               </View>
-              <View style={styles.titleTextContainer}>
-                <Text style={styles.title}>Rental & Purchase History</Text>
-                <Text style={styles.subtitle}>
-                  View all your past orders and rentals
+            </View>
+          </View>
+        </View>
+
+        {/* Summary Section */}
+        {history.length > 0 && (
+          <View style={styles.summaryContainer}>
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryCard}>
+                <View style={styles.summaryIcon}>
+                  <Ionicons name="list" size={24} color="#014D40" />
+                </View>
+                <Text style={styles.summaryValue}>{history.length}</Text>
+                <Text style={styles.summaryLabel}>Total Orders</Text>
+              </View>
+              <View style={styles.summaryCard}>
+                <View style={styles.summaryIcon}>
+                  <Ionicons name="shirt" size={24} color="#014D40" />
+                </View>
+                <Text style={styles.summaryValue}>
+                  {history.filter(item => item.type === 'rental').length}
                 </Text>
+                <Text style={styles.summaryLabel}>Rentals</Text>
               </View>
             </View>
-          </View>
-        </View>
-      </View>
-
-      {/* Summary Section */}
-      {history.length > 0 && (
-        <View style={styles.summaryContainer}>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryIcon}>
-                <Ionicons name="list" size={24} color="#014D40" />
-              </View>
-              <Text style={styles.summaryValue}>{history.length}</Text>
-              <Text style={styles.summaryLabel}>Total Orders</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryIcon}>
-                <Ionicons name="shirt" size={24} color="#014D40" />
-              </View>
-              <Text style={styles.summaryValue}>
-                {history.filter(item => item.type === 'rental').length}
-              </Text>
-              <Text style={styles.summaryLabel}>Rentals</Text>
-            </View>
-          </View>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryIcon}>
-                <Ionicons name="bag" size={24} color="#014D40" />
-              </View>
-              <Text style={styles.summaryValue}>
-                {history.filter(item => item.type === 'purchase').length}
-              </Text>
-              <Text style={styles.summaryLabel}>Purchases</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryIcon}>
-                <Ionicons name="wallet" size={24} color="#014D40" />
-              </View>
-              <Text style={styles.summaryValue}>
-                {formatCurrency(
-                  history.reduce((total, item) => {
-                    const amount = typeof item.amount === 'string' ? Number(item.amount) : (item.amount || 0);
-                    return total + amount;
-                  }, 0)
-                )}
-              </Text>
-              <Text style={styles.summaryLabel}>Total Spent</Text>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Search and Filters */}
-      <View style={styles.filtersContainer}>
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#6B7280" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search items..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor="#9CA3AF"
-          />
-        </View>
-
-        <View style={styles.filterRow}>
-          <Dropdown
-            label="Type"
-            value={typeFilter}
-            options={typeOptions}
-            onSelect={setTypeFilter}
-            placeholder="Select type"
-          />
-          <Dropdown
-            label="Status"
-            value={statusFilter}
-            options={statusOptions}
-            onSelect={setStatusFilter}
-            placeholder="Select status"
-          />
-        </View>
-        
-
-      </View>
-
-            </>
-          }
-          ListEmptyComponent={
-            !loading ? (
-              <View style={styles.emptyState}>
-                <Ionicons name="time-outline" size={80} color="#D1D5DB" />
-                <Text style={styles.emptyStateTitle}>No History Found</Text>
-                <Text style={styles.emptyStateText}>
-                  {searchQuery || statusFilter !== 'all' || typeFilter !== 'all'
-                    ? 'Try adjusting your filters or search terms'
-                    : 'You haven\'t made any orders or rentals yet'}
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryCard}>
+                <View style={styles.summaryIcon}>
+                  <Ionicons name="bag" size={24} color="#014D40" />
+                </View>
+                <Text style={styles.summaryValue}>
+                  {history.filter(item => item.type === 'purchase').length}
                 </Text>
+                <Text style={styles.summaryLabel}>Purchases</Text>
               </View>
-            ) : null
-          }
-          ListFooterComponent={
-            loadingMore ? (
+              <View style={styles.summaryCard}>
+                <View style={styles.summaryIcon}>
+                  <Ionicons name="wallet" size={24} color="#014D40" />
+                </View>
+                <Text style={styles.summaryValue}>
+                  {formatCurrency(
+                    history.reduce((total, item) => {
+                      // Exclude cancelled and declined orders from Total Spent
+                      if (item.status === 'cancelled' || item.status === 'declined') {
+                        return total;
+                      }
+                      const amount = typeof item.amount === 'string' ? Number(item.amount) : (item.amount || 0);
+                      return total + amount;
+                    }, 0)
+                  )}
+                </Text>
+                <Text style={styles.summaryLabel}>Total Spent</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Search and Filters */}
+        <View style={styles.filtersContainer}>
+          <View 
+            ref={searchContainerRef}
+            style={styles.searchContainer}
+          >
+            <Ionicons name="search" size={20} color="#6B7280" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search items..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#9CA3AF"
+              returnKeyType="search"
+              blurOnSubmit={true}
+              keyboardType="default"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
+          <View style={styles.filterRow}>
+            <Dropdown
+              label="Type"
+              value={typeFilter}
+              options={typeOptions}
+              onSelect={setTypeFilter}
+              placeholder="Select type"
+            />
+            <Dropdown
+              label="Status"
+              value={statusFilter}
+              options={statusOptions}
+              onSelect={setStatusFilter}
+              placeholder="Select status"
+            />
+          </View>
+        </View>
+
+        {/* History Items */}
+        {loading && history.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#014D40" />
+            <Text style={styles.loadingText}>Loading your history...</Text>
+          </View>
+        ) : history.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="time-outline" size={80} color="#D1D5DB" />
+            <Text style={styles.emptyStateTitle}>No History Found</Text>
+            <Text style={styles.emptyStateText}>
+              {searchQuery || statusFilter !== 'all' || typeFilter !== 'all'
+                ? 'Try adjusting your filters or search terms'
+                : 'You haven\'t made any orders or rentals yet'}
+            </Text>
+          </View>
+        ) : (
+          <>
+            {history.map((item) => (
+              <View key={`${item.type}-${item.id}`} style={styles.historyItemWrapper}>
+                {renderHistoryItem({ item })}
+              </View>
+            ))}
+            {loadingMore && (
               <View style={styles.loadMoreContainer}>
                 <ActivityIndicator size="small" color="#014D40" />
                 <Text style={styles.loadMoreText}>Loading more history...</Text>
               </View>
-            ) : (
-              <View style={styles.bottomSpacing} />
-            )
-          }
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-        />
-      </View>
+            )}
+            {!loadingMore && <View style={styles.bottomSpacing} />}
+          </>
+        )}
+      </ScrollView>
 
       {/* Details Modal */}
       {renderDetailsModal()}
@@ -986,13 +1082,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
     position: 'relative',
-    zIndex: 1,
+    zIndex: 0, // Base z-index
+    width: '100%', // Full width container
   },
-  listWrapper: {
+  scrollView: {
     flex: 1,
+    width: '100%',
   },
-  listContainer: {
+  scrollContent: {
     paddingBottom: 20,
+    flexGrow: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -1007,7 +1106,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   header: {
-    padding: isSmallMobile ? 12 : isMediumMobile ? 14 : isLargeMobile ? 16 : 24,
+    padding: isSmallMobile ? 12 : isMediumMobile ? 14 : isLargeMobile ? 16 : 20,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
@@ -1016,6 +1115,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 3,
+    width: '100%', // Full width header
   },
   headerTop: {
     flexDirection: 'row',
@@ -1070,24 +1170,28 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   filtersContainer: {
-    padding: isSmallMobile ? 10 : isMediumMobile ? 12 : isLargeMobile ? 14 : 24,
+    padding: isSmallMobile ? 10 : isMediumMobile ? 12 : isLargeMobile ? 14 : 20,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
     position: 'relative',
-    zIndex: 9999999,
+    zIndex: 10000, // High z-index to ensure dropdowns appear above FlatList
+    elevation: 10000, // High elevation for Android
     marginBottom: 0,
+    width: '100%', // Full width
+    overflow: 'visible', // Allow dropdowns to overflow
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
     borderRadius: isSmallMobile ? 8 : isMediumMobile ? 10 : isLargeMobile ? 12 : 16,
-    paddingHorizontal: isSmallMobile ? 12 : isMediumMobile ? 14 : isLargeMobile ? 16 : 20,
-    paddingVertical: isSmallMobile ? 10 : isMediumMobile ? 12 : isLargeMobile ? 14 : 16,
-    marginBottom: isSmallMobile ? 16 : isMediumMobile ? 18 : isLargeMobile ? 20 : 24,
+    paddingHorizontal: isSmallMobile ? 12 : isMediumMobile ? 14 : isLargeMobile ? 16 : 16,
+    paddingVertical: isSmallMobile ? 10 : isMediumMobile ? 12 : isLargeMobile ? 14 : 14,
+    marginBottom: isSmallMobile ? 16 : isMediumMobile ? 18 : isLargeMobile ? 20 : 20,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    width: '100%', // Full width of parent (filtersContainer)
   },
   searchInput: {
     flex: 1,
@@ -1100,12 +1204,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: isSmallMobile ? 8 : isMediumMobile ? 10 : isLargeMobile ? 12 : 16,
     position: 'relative',
-    zIndex: 99999999,
+    zIndex: 10000, // High z-index to appear above other elements
+    elevation: 10000, // High elevation for Android
   },
   dropdownContainer: {
     flex: 1,
     position: 'relative',
-    zIndex: 99999999,
+    zIndex: 10000, // High z-index to appear above other elements
+    elevation: 10000, // High elevation for Android
   },
   dropdownLabel: {
     fontSize: isSmallMobile ? 12 : isMediumMobile ? 13 : isLargeMobile ? 14 : 14,
@@ -1152,8 +1258,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: isSmallMobile ? 2 : isMediumMobile ? 3 : isLargeMobile ? 4 : 8 },
     shadowOpacity: isSmallMobile ? 0.2 : isMediumMobile ? 0.25 : isLargeMobile ? 0.3 : 0.4,
     shadowRadius: isSmallMobile ? 8 : isMediumMobile ? 10 : isLargeMobile ? 12 : 20,
-    elevation: isSmallMobile ? 15 : isMediumMobile ? 18 : isLargeMobile ? 20 : 30,
-    zIndex: 99999999,
+    elevation: 10001, // Highest elevation for Android - appears above everything
+    zIndex: 10001, // Highest z-index for iOS/web - appears above everything
     marginTop: 4,
     maxHeight: isSmallMobile ? 320 : isMediumMobile ? 340 : isLargeMobile ? 360 : 400,
     width: '100%',
@@ -1200,7 +1306,8 @@ const styles = StyleSheet.create({
     right: -1000,
     bottom: -1000,
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    zIndex: 99999998,
+    zIndex: 10000, // Below dropdown menu but above other content
+    elevation: 10000, // Below dropdown menu but above other content
   },
   historyContainer: {
     backgroundColor: '#F9FAFB',
@@ -1253,11 +1360,16 @@ const styles = StyleSheet.create({
     color: '#014D40',
     textAlign: 'center',
   },
+  historyItemWrapper: {
+    marginHorizontal: isSmallMobile ? 10 : isMediumMobile ? 12 : isLargeMobile ? 14 : 20, // Match filtersContainer padding to align with search bar
+    marginBottom: 16,
+    zIndex: 1, // Lower z-index so dropdowns appear above
+    elevation: 1, // Lower elevation for Android
+  },
   historyItem: {
     backgroundColor: '#fff',
     borderRadius: isSmallMobile ? 12 : isMediumMobile ? 14 : isLargeMobile ? 16 : 20,
-    padding: isSmallMobile ? 12 : isMediumMobile ? 14 : isLargeMobile ? 16 : 24,
-    marginBottom: 16,
+    padding: isSmallMobile ? 12 : isMediumMobile ? 14 : isLargeMobile ? 16 : 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -1265,6 +1377,7 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderWidth: 1,
     borderColor: '#F3F4F6',
+    width: '100%', // Full width of wrapper
   },
   itemHeader: {
     flexDirection: 'row',

@@ -12,6 +12,7 @@ import {
   Text,
   FlatList,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedView } from '../../../components/ThemedView';
@@ -744,7 +745,12 @@ export default function SizingManagementScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+          <KeyboardAvoidingWrapper 
+            style={{ flex: 1 }}
+            scrollEnabled={true}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
+          >
+            <View style={styles.modalContent}>
             {/* Basic Information */}
             <View style={styles.formSection}>
               <ThemedText style={styles.formSectionTitle}>Basic Information</ThemedText>
@@ -1125,7 +1131,8 @@ export default function SizingManagementScreen() {
                 </View>
               ))}
             </View>
-          </ScrollView>
+          </View>
+          </KeyboardAvoidingWrapper>
 
           {/* Floating Bulb Icon - Above the Cancel and Fill All Fields buttons */}
           <View style={styles.floatingHelpContainer}>
@@ -1171,7 +1178,11 @@ export default function SizingManagementScreen() {
   };
 
   return (
-    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={false}>
+    <KeyboardAvoidingWrapper 
+      style={styles.container} 
+      scrollEnabled={false}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
+    >
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={Colors.primary} />
@@ -1576,6 +1587,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     paddingTop: 24,
+    paddingBottom: 20,
   },
   formSection: {
     marginBottom: 32,

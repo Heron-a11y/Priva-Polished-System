@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, TextInput, Platform, Dimensions, ScrollView, Modal, Image } from 'react-native';
 import apiService from '../../services/api';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -195,7 +195,7 @@ const OrdersScreen = () => {
 
     return flatData;
   };
-
+  
   // FlatList render function for mobile table
   const renderFlatListItem = ({ item }: { item: Order }) => {
     return (
@@ -416,7 +416,7 @@ const OrdersScreen = () => {
       setLoadingMore(true);
     }
     
-    try {
+      try {
       const params = new URLSearchParams();
       params.append('page', page.toString());
       params.append('per_page', '10');
@@ -461,16 +461,16 @@ const OrdersScreen = () => {
         setCurrentPage(page);
         setLastUpdated(new Date());
       }
-    } catch (err) {
+      } catch (err) {
       console.error('Error fetching orders:', err);
       if (reset) {
         Alert.alert('Error', 'Failed to fetch orders.');
-      }
-    } finally {
+        }
+      } finally {
       setLoading(false);
       setLoadingMore(false);
-    }
-  };
+      }
+    };
 
   useEffect(() => {
     fetchOrders(1, true);
@@ -479,6 +479,16 @@ const OrdersScreen = () => {
   const loadMore = () => {
     if (!loadingMore && hasMorePages) {
       fetchOrders(currentPage + 1, false);
+    }
+  };
+
+  const handleScroll = (event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const paddingToBottom = 300; // Trigger load more when 300px from bottom
+    const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+    
+    if (isCloseToBottom && !loadingMore && hasMorePages) {
+      loadMore();
     }
   };
 
@@ -731,8 +741,9 @@ const OrdersScreen = () => {
   };
 
   return (
-    <KeyboardAvoidingWrapper style={styles.container}>
-      <View style={styles.header}>
+    <KeyboardAvoidingWrapper style={styles.container} scrollEnabled={true} onScroll={handleScroll}>
+      <View style={styles.contentWrapper}>
+        <View style={styles.header}>
         <View style={styles.titleContainer}>
           <Ionicons name="file-tray-full" size={28} color={Colors.primary} />
           <Text style={styles.title}>Manage Orders</Text>
@@ -926,6 +937,11 @@ const OrdersScreen = () => {
           value={search}
           placeholderTextColor="#999"
           onChangeText={setSearch}
+          returnKeyType="search"
+          blurOnSubmit={true}
+          keyboardType="default"
+          autoCapitalize="none"
+          autoCorrect={false}
           onFocus={() => {
             setShowTypeDropdown(false);
             setShowStatusDropdown(false);
@@ -981,37 +997,33 @@ const OrdersScreen = () => {
               <Text style={styles.emptyStateText}>No orders found</Text>
             </View>
           ) : (
-            <FlatList
-              data={getGroupedOrdersData()}
-              renderItem={({ item }) => {
+            <View style={styles.cardsContainer}>
+              {getGroupedOrdersData().map((item, index) => {
                 if (item.type === 'header') {
-                  return renderStatusGroupHeader(item.status || '', item.count || 0);
+                  return (
+                    <View key={`header-${item.status}-${index}`}>
+                      {renderStatusGroupHeader(item.status || '', item.count || 0)}
+                    </View>
+                  );
                 } else {
-                  return renderOrderCard({ item: item.order! });
+                  return (
+                    <View key={`order-${item.order?.type}-${item.order?.id}-${index}`}>
+                      {renderOrderCard({ item: item.order! })}
+                    </View>
+                  );
                 }
-              }}
-              keyExtractor={(item, index) => {
-                if (item.type === 'header') {
-                  return `header-${item.status}`;
-                } else {
-                  return `order-${item.order?.type}-${item.order?.id}`;
-                }
-              }}
-              onEndReached={loadMore}
-              onEndReachedThreshold={0.5}
-              ListFooterComponent={
-                loadingMore ? (
-                  <View style={styles.loadMoreContainer}>
-                    <ActivityIndicator size="small" color={Colors.primary} />
-                    <Text style={styles.loadMoreText}>Loading more orders...</Text>
-                  </View>
-                ) : null
-              }
-              contentContainerStyle={styles.cardsContainer}
-              showsVerticalScrollIndicator={false}
-            />
+              })}
+              {/* Load More Footer */}
+              {hasMorePages && loadingMore && (
+                <View style={styles.loadMoreContainer}>
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <Text style={styles.loadMoreText}>Loading more orders...</Text>
+                </View>
+              )}
+            </View>
           )}
         </View>
+      </View>
       </View>
       
       {/* Order Details Modal */}
@@ -1033,8 +1045,9 @@ const OrdersScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-              <View style={styles.orderDetailCard}>
+            <KeyboardAvoidingWrapper style={{ flex: 1 }}>
+              <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+                <View style={styles.orderDetailCard}>
                 {/* Item Image */}
                 {(() => {
                   // Extract clothing type from details (e.g., "Suit Marty - Badly needed..." -> "Suit Marty")
@@ -1796,8 +1809,9 @@ const OrdersScreen = () => {
                     </View>
                   </View>
                 )}
-              </View>
-            </ScrollView>
+                </View>
+              </ScrollView>
+            </KeyboardAvoidingWrapper>
           </View>
         </Modal>
       )}
@@ -1828,9 +1842,11 @@ const OrdersScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: Colors.background.light,
     zIndex: 1,
+  },
+  contentWrapper: {
+    padding: 20,
   },
   header: {
     marginBottom: 20,
@@ -2804,6 +2820,11 @@ const styles = StyleSheet.create({
   // Card layout styles
   cardsContainer: {
     paddingVertical: 8,
+  },
+  loadMoreTrigger: {
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   orderCard: {
     backgroundColor: Colors.background.card,
